@@ -9,6 +9,7 @@ Worktrees allow parallel agents to operate on the same repo without blocking eac
 - Mode toggle: Local, Worktree, Cloud.
 - Worktree mode creates a new workspace directory. In this app, the default strategy is a full clone to a sibling folder rather than `git worktree`.
 - Thread shows a clear mapping between thread, worktree path, branch, and PR.
+- Branch selector shows “From main” when in worktree mode.
 
 ## Merge assistant
 
@@ -23,6 +24,13 @@ Worktrees allow parallel agents to operate on the same repo without blocking eac
 - Run Codex in that clone and let it create a branch as needed.
 - Merge back by adding the clone as a temporary remote or by `git fetch`ing the branch.
 - Create or update a branch on the main repo before merging.
+
+## Worktree creation UI
+
+- “Creating worktree” modal with terminal-style output and a progress bar.
+- Output includes the worktree path and setup script steps.
+- Actions: Work locally instead, Cancel.
+- After creation: show “Checkout on local” and “Create branch here” actions.
 
 ## Lifecycle controls
 

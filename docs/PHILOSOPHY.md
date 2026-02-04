@@ -8,6 +8,7 @@ The product is fundamentally different from an IDE. It is a command center for a
 - Threads are the primary artifact, not files.
 - The main view is a run timeline, not a code editor.
 - Editing is optional and handled in the user’s editor of choice.
+- The UI should feel native, calm, and focused on progress over pixels.
 
 ## Consequences for UX
 

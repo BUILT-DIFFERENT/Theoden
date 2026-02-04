@@ -10,6 +10,7 @@
 
 - Provide run-command panel for a simple implementation.
 - Provide Open terminal here for Windows Terminal.
+- Optional embedded terminal panel with streaming output.
 
 ## Clipboard and attachments
 

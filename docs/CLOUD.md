@@ -6,6 +6,7 @@
 - Runs are fire-and-forget with returnable results and PR links.
 - Thread history is shared with local runs.
 - Cloud tasks execute on Codex Cloud via the CLI, not locally.
+- Cloud requires a GitHub-connected repo and produces a PR.
 
 ## Provider interface
 

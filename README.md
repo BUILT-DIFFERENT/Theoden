@@ -8,6 +8,7 @@ Key docs:
 - `docs/WORKFLOW_UI.md`
 - `docs/ARCHITECTURE.md`
 - `docs/APP_SERVER.md`
+- `docs/UI_SPEC.md`
 - `docs/ROADMAP.md`
 
 ---

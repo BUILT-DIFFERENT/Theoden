@@ -11,12 +11,19 @@
 - Summarize staged diff into a short subject line.
 - Include a short list of key files changed.
 - Keep deterministic output for repeatability.
+- Placeholder text: “Leave blank and Codex will generate a commit message for you.”
 
 ## Push and PR
 
 - Option to Commit only.
 - Option to Commit and Push.
 - Option to Commit and Create PR.
+
+## PR progress modal
+
+- Title: “Creating a PR”.
+- Subtitle: “Hold tight, this may take a few moments…”
+- Checklist: committed, pushed, creating PR.
 
 ## PR creation
 

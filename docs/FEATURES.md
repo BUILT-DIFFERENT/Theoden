@@ -16,6 +16,8 @@ This file mirrors the agreed build plan and ensures every requested feature has 
 - Timeline with plans, actions, results.
 - Status chips and progress indicators.
 - Notifications for done or needs review.
+- Right review panel for diffs (persistent column).
+- Progress ring with percent and active branch during runs.
 
 ## Project and context
 
@@ -35,6 +37,7 @@ This file mirrors the agreed build plan and ensures every requested feature has 
 - Worktree mode with per-thread directory and branch.
 - Bring-back merge assistant.
 - Clean up or keep worktrees.
+- Worktree creation modal with terminal-style setup output.
 
 ## Cloud execution
 
@@ -48,6 +51,7 @@ This file mirrors the agreed build plan and ensures every requested feature has 
 - Scheduler with enable and disable.
 - Prompt templates and variables.
 - Automation triggers spawn new threads.
+- Templates gallery with “Let’s automate” header.
 
 ## Skills
 
@@ -62,3 +66,5 @@ This file mirrors the agreed build plan and ensures every requested feature has 
 - Editor detection on startup.
 - Attach images to threads.
 - Settings view for config and capabilities.
+- Compact mode with always-on-top behavior.
+- Optional terminal panel for streaming output.
