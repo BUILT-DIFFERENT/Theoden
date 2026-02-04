@@ -32,3 +32,7 @@ export async function sendAppServerRequest<T>(request: AppServerRequest): Promis
 export async function sendAppServerNotification(method: string, params?: unknown) {
   return invoke("app_server_notify", { method, params });
 }
+
+export async function respondAppServerRequest(id: string | number, result?: unknown, error?: unknown) {
+  return invoke("app_server_respond", { id, result, error });
+}

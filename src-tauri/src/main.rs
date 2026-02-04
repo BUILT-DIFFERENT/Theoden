@@ -116,6 +116,10 @@ async fn app_server_start(
                                 continue;
                             }
                         }
+                        if has_method {
+                            let _ = app_handle.emit_all("app-server-request", message);
+                            continue;
+                        }
                     }
 
                     if has_method {
@@ -212,6 +216,34 @@ async fn app_server_notify(
 }
 
 #[tauri::command]
+async fn app_server_respond(
+    state: tauri::State<'_, Arc<AppServerBridge>>,
+    id: serde_json::Value,
+    result: Option<serde_json::Value>,
+    error: Option<serde_json::Value>,
+) -> Result<(), String> {
+    let mut payload = serde_json::json!({ "id": id });
+    if let Some(result) = result {
+        payload["result"] = result;
+    } else if let Some(error) = error {
+        payload["error"] = error;
+    } else {
+        payload["result"] = serde_json::json!({});
+    }
+    let line = serde_json::to_string(&payload).map_err(|err| err.to_string())?;
+    let mut stdin_guard = state.stdin.lock().await;
+    let stdin = stdin_guard
+        .as_mut()
+        .ok_or_else(|| "app-server stdin not available".to_string())?;
+    stdin
+        .write_all(line.as_bytes())
+        .await
+        .map_err(|err| err.to_string())?;
+    stdin.write_all(b"\n").await.map_err(|err| err.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn app_server_stop(state: tauri::State<'_, Arc<AppServerBridge>>) -> Result<(), String> {
     if let Some(mut child) = state.child.lock().await.take() {
         let _ = child.kill().await;
@@ -249,6 +281,7 @@ fn main() {
             app_server_start,
             app_server_request,
             app_server_notify,
+            app_server_respond,
             app_server_stop,
             run_cli
         ])

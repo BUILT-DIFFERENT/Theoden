@@ -9,11 +9,13 @@ import {
   startAppServer
 } from "@/app/services/cli/appServer";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
+import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 
 export function AppShell() {
   const threadMatch = useMatch({ from: "/threads/$threadId", strict: false });
   const threadId = threadMatch?.params?.threadId;
   const { thread } = useThreadDetail(threadId);
+  useAppServerStream();
 
   useEffect(() => {
     if (!isTauri()) return;

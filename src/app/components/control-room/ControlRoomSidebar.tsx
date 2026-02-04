@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { useThreadList } from "@/app/services/cli/useThreads";
+import { useActiveRuns } from "@/app/services/cli/useActiveRuns";
 
 export function ControlRoomSidebar() {
-  const { projects } = useThreadList();
-  const hasActiveRuns = projects.some((project) => project.activeRuns.length > 0);
+  const { projects, threads } = useThreadList();
+  const activeRuns = useActiveRuns(threads);
+  const hasActiveRuns = activeRuns.length > 0;
   return (
     <aside className="w-72 border-r border-white/5 bg-ink-900/60 px-4 py-6">
       <div className="mb-6">
@@ -15,14 +17,12 @@ export function ControlRoomSidebar() {
         <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Active</p>
         <div className="mt-3 space-y-3 text-sm">
           {hasActiveRuns ? (
-            projects
-              .flatMap((project) => project.activeRuns)
-              .map((run) => (
-                <div key={run.id} className="rounded-xl border border-white/5 bg-black/20 p-3">
-                  <p className="text-ink-100">{run.title}</p>
-                  <p className="text-xs text-ink-400">{run.statusLabel}</p>
-                </div>
-              ))
+            activeRuns.map((run) => (
+              <div key={run.id} className="rounded-xl border border-white/5 bg-black/20 p-3">
+                <p className="text-ink-100">{run.title}</p>
+                <p className="text-xs text-ink-400">{run.statusLabel}</p>
+              </div>
+            ))
           ) : (
             <div className="rounded-xl border border-white/5 bg-black/20 p-3 text-xs text-ink-400">
               No active runs.

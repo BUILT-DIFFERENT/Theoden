@@ -30,7 +30,10 @@ function itemLabel(item: Record<string, any>) {
   }
   if (type === "fileChange") {
     const count = item.changes?.length ?? 0;
-    return `Edited ${count} file${count === 1 ? "" : "s"}`;
+    const { additions, deletions } = diffStatsFromChanges(item.changes);
+    const diffSuffix =
+      additions || deletions ? ` +${additions} -${deletions}` : "";
+    return `Edited ${count} file${count === 1 ? "" : "s"}${diffSuffix}`;
   }
   if (type === "plan") {
     return "Plan updated";
@@ -77,12 +80,41 @@ function detailFromParams(method: string, params?: Record<string, any>) {
     }
   }
   if (method === "turn/diff/updated" && params.diff) {
+    const { additions, deletions } = diffStatsFromText(params.diff);
+    if (additions || deletions) {
+      return `Diff +${additions} -${deletions}`;
+    }
     return `Updated diff (${params.diff?.length ?? 0} chars)`;
   }
   if (params.turn?.status) {
     return `Turn ${params.turn.status}`;
   }
   return undefined;
+}
+
+function diffStatsFromText(diffText?: string) {
+  if (!diffText) return { additions: 0, deletions: 0 };
+  let additions = 0;
+  let deletions = 0;
+  diffText.split(/\r?\n/).forEach((line) => {
+    if (line.startsWith("+++") || line.startsWith("---")) return;
+    if (line.startsWith("+")) additions += 1;
+    if (line.startsWith("-")) deletions += 1;
+  });
+  return { additions, deletions };
+}
+
+function diffStatsFromChanges(changes?: Array<{ diff?: string }>) {
+  if (!changes?.length) return { additions: 0, deletions: 0 };
+  return changes.reduce(
+    (acc, change) => {
+      const { additions, deletions } = diffStatsFromText(change.diff);
+      acc.additions += additions;
+      acc.deletions += deletions;
+      return acc;
+    },
+    { additions: 0, deletions: 0 }
+  );
 }
 
 export function mapNotificationToRunEvent(notification: AppServerNotification): RunEvent | null {

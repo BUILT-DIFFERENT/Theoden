@@ -1,8 +1,9 @@
 import { useThreadList } from "@/app/services/cli/useThreads";
+import { useActiveRuns } from "@/app/services/cli/useActiveRuns";
 
 export function ControlRoomPage() {
-  const { projects, threads } = useThreadList();
-  const activeRuns = projects.flatMap((project) => project.activeRuns);
+  const { threads } = useThreadList();
+  const activeRuns = useActiveRuns(threads);
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
