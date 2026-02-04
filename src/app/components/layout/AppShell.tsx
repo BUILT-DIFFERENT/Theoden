@@ -1,4 +1,4 @@
-import { Outlet, Link } from "@tanstack/react-router";
+import { Outlet, Link, useMatch } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ControlRoomSidebar } from "@/app/components/control-room/ControlRoomSidebar";
 import { ThreadMetaPanel } from "@/app/components/threads/ThreadMetaPanel";
@@ -8,8 +8,13 @@ import {
   sendAppServerRequest,
   startAppServer
 } from "@/app/services/cli/appServer";
+import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 
 export function AppShell() {
+  const threadMatch = useMatch({ from: "/threads/$threadId", strict: false });
+  const threadId = threadMatch?.params?.threadId;
+  const { thread } = useThreadDetail(threadId);
+
   useEffect(() => {
     if (!isTauri()) return;
     const bridgeKey = "__THEODEN_APP_SERVER_STARTED__";
@@ -66,7 +71,7 @@ export function AppShell() {
               <Outlet />
             </section>
             <aside className="hidden lg:block">
-              <ThreadMetaPanel />
+              <ThreadMetaPanel thread={thread} />
             </aside>
           </div>
         </main>

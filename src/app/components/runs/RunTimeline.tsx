@@ -1,8 +1,10 @@
 import { mockThreadDetail } from "@/app/state/mockData";
 import { useAppServerEvents } from "@/app/services/cli/useAppServerEvents";
+import { useParams } from "@tanstack/react-router";
 
 export function RunTimeline() {
-  const liveEvents = useAppServerEvents();
+  const { threadId } = useParams({ from: "/threads/$threadId" });
+  const liveEvents = useAppServerEvents(threadId);
   const events = liveEvents.length ? liveEvents : mockThreadDetail.events;
   return (
     <div className="space-y-4">

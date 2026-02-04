@@ -6,7 +6,7 @@ import { mapNotificationToRunEvent } from "@/app/services/cli/eventMapper";
 
 const MAX_EVENTS = 200;
 
-export function useAppServerEvents() {
+export function useAppServerEvents(threadId?: string) {
   const [events, setEvents] = useState<RunEvent[]>([]);
 
   useEffect(() => {
@@ -14,7 +14,11 @@ export function useAppServerEvents() {
     let unlisten: (() => void) | null = null;
 
     listen("app-server-notification", (event) => {
-      const mapped = mapNotificationToRunEvent(event.payload as any);
+      const payload = event.payload as any;
+      if (threadId && payload?.params?.threadId && payload.params.threadId !== threadId) {
+        return;
+      }
+      const mapped = mapNotificationToRunEvent(payload);
       if (!mapped) return;
       setEvents((prev) => [...prev, mapped].slice(-MAX_EVENTS));
     }).then((stop) => {

@@ -1,20 +1,26 @@
 import { mockThreadDetail } from "@/app/state/mockData";
+import type { ThreadDetail } from "@/app/types";
 
-export function ThreadMetaPanel() {
+interface ThreadMetaPanelProps {
+  thread?: ThreadDetail;
+}
+
+export function ThreadMetaPanel({ thread }: ThreadMetaPanelProps) {
+  const detail = thread ?? mockThreadDetail;
   return (
     <div className="sticky top-6 space-y-4">
       <div className="rounded-2xl border border-white/10 bg-ink-900/60 p-4 shadow-card">
         <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Thread</p>
-        <h3 className="mt-2 font-display text-lg">{mockThreadDetail.title}</h3>
-        <p className="mt-1 text-xs text-ink-400">{mockThreadDetail.subtitle}</p>
+        <h3 className="mt-2 font-display text-lg">{detail.title}</h3>
+        <p className="mt-1 text-xs text-ink-400">{detail.subtitle}</p>
         <div className="mt-4 space-y-2 text-xs text-ink-300">
-          <p>Project: {mockThreadDetail.project}</p>
-          <p>Mode: {mockThreadDetail.mode}</p>
-          {mockThreadDetail.worktreeStrategy ? (
-            <p>Workspace: {mockThreadDetail.worktreeStrategy}</p>
+          <p>Project: {detail.projectId}</p>
+          <p>Mode: {detail.mode}</p>
+          {detail.worktreeStrategy ? (
+            <p>Workspace: {detail.worktreeStrategy}</p>
           ) : null}
-          <p>Effort: {mockThreadDetail.effort}</p>
-          <p>Status: {mockThreadDetail.status}</p>
+          <p>Effort: {detail.effort}</p>
+          <p>Status: {detail.status}</p>
         </div>
         <div className="mt-4 flex flex-wrap gap-2 text-xs">
           <button className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
