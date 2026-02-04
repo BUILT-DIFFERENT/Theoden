@@ -24,7 +24,7 @@ This document captures the UI behaviors and microcopy observed in the launch dem
 ## Composer
 
 - Bottom-docked rounded input with placeholder: “@ to add files, / for commands”.
-- Controls: attach, model dropdown, effort dropdown, lock icon, mic, send button.
+- Controls: attach, model dropdown, effort dropdown, lock icon, send button. (No voice input)
 - Environment tabs: Local, Worktree, Cloud.
 - Branch/base selector: “From main” dropdown in worktree mode.
 - While running: send becomes Stop, progress ring shows percent and active branch.

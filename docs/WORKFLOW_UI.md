@@ -21,7 +21,7 @@
 
 ## Composer controls
 
-- Attachments, model dropdown, effort dropdown, lock, mic, send.
+- Attachments, model dropdown, effort dropdown, lock, send. (No voice input)
 - Environment tabs: Local, Worktree, Cloud.
 - Branch selector in worktree mode (“From main”).
 - When running: send becomes Stop, progress ring shows percent and branch.
