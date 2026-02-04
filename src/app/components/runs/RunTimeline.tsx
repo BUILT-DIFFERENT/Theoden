@@ -1,9 +1,12 @@
 import { mockThreadDetail } from "@/app/state/mockData";
+import { useAppServerEvents } from "@/app/services/cli/useAppServerEvents";
 
 export function RunTimeline() {
+  const liveEvents = useAppServerEvents();
+  const events = liveEvents.length ? liveEvents : mockThreadDetail.events;
   return (
     <div className="space-y-4">
-      {mockThreadDetail.events.map((event) => (
+      {events.map((event) => (
         <div key={event.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-ink-100">{event.label}</p>

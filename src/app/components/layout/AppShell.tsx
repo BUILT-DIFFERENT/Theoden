@@ -1,8 +1,44 @@
 import { Outlet, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { ControlRoomSidebar } from "@/app/components/control-room/ControlRoomSidebar";
 import { ThreadMetaPanel } from "@/app/components/threads/ThreadMetaPanel";
+import { isTauri } from "@/app/utils/tauri";
+import {
+  sendAppServerNotification,
+  sendAppServerRequest,
+  startAppServer
+} from "@/app/services/cli/appServer";
 
 export function AppShell() {
+  useEffect(() => {
+    if (!isTauri()) return;
+    const bridgeKey = "__THEODEN_APP_SERVER_STARTED__";
+    if ((window as any)[bridgeKey]) return;
+    (window as any)[bridgeKey] = true;
+
+    const bootstrap = async () => {
+      try {
+        await startAppServer({});
+        await sendAppServerRequest({
+          id: Date.now(),
+          method: "initialize",
+          params: {
+            clientInfo: {
+              name: "theoden_desktop",
+              title: "Theoden Desktop",
+              version: "0.1.0"
+            }
+          }
+        });
+        await sendAppServerNotification("initialized");
+      } catch (error) {
+        console.warn("App-server bootstrap failed", error);
+      }
+    };
+
+    bootstrap();
+  }, []);
+
   return (
     <div className="min-h-screen text-ink-50">
       <div className="flex min-h-screen">
