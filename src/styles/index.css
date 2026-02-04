@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  background: radial-gradient(circle at top left, rgba(255, 155, 74, 0.08), transparent 55%),
+    radial-gradient(circle at 25% 80%, rgba(246, 122, 31, 0.08), transparent 55%),
+    #141923;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}

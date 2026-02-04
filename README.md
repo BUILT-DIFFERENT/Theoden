@@ -1,3 +1,17 @@
+# Theoden Command Center (Desktop)
+
+This repo includes a Windows-first desktop app scaffold (Tauri + React) that acts as a UI wrapper around the Codex CLI. It is intentionally threads-first and run-timeline-first, with the CLI (`codex app-server` and `codex cloud exec`) as the source of truth.
+
+Key docs:
+
+- `docs/PHILOSOPHY.md`
+- `docs/WORKFLOW_UI.md`
+- `docs/ARCHITECTURE.md`
+- `docs/APP_SERVER.md`
+- `docs/ROADMAP.md`
+
+---
+
 <p align="center"><code>npm i -g @openai/codex</code><br />or <code>brew install --cask codex</code></p>
 <p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.
 <p align="center">
