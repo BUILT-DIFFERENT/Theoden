@@ -1,4 +1,9 @@
-import type { RunEvent, RunMode, ThreadDetail, WorkspaceStrategy } from "@/app/types";
+import type {
+  RunEvent,
+  RunMode,
+  ThreadDetail,
+  WorkspaceStrategy,
+} from "@/app/types";
 
 export interface RunRequest {
   threadId?: string;
@@ -33,5 +38,7 @@ export interface Provider {
   id: "local" | "worktree" | "cloud";
   status: "ready" | "unavailable" | "stub";
   displayName: string;
-  startRun: (request: RunRequest) => Promise<{ handle: RunHandle; stream: RunEventStream }>;
+  startRun: (
+    request: RunRequest,
+  ) => Promise<{ handle: RunHandle; stream: RunEventStream }>;
 }

@@ -1,10 +1,15 @@
-import type { Provider, RunRequest } from "@/app/services/providers";
-import { CloudProvider, LocalProvider, WorktreeProvider } from "@/app/services/providers";
+import {
+  CloudProvider,
+  LocalProvider,
+  WorktreeProvider,
+  type Provider,
+  type RunRequest,
+} from "@/app/services/providers";
 
 const providers: Record<Provider["id"], Provider> = {
   local: LocalProvider,
   worktree: WorktreeProvider,
-  cloud: CloudProvider
+  cloud: CloudProvider,
 };
 
 export function getProvider(id: Provider["id"]) {

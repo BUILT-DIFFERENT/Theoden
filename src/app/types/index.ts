@@ -1,4 +1,9 @@
-export type RunStatus = "queued" | "running" | "needs_review" | "done" | "failed";
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "needs_review"
+  | "done"
+  | "failed";
 export type RunMode = "local" | "worktree" | "cloud";
 export type WorkspaceStrategy = "clone" | "git_worktree";
 
@@ -26,6 +31,8 @@ export interface ThreadSummary {
   status: RunStatus;
   projectId: string;
   lastUpdated: string;
+  modelProvider?: string;
+  source?: string;
 }
 
 export interface ThreadDetail extends ThreadSummary {
@@ -35,6 +42,7 @@ export interface ThreadDetail extends ThreadSummary {
   events: RunEvent[];
   attachments: ThreadAttachment[];
   diffSummary: DiffSummary;
+  diffText?: string;
 }
 
 export interface ThreadAttachment {

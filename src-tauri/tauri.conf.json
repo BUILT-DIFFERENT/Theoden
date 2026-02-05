@@ -1,24 +1,27 @@
 {
+  "$schema": "./gen/schemas/desktop-schema.json",
+  "productName": "Codex Command Center",
+  "mainBinaryName": "codex-command-center",
+  "version": "0.1.0",
+  "identifier": "com.theoden.codexcommandcenter",
   "build": {
-    "beforeBuildCommand": "npm run build",
-    "beforeDevCommand": "npm run dev",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
+    "beforeBuildCommand": "pnpm app:build",
+    "beforeDevCommand": "pnpm app:dev",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
   },
-  "package": {
-    "productName": "Codex Command Center",
-    "version": "0.1.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": true
-    },
+  "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Codex Command Center",
         "width": 1400,
-        "height": 900
+        "height": 900,
+        "useHttpsScheme": true
       }
-    ]
+    ],
+    "security": {
+      "capabilities": ["default"]
+    }
   }
 }

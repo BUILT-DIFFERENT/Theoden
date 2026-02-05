@@ -15,19 +15,21 @@ export interface WorkspaceInfo {
   strategy: WorkspaceStrategy;
 }
 
-export async function createWorkspace(_request: WorkspaceCreateRequest): Promise<WorkspaceInfo> {
-  return {
+export function createWorkspace(
+  _request: WorkspaceCreateRequest,
+): Promise<WorkspaceInfo> {
+  return Promise.resolve({
     id: `ws-${Date.now()}`,
     path: "",
     branch: "",
-    strategy: _request.strategy
-  };
+    strategy: _request.strategy,
+  });
 }
 
-export async function mergeWorkspace(
+export function mergeWorkspace(
   _workspaceId: string,
   _targetBranch: string,
-  _strategy: "rebase" | "merge" | "squash"
-) {
-  return;
+  _strategy: "rebase" | "merge" | "squash",
+): Promise<void> {
+  return Promise.resolve();
 }

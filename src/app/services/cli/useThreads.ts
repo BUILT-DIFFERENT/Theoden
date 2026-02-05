@@ -1,9 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+
+import {
+  listThreads,
+  type ThreadListResponse,
+} from "@/app/services/cli/threads";
+import { mockProjects, mockThreads } from "@/app/state/mockData";
 import type { Project, ThreadSummary } from "@/app/types";
-import { listThreads } from "@/app/services/cli/threads";
 import { isTauri } from "@/app/utils/tauri";
 import { formatRelativeTimeFromSeconds } from "@/app/utils/time";
-import { mockProjects, mockThreads } from "@/app/state/mockData";
 
 function projectKeyFromCwd(cwd: string) {
   return cwd.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
@@ -19,63 +24,154 @@ function mapThreadToSummary(thread: {
   preview: string;
   cwd: string;
   updatedAt: number;
+  modelProvider?: string;
+  source?: unknown;
 }) {
-  const title = thread.preview?.trim().length ? thread.preview : "Untitled thread";
+  const title = thread.preview?.trim().length
+    ? thread.preview
+    : "Untitled thread";
   return {
     id: thread.id,
     title,
     subtitle: thread.cwd,
     status: "done",
     projectId: projectKeyFromCwd(thread.cwd),
-    lastUpdated: formatRelativeTimeFromSeconds(thread.updatedAt)
+    lastUpdated: formatRelativeTimeFromSeconds(thread.updatedAt),
+    modelProvider: thread.modelProvider,
+    source: sourceLabelFromThread(thread.source),
   } satisfies ThreadSummary;
 }
 
 function mapThreadsToProjects(threads: ThreadSummary[]): Project[] {
-  const grouped: Record<string, Project> = {};
+  const grouped = new Map<string, Project>();
   threads.forEach((thread) => {
     const projectId = thread.projectId;
-    if (!grouped[projectId]) {
-      grouped[projectId] = {
+    const existing = grouped.get(projectId);
+    if (!existing) {
+      grouped.set(projectId, {
         id: projectId,
         name: projectNameFromCwd(thread.subtitle),
         path: thread.subtitle,
         tags: ["cli"],
         activeRuns: [],
-        recentThreads: [],
-        lastThreadId: thread.id
-      };
+        recentThreads: [thread],
+        lastThreadId: thread.id,
+      });
+      return;
     }
-    grouped[projectId].recentThreads.push(thread);
+    existing.recentThreads.push(thread);
   });
-  return Object.values(grouped).map((project) => ({
+  return Array.from(grouped.values(), (project) => ({
     ...project,
     recentThreads: project.recentThreads.slice(0, 5),
-    lastThreadId: project.recentThreads[0]?.id ?? project.lastThreadId
+    lastThreadId: project.recentThreads[0]?.id ?? project.lastThreadId,
   }));
 }
 
-export function useThreadList() {
-  const query = useQuery({
-    queryKey: ["threads", "list"],
-    queryFn: () => listThreads({ limit: 50 }),
-    enabled: isTauri()
+export interface ThreadListOptions {
+  search?: string;
+  limit?: number;
+  archived?: boolean;
+  modelProviders?: string[];
+  sourceKinds?: string[];
+}
+
+function normalizeSearch(value?: string) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+export function useThreadList(options: ThreadListOptions = {}) {
+  const isDesktop = isTauri();
+  const normalizedProviders = normalizeArray(options.modelProviders);
+  const normalizedSources = normalizeArray(options.sourceKinds);
+  const archived = options.archived ?? false;
+  const query = useInfiniteQuery<ThreadListResponse>({
+    queryKey: [
+      "threads",
+      "list",
+      options.limit ?? 50,
+      archived,
+      normalizedProviders,
+      normalizedSources,
+    ],
+    queryFn: ({ pageParam }) =>
+      listThreads({
+        cursor: typeof pageParam === "string" ? pageParam : null,
+        limit: options.limit ?? 50,
+        archived: options.archived ?? undefined,
+        modelProviders: normalizedProviders,
+        sourceKinds: normalizedSources,
+      }),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: isDesktop,
   });
 
-  if (!isTauri()) {
-    return {
-      threads: mockThreads,
-      projects: mockProjects,
-      isLoading: false,
-      isMock: true
-    };
-  }
-
-  const threads = (query.data ?? []).map(mapThreadToSummary);
+  const allThreads = useMemo(() => {
+    if (!isDesktop) return mockThreads;
+    const pages = query.data?.pages ?? [];
+    return pages.flatMap((page) => page.data).map(mapThreadToSummary);
+  }, [isDesktop, mockThreads, query.data]);
+  const search = normalizeSearch(options.search);
+  const threads = useMemo(() => {
+    if (!search) return allThreads;
+    return allThreads.filter((thread) => {
+      const haystack =
+        `${thread.title} ${thread.subtitle} ${thread.projectId}`.toLowerCase();
+      return haystack.includes(search);
+    });
+  }, [allThreads, search]);
+  const providers = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allThreads
+            .map((thread) => thread.modelProvider)
+            .filter((provider): provider is string => Boolean(provider)),
+        ),
+      ).sort(),
+    [allThreads],
+  );
+  const sources = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allThreads
+            .map((thread) => thread.source)
+            .filter((source): source is string => Boolean(source)),
+        ),
+      ).sort(),
+    [allThreads],
+  );
+  const projects = useMemo(
+    () => (isDesktop ? mapThreadsToProjects(threads) : mockProjects),
+    [isDesktop, mockProjects, threads],
+  );
   return {
     threads,
-    projects: mapThreadsToProjects(threads),
-    isLoading: query.isLoading,
-    isMock: false
+    allThreads,
+    projects,
+    providers,
+    sources,
+    hasMore: isDesktop ? query.hasNextPage : false,
+    loadMore: query.fetchNextPage,
+    isFetchingMore: isDesktop ? query.isFetchingNextPage : false,
+    isLoading: isDesktop ? query.isPending : false,
+    isMock: !isDesktop,
   };
+}
+
+function normalizeArray(values?: string[]) {
+  if (!values?.length) return [];
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean)),
+  ).sort();
+}
+
+function sourceLabelFromThread(source?: unknown) {
+  if (typeof source === "string") return source;
+  if (source && typeof source === "object" && "subagent" in source) {
+    return "subagent";
+  }
+  return undefined;
 }

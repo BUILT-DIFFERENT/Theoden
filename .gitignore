@@ -13,6 +13,9 @@ bazel-*
 build/
 out/
 storybook-static/
+target/
+vite.config.d.ts
+vite.config.js
 
 # ignore README for publishing
 codex-cli/README.md
@@ -68,6 +71,11 @@ coverage/
 # personal files
 personal/
 
+# local agent tooling
+.agents/
+.codex/
+.opencode/
+
 # os
 .DS_Store
 Thumbs.db
@@ -90,4 +98,3 @@ CHANGELOG.ignore.md
 # Python bytecode files
 __pycache__/
 *.pyc
-

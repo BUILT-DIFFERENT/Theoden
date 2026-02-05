@@ -102,16 +102,30 @@ pub fn arg0_dispatch() -> Option<Arg0PathEntryGuard> {
 /// in this workspace that depends on these helper CLIs.
 pub fn arg0_dispatch_or_else<F, Fut>(main_fn: F) -> anyhow::Result<()>
 where
-    F: FnOnce(Option<PathBuf>) -> Fut,
-    Fut: Future<Output = anyhow::Result<()>>,
+    F: FnOnce(Option<PathBuf>) -> Fut + Send + 'static,
+    Fut: Future<Output = anyhow::Result<()>> + 'static,
 {
     // Retain the TempDir so it exists for the lifetime of the invocation of
     // this executable. Admittedly, we could invoke `keep()` on it, but it
     // would be nice to avoid leaving temporary directories behind, if possible.
     let _path_entry = arg0_dispatch();
 
-    // Regular invocation – create a Tokio runtime and execute the provided
-    // async entry-point.
+    #[cfg(windows)]
+    {
+        run_with_large_stack(main_fn)
+    }
+
+    #[cfg(not(windows))]
+    {
+        run_with_runtime(main_fn)
+    }
+}
+
+fn run_with_runtime<F, Fut>(main_fn: F) -> anyhow::Result<()>
+where
+    F: FnOnce(Option<PathBuf>) -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async move {
         let codex_linux_sandbox_exe: Option<PathBuf> = if cfg!(target_os = "linux") {
@@ -122,6 +136,30 @@ where
 
         main_fn(codex_linux_sandbox_exe).await
     })
+}
+
+#[cfg(windows)]
+fn run_with_large_stack<F, Fut>(main_fn: F) -> anyhow::Result<()>
+where
+    F: FnOnce(Option<PathBuf>) -> Fut + Send + 'static,
+    Fut: Future<Output = anyhow::Result<()>> + 'static,
+{
+    const STACK_SIZE_BYTES: usize = 8 * 1024 * 1024;
+    let handle = std::thread::Builder::new()
+        .stack_size(STACK_SIZE_BYTES)
+        .spawn(move || run_with_runtime(main_fn))?;
+    match handle.join() {
+        Ok(result) => result,
+        Err(err) => {
+            if let Some(payload) = err.downcast_ref::<&'static str>() {
+                anyhow::bail!("worker thread panicked: {payload}");
+            }
+            if let Some(payload) = err.downcast_ref::<String>() {
+                anyhow::bail!("worker thread panicked: {payload}");
+            }
+            anyhow::bail!("worker thread panicked");
+        }
+    }
 }
 
 const ILLEGAL_ENV_VAR_PREFIX: &str = "CODEX_";

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, Mutex};
@@ -62,36 +62,43 @@ async fn app_server_start(
     args: Option<Vec<String>>,
     cwd: Option<String>,
 ) -> Result<(), String> {
-    let mut child_guard = state.child.lock().await;
-    if child_guard.is_some() {
-        return Ok(());
-    }
+    let (stdout, stderr, stdin) = {
+        let mut child_guard = state.child.lock().await;
+        if child_guard.is_some() {
+            return Ok(());
+        }
 
-    let mut cmd = Command::new("codex");
-    cmd.arg("app-server");
-    if let Some(extra_args) = args {
-        cmd.args(extra_args);
-    }
-    if let Some(cwd) = cwd {
-        cmd.current_dir(cwd);
-    }
-    cmd.stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        let mut cmd = Command::new("codex");
+        cmd.arg("app-server");
+        if let Some(extra_args) = args {
+            cmd.args(extra_args);
+        }
+        if let Some(cwd) = cwd {
+            cmd.current_dir(cwd);
+        }
+        cmd.stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|err| format!("failed to spawn codex app-server: {err}"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "failed to capture app-server stdout".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "failed to capture app-server stderr".to_string())?;
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "failed to capture app-server stdin".to_string())?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|err| format!("failed to spawn codex app-server: {err}"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "failed to capture app-server stdout".to_string())?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| "failed to capture app-server stderr".to_string())?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "failed to capture app-server stdin".to_string())?;
+
+        *child_guard = Some(child);
+        (stdout, stderr, stdin)
+    };
 
     *state.stdin.lock().await = Some(stdin);
 
@@ -117,15 +124,15 @@ async fn app_server_start(
                             }
                         }
                         if has_method {
-                            let _ = app_handle.emit_all("app-server-request", message);
+                            let _ = app_handle.emit("app-server-request", message);
                             continue;
                         }
                     }
 
                     if has_method {
-                        let _ = app_handle.emit_all("app-server-notification", message);
+                        let _ = app_handle.emit("app-server-notification", message);
                     } else {
-                        let _ = app_handle.emit_all("app-server-response", message);
+                        let _ = app_handle.emit("app-server-response", message);
                     }
                 }
                 Err(err) => {
@@ -134,7 +141,7 @@ async fn app_server_start(
                         "error": err.to_string(),
                         "line": line
                     });
-                    let _ = app_handle.emit_all("app-server-raw", payload);
+                    let _ = app_handle.emit("app-server-raw", payload);
                 }
             }
         }
@@ -148,11 +155,9 @@ async fn app_server_start(
                 continue;
             }
             let payload = serde_json::json!({ "stderr": line });
-            let _ = app_handle.emit_all("app-server-stderr", payload);
+            let _ = app_handle.emit("app-server-stderr", payload);
         }
     });
-
-    *child_guard = Some(child);
     Ok(())
 }
 

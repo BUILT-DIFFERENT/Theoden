@@ -1,5 +1,5 @@
-import type { Provider, RunRequest } from "@/app/services/providers/types";
 import { runCli } from "@/app/services/cli/runner";
+import type { Provider, RunRequest } from "@/app/services/providers/types";
 
 export const CloudProvider: Provider = {
   id: "cloud",
@@ -15,11 +15,13 @@ export const CloudProvider: Provider = {
         "--env",
         envId,
         ...(_request.cloud?.branch ? ["--branch", _request.cloud.branch] : []),
-        ...(_request.cloud?.attempts ? ["--attempts", String(_request.cloud.attempts)] : []),
-        _request.prompt
+        ...(_request.cloud?.attempts
+          ? ["--attempts", String(_request.cloud.attempts)]
+          : []),
+        _request.prompt,
       ],
-      cwd: _request.repoPath
+      cwd: _request.repoPath,
     });
     throw new Error("Cloud provider not implemented yet.");
-  }
+  },
 };

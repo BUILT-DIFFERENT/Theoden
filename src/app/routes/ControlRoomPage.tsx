@@ -1,15 +1,21 @@
-import { useThreadList } from "@/app/services/cli/useThreads";
+import { useState } from "react";
+
 import { useActiveRuns } from "@/app/services/cli/useActiveRuns";
+import { useThreadList } from "@/app/services/cli/useThreads";
 
 export function ControlRoomPage() {
-  const { threads } = useThreadList();
-  const activeRuns = useActiveRuns(threads);
+  const [search, setSearch] = useState("");
+  const { threads, allThreads, hasMore, loadMore, isFetchingMore } =
+    useThreadList({ search, limit: 25 });
+  const activeRuns = useActiveRuns(allThreads);
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Live Runs</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Live Runs
+            </p>
             <h2 className="font-display text-xl">Parallel agents in flight</h2>
           </div>
           <button className="rounded-full border border-white/10 px-4 py-2 text-xs hover:border-flare-300">
@@ -19,10 +25,15 @@ export function ControlRoomPage() {
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {activeRuns.length ? (
             activeRuns.map((run) => (
-              <div key={run.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <div
+                key={run.id}
+                className="rounded-xl border border-white/10 bg-black/20 p-4"
+              >
                 <p className="text-sm text-ink-100">{run.title}</p>
                 <p className="text-xs text-ink-400">{run.statusLabel}</p>
-                <p className="mt-2 text-xs text-ink-300">Project: {run.projectId}</p>
+                <p className="mt-2 text-xs text-ink-300">
+                  Project: {run.projectId}
+                </p>
               </div>
             ))
           ) : (
@@ -36,17 +47,38 @@ export function ControlRoomPage() {
       <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Threads</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Threads
+            </p>
             <h2 className="font-display text-xl">Recent investigations</h2>
           </div>
           <button className="rounded-full border border-white/10 px-4 py-2 text-xs hover:border-flare-300">
             View all
           </button>
         </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search threads"
+            className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none md:w-64"
+          />
+          {search ? (
+            <button
+              className="rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300"
+              onClick={() => setSearch("")}
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
         <div className="mt-4 space-y-3">
           {threads.length ? (
             threads.map((thread) => (
-              <div key={thread.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <div
+                key={thread.id}
+                className="rounded-xl border border-white/10 bg-black/20 p-4"
+              >
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-ink-100">{thread.title}</p>
                   <span className="rounded-full border border-white/10 px-2 py-1 text-xs text-ink-300">
@@ -54,15 +86,28 @@ export function ControlRoomPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-ink-400">{thread.subtitle}</p>
-                <p className="mt-2 text-xs text-ink-300">Updated {thread.lastUpdated}</p>
+                <p className="mt-2 text-xs text-ink-300">
+                  Updated {thread.lastUpdated}
+                </p>
               </div>
             ))
           ) : (
             <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-ink-400">
-              No threads yet.
+              {search ? "No threads match your search." : "No threads yet."}
             </div>
           )}
         </div>
+        {hasMore ? (
+          <div className="mt-4">
+            <button
+              className="rounded-full border border-white/10 px-4 py-2 text-xs hover:border-flare-300"
+              onClick={() => void loadMore()}
+              disabled={isFetchingMore}
+            >
+              {isFetchingMore ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        ) : null}
       </section>
     </div>
   );

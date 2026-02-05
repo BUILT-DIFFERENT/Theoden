@@ -33,10 +33,12 @@
   "sideEffects": false,
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsup",
+    "build": "pnpm run build:codex && tsup",
     "build:watch": "tsup --watch",
+    "build:codex": "cargo build -p codex-cli --manifest-path ../../codex-rs/Cargo.toml",
     "lint": "pnpm eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
     "lint:fix": "pnpm eslint --fix \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "pretest": "pnpm run build:codex",
     "test": "jest",
     "test:watch": "jest --watch",
     "coverage": "jest --coverage",

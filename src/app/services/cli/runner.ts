@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "@tauri-apps/api/core";
 
-export interface CliRunRequest {
+export interface CliRunRequest extends Record<string, unknown> {
   args: string[];
   cwd?: string;
   env?: Record<string, string>;

@@ -6,12 +6,12 @@ export interface ThreadRecord {
   projectPath: string;
 }
 
-export async function listThreadHistory(): Promise<ThreadRecord[]> {
+export function listThreadHistory(): Promise<ThreadRecord[]> {
   // Placeholder: call `thread/list` via app-server.
-  return [];
+  return Promise.resolve([]);
 }
 
-export async function resumeThread(_threadId: string) {
+export function resumeThread(_threadId: string): Promise<void> {
   // Placeholder: call `thread/resume` via app-server.
-  return;
+  return Promise.resolve();
 }

@@ -1,5 +1,13 @@
-import type { Provider, RunRequest } from "@/app/services/providers/types";
-import { sendAppServerRequest, startAppServer } from "@/app/services/cli/appServer";
+import {
+  sendAppServerRequest,
+  startAppServer,
+} from "@/app/services/cli/appServer";
+import type {
+  Provider,
+  RunEventStream,
+  RunHandle,
+  RunRequest,
+} from "@/app/services/providers/types";
 
 export const LocalProvider: Provider = {
   id: "local",
@@ -7,42 +15,35 @@ export const LocalProvider: Provider = {
   displayName: "Local CLI",
   async startRun(_request: RunRequest) {
     // Placeholder: launch `codex app-server` and start a thread/turn.
+    const now = Date.now();
     await startAppServer({ cwd: _request.repoPath });
     await sendAppServerRequest({
-      id: Date.now(),
+      id: now,
       method: "thread/start",
       params: {
-        cwd: _request.repoPath
-      }
+        cwd: _request.repoPath,
+      },
     });
     await sendAppServerRequest({
-      id: Date.now() + 1,
+      id: now + 1,
       method: "turn/start",
       params: {
         threadId: "thread-id-from-start",
         input: [{ type: "text", text: _request.prompt }],
-        effort: _request.effort
-      }
+        effort: _request.effort,
+      },
     });
-    const handle = {
-      id: `local-${Date.now()}`,
-      stop: async () => {
-        return;
-      }
+    const handle: RunHandle = {
+      id: `local-${now}`,
+      stop: () => Promise.resolve(),
     };
 
-    const stream = {
-      onEvent: (_handler: (event: any) => void) => {
-        return;
-      },
-      onComplete: (_handler: (thread: any) => void) => {
-        return;
-      },
-      onError: (_handler: (error: Error) => void) => {
-        return;
-      }
+    const stream: RunEventStream = {
+      onEvent: () => {},
+      onComplete: () => {},
+      onError: () => {},
     };
 
     return { handle, stream };
-  }
+  },
 };

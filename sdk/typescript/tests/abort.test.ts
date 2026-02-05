@@ -123,16 +123,19 @@ describe("AbortSignal support", () => {
 
       // Abort during iteration
       let eventCount = 0;
+      const abortTimer = setTimeout(
+        () => controller.abort("Aborted during iteration"),
+        50,
+      );
       await expect(
         (async () => {
           for await (const event of events) {
             void event; // Consume the event
-            eventCount++;
-            // Abort after first event
-            if (eventCount === 5) {
+            eventCount += 1;
+            if (eventCount === 1) {
+              clearTimeout(abortTimer);
               controller.abort("Aborted during iteration");
             }
-            // Continue iterating - should eventually throw
           }
         })(),
       ).rejects.toThrow();

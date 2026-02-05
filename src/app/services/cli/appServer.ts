@@ -1,11 +1,11 @@
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "@tauri-apps/api/core";
 
-export interface AppServerStartRequest {
+export interface AppServerStartRequest extends Record<string, unknown> {
   args?: string[];
   cwd?: string;
 }
 
-export interface AppServerRequest {
+export interface AppServerRequest extends Record<string, unknown> {
   id: number;
   method: string;
   params?: unknown;
@@ -25,14 +25,23 @@ export async function stopAppServer() {
   return invoke("app_server_stop");
 }
 
-export async function sendAppServerRequest<T>(request: AppServerRequest): Promise<AppServerResponse<T>> {
+export async function sendAppServerRequest<T>(
+  request: AppServerRequest,
+): Promise<AppServerResponse<T>> {
   return invoke("app_server_request", request);
 }
 
-export async function sendAppServerNotification(method: string, params?: unknown) {
+export async function sendAppServerNotification(
+  method: string,
+  params?: unknown,
+) {
   return invoke("app_server_notify", { method, params });
 }
 
-export async function respondAppServerRequest(id: string | number, result?: unknown, error?: unknown) {
+export async function respondAppServerRequest(
+  id: string | number,
+  result?: unknown,
+  error?: unknown,
+) {
   return invoke("app_server_respond", { id, result, error });
 }

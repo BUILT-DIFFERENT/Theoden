@@ -4,10 +4,13 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Config</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+          Config
+        </p>
         <h2 className="font-display text-xl">Unified CLI configuration</h2>
         <p className="mt-2 text-sm text-ink-300">
-          Shows the merged user config and per-project overrides from the Codex CLI config TOML.
+          Shows the merged user config and per-project overrides from the Codex
+          CLI config TOML.
         </p>
         <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-ink-300">
           config.toml preview will live here.
@@ -23,11 +26,16 @@ export function SettingsPage() {
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Editors</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+          Editors
+        </p>
         <h2 className="font-display text-xl">Detected tools</h2>
         <div className="mt-4 space-y-2 text-sm">
           {mockEditors.map((editor) => (
-            <div key={editor.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+            <div
+              key={editor.id}
+              className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2"
+            >
               <span>{editor.name}</span>
               <span className="text-xs text-ink-400">
                 {editor.detected ? "Detected" : "Not found"}
@@ -38,11 +46,16 @@ export function SettingsPage() {
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Providers</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+          Providers
+        </p>
         <h2 className="font-display text-xl">Execution backends</h2>
         <div className="mt-4 space-y-2 text-sm">
           {mockProviders.map((provider) => (
-            <div key={provider.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+            <div
+              key={provider.id}
+              className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2"
+            >
               <span>{provider.id}</span>
               <span className="text-xs text-ink-400">{provider.detail}</span>
             </div>

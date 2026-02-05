@@ -6,8 +6,8 @@ export const mockInstalledSkills: SkillSummary[] = [
     name: "Yeet",
     description: "Stage, commit, push, and open a GitHub PR end-to-end.",
     installed: true,
-    permissions: ["git", "network"]
-  }
+    permissions: ["git", "network"],
+  },
 ];
 
 export const mockRemoteSkills: RemoteSkillSummary[] = [
@@ -17,7 +17,7 @@ export const mockRemoteSkills: RemoteSkillSummary[] = [
     description: "Summarize recent CI failures and propose fixes.",
     publisher: "OpenAI Labs",
     tags: ["automation", "testing"],
-    installable: true
+    installable: true,
   },
   {
     id: "remote-skill-changelog",
@@ -25,6 +25,6 @@ export const mockRemoteSkills: RemoteSkillSummary[] = [
     description: "Draft a changelog from merged PRs.",
     publisher: "Community",
     tags: ["docs", "release"],
-    installable: true
-  }
+    installable: true,
+  },
 ];

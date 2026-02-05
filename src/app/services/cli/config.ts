@@ -5,16 +5,18 @@ export interface CodexConfig {
   [key: string]: unknown;
 }
 
-export async function loadMergedConfig(): Promise<CodexConfig> {
+export function loadMergedConfig(): Promise<CodexConfig> {
   // Placeholder: call `config/read` via app-server.
-  return {
+  return Promise.resolve({
     model: "gpt-5",
     effort: "high",
-    verbosity: "normal"
-  };
+    verbosity: "normal",
+  });
 }
 
-export async function validateConfig(_configText: string): Promise<{ valid: boolean; errors: string[] }> {
+export function validateConfig(
+  _configText: string,
+): Promise<{ valid: boolean; errors: string[] }> {
   // Placeholder: app-server validates on write; UI can do local TOML parse.
-  return { valid: true, errors: [] };
+  return Promise.resolve({ valid: true, errors: [] });
 }

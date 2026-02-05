@@ -1,36 +1,53 @@
+import {
+  getArray,
+  getObject,
+  getString,
+  getStringArray,
+  isRecord,
+  type AppServerNotification,
+  type JsonObject,
+} from "@/app/services/cli/appServerPayload";
+import {
+  diffStatsFromChanges,
+  diffStatsFromText,
+} from "@/app/services/cli/diffSummary";
 import type { RunEvent, RunStatus } from "@/app/types";
 
-export interface AppServerNotification {
-  method: string;
-  params?: Record<string, any>;
-}
+const METHOD_LABELS: Record<string, string> = {
+  "thread/started": "Thread started",
+  "turn/started": "Turn started",
+  "turn/completed": "Turn completed",
+  "turn/diff/updated": "Diff updated",
+  "turn/plan/updated": "Plan updated",
+  "item/commandExecution/outputDelta": "Command output",
+  "item/fileChange/outputDelta": "File change output",
+  "item/fileChange/requestApproval": "Approve file change",
+  "item/commandExecution/requestApproval": "Approve command",
+  "item/agentMessage/delta": "Agent message",
+};
 
-function statusFromMethod(method: string, params?: Record<string, any>): RunStatus {
-  if (method.includes("requestApproval")) {
-    return "needs_review";
-  }
-  if (method.includes("error") || method.includes("failed")) {
-    return "failed";
-  }
+function statusFromMethod(method: string, params?: JsonObject): RunStatus {
+  if (method.includes("requestApproval")) return "needs_review";
+  if (method.includes("error") || method.includes("failed")) return "failed";
   if (method.includes("completed")) {
-    const turnStatus = params?.turn?.status;
-    if (turnStatus === "failed") {
-      return "failed";
-    }
+    const turn = params ? getObject(params, "turn") : undefined;
+    const turnStatus = turn ? getString(turn, "status") : undefined;
+    if (turnStatus === "failed") return "failed";
     return "done";
   }
   return "running";
 }
 
-function itemLabel(item: Record<string, any>) {
-  const type = item.type;
+function itemLabel(item: JsonObject) {
+  const type = getString(item, "type");
   if (type === "commandExecution") {
-    const command = item.command?.join(" ") ?? "Command";
+    const command = commandStringFromRecord(item) ?? "Command";
     return `Command: ${command}`;
   }
   if (type === "fileChange") {
-    const count = item.changes?.length ?? 0;
-    const { additions, deletions } = diffStatsFromChanges(item.changes);
+    const changes = getArray(item, "changes") ?? [];
+    const count = changes.length;
+    const { additions, deletions } = diffStatsFromChanges(changes);
     const diffSuffix =
       additions || deletions ? ` +${additions} -${deletions}` : "";
     return `Edited ${count} file${count === 1 ? "" : "s"}${diffSuffix}`;
@@ -42,89 +59,84 @@ function itemLabel(item: Record<string, any>) {
     return "Reasoning";
   }
   if (type === "webSearch") {
-    return `Search: ${item.query ?? "web"}`;
+    const query = getString(item, "query");
+    return `Search: ${query ?? "web"}`;
   }
   if (type === "mcpToolCall") {
-    return `Tool: ${item.tool ?? "mcp"}`;
+    const tool = getString(item, "tool");
+    return `Tool: ${tool ?? "mcp"}`;
   }
   return type ?? "Item";
 }
 
-function labelFromMethod(method: string, params?: Record<string, any>) {
-  if (method === "thread/started") return "Thread started";
-  if (method === "turn/started") return "Turn started";
-  if (method === "turn/completed") return "Turn completed";
-  if (method === "turn/diff/updated") return "Diff updated";
-  if (method === "turn/plan/updated") return "Plan updated";
-  if (method === "item/started" && params?.item) return itemLabel(params.item);
-  if (method === "item/completed" && params?.item) return `${itemLabel(params.item)} (done)`;
-  if (method === "item/commandExecution/outputDelta") return "Command output";
-  if (method === "item/fileChange/outputDelta") return "File change output";
-  if (method === "item/fileChange/requestApproval") return "Approve file change";
-  if (method === "item/commandExecution/requestApproval") return "Approve command";
-  if (method === "item/agentMessage/delta") return "Agent message";
-  return method;
+function labelFromMethod(method: string, params?: JsonObject) {
+  const item = params ? getObject(params, "item") : undefined;
+  if (method === "item/started" && item) return itemLabel(item);
+  if (method === "item/completed" && item) return `${itemLabel(item)} (done)`;
+  return METHOD_LABELS[method] ?? method;
 }
 
-function detailFromParams(method: string, params?: Record<string, any>) {
+function detailFromParams(method: string, params?: JsonObject) {
   if (!params) return undefined;
-  if (method.startsWith("item/") && params.item) {
-    if (params.item.type === "fileChange") {
-      const paths = params.item.changes?.map((c: any) => c.path).filter(Boolean);
-      if (paths?.length) {
+  const item = getObject(params, "item");
+  if (method.startsWith("item/") && item) {
+    const itemType = getString(item, "type");
+    if (itemType === "fileChange") {
+      const changes = getArray(item, "changes") ?? [];
+      const paths = changes.reduce<string[]>((acc, change) => {
+        if (!isRecord(change)) {
+          return acc;
+        }
+        const path = getString(change, "path");
+        if (path) {
+          acc.push(path);
+        }
+        return acc;
+      }, []);
+      if (paths.length) {
         return paths.slice(0, 3).join(", ") + (paths.length > 3 ? "…" : "");
       }
     }
-    if (params.item.type === "commandExecution") {
-      return params.item.command?.join(" ");
+    if (itemType === "commandExecution") {
+      return commandStringFromRecord(item);
     }
   }
-  if (method === "turn/diff/updated" && params.diff) {
-    const { additions, deletions } = diffStatsFromText(params.diff);
+  if (method === "turn/diff/updated") {
+    const diff = getString(params, "diff");
+    if (!diff) return undefined;
+    const { additions, deletions } = diffStatsFromText(diff);
     if (additions || deletions) {
       return `Diff +${additions} -${deletions}`;
     }
-    return `Updated diff (${params.diff?.length ?? 0} chars)`;
+    return `Updated diff (${diff.length} chars)`;
   }
-  if (params.turn?.status) {
-    return `Turn ${params.turn.status}`;
+  const turn = getObject(params, "turn");
+  const status = turn ? getString(turn, "status") : undefined;
+  if (status) {
+    return `Turn ${status}`;
   }
   return undefined;
 }
 
-function diffStatsFromText(diffText?: string) {
-  if (!diffText) return { additions: 0, deletions: 0 };
-  let additions = 0;
-  let deletions = 0;
-  diffText.split(/\r?\n/).forEach((line) => {
-    if (line.startsWith("+++") || line.startsWith("---")) return;
-    if (line.startsWith("+")) additions += 1;
-    if (line.startsWith("-")) deletions += 1;
-  });
-  return { additions, deletions };
+function commandStringFromRecord(record: JsonObject) {
+  const command = getString(record, "command");
+  if (command) return command;
+  return getStringArray(record, "command")?.join(" ");
 }
 
-function diffStatsFromChanges(changes?: Array<{ diff?: string }>) {
-  if (!changes?.length) return { additions: 0, deletions: 0 };
-  return changes.reduce(
-    (acc, change) => {
-      const { additions, deletions } = diffStatsFromText(change.diff);
-      acc.additions += additions;
-      acc.deletions += deletions;
-      return acc;
-    },
-    { additions: 0, deletions: 0 }
-  );
-}
-
-export function mapNotificationToRunEvent(notification: AppServerNotification): RunEvent | null {
+export function mapNotificationToRunEvent(
+  notification: AppServerNotification,
+): RunEvent | null {
   if (!notification?.method) return null;
-  const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const timestamp = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return {
     id: `${notification.method}-${Date.now()}`,
     timestamp,
     label: labelFromMethod(notification.method, notification.params),
     detail: detailFromParams(notification.method, notification.params),
-    status: statusFromMethod(notification.method, notification.params)
+    status: statusFromMethod(notification.method, notification.params),
   };
 }
