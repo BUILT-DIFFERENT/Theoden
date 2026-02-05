@@ -46,6 +46,13 @@ export function getStringArray(
   return value;
 }
 
+export function getNumber(record: JsonObject, key: string): number | undefined {
+  const value = record[key];
+  if (typeof value !== "number") return undefined;
+  if (Number.isNaN(value)) return undefined;
+  return value;
+}
+
 export function parseAppServerNotification(
   payload: unknown,
 ): AppServerNotification | null {

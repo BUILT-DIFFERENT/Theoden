@@ -70,6 +70,12 @@ export function AppShell() {
                 Control Room
               </Link>
               <Link
+                to="/threads"
+                className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
+              >
+                Threads
+              </Link>
+              <Link
                 to="/skills"
                 className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
               >

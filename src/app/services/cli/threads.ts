@@ -79,3 +79,31 @@ export async function readThread(threadId: string, includeTurns = false) {
   }
   return response.result?.thread;
 }
+
+export async function archiveThread(threadId: string) {
+  const response = await sendAppServerRequest({
+    id: requestId(),
+    method: "thread/archive",
+    params: {
+      threadId,
+    },
+  });
+  if (response.error) {
+    throw new Error(response.error.message);
+  }
+  return response.result;
+}
+
+export async function unarchiveThread(threadId: string) {
+  const response = await sendAppServerRequest({
+    id: requestId(),
+    method: "thread/unarchive",
+    params: {
+      threadId,
+    },
+  });
+  if (response.error) {
+    throw new Error(response.error.message);
+  }
+  return response.result;
+}

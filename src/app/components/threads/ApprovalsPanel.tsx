@@ -17,11 +17,27 @@ export function ApprovalsPanel({ threadId }: ApprovalsPanelProps) {
   const handleDecision = useCallback(
     async (
       approval: (typeof approvals)[number],
-      decision: "accept" | "acceptForSession" | "decline",
+      decision:
+        | "accept"
+        | "acceptForSession"
+        | "acceptWithExecpolicyAmendment"
+        | "decline",
     ) => {
       try {
         setApprovalDecision(approval.id, decision);
-        await respondAppServerRequest(approval.rawId, { decision });
+        const decisionPayload =
+          decision === "acceptWithExecpolicyAmendment"
+            ? approval.execPolicyAmendment
+              ? {
+                  acceptWithExecpolicyAmendment: {
+                    execpolicy_amendment: approval.execPolicyAmendment,
+                  },
+                }
+              : "accept"
+            : decision;
+        await respondAppServerRequest(approval.rawId, {
+          decision: decisionPayload,
+        });
       } catch (error) {
         console.warn("Failed to respond to approval request", error);
         markApprovalError(
@@ -56,11 +72,13 @@ export function ApprovalsPanel({ threadId }: ApprovalsPanelProps) {
                 ? "Awaiting decision"
                 : approval.decision === "acceptForSession"
                   ? "Approved for session"
-                  : approval.decision === "accept"
-                    ? "Approved"
-                    : approval.decision === "decline"
-                      ? "Declined"
-                      : "Updated"}
+                  : approval.decision === "acceptWithExecpolicyAmendment"
+                    ? "Approved with policy"
+                    : approval.decision === "accept"
+                      ? "Approved"
+                      : approval.decision === "decline"
+                        ? "Declined"
+                        : "Updated"}
               {approval.status === "responded" ? " · Awaiting result" : ""}
               {approval.status === "completed" ? " · Completed" : ""}
               {approval.status === "failed" ? " · Failed" : ""}
@@ -97,6 +115,16 @@ export function ApprovalsPanel({ threadId }: ApprovalsPanelProps) {
                         </p>
                       ))}
                     </div>
+                  </div>
+                ) : null}
+                {approval.execPolicyAmendment?.length ? (
+                  <div>
+                    <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                      Policy amendment
+                    </p>
+                    <p className="mt-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1 font-mono text-[0.7rem] text-ink-200">
+                      {approval.execPolicyAmendment.join(" ")}
+                    </p>
                   </div>
                 ) : null}
                 {approval.cwd ? (
@@ -136,6 +164,29 @@ export function ApprovalsPanel({ threadId }: ApprovalsPanelProps) {
                 )}
               </div>
             )}
+            {approval.kind === "command" &&
+            (approval.status === "completed" ||
+              approval.status === "failed") ? (
+              <div className="mt-3 space-y-2 text-xs text-ink-300">
+                <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                  <span>Execution output</span>
+                  {typeof approval.exitCode === "number" ? (
+                    <span>Exit {approval.exitCode}</span>
+                  ) : null}
+                </div>
+                {approval.commandOutput ? (
+                  <pre className="max-h-40 overflow-auto rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-[0.7rem] text-ink-200">
+                    {approval.commandOutput}
+                  </pre>
+                ) : (
+                  <p className="text-xs text-ink-500">
+                    {approval.status === "failed"
+                      ? "Command failed with no output."
+                      : "No output captured."}
+                  </p>
+                )}
+              </div>
+            ) : null}
             {approval.error ? (
               <p className="mt-2 text-xs text-rose-300">{approval.error}</p>
             ) : null}
@@ -156,6 +207,21 @@ export function ApprovalsPanel({ threadId }: ApprovalsPanelProps) {
               >
                 Accept for session
               </button>
+              {approval.kind === "command" &&
+              approval.execPolicyAmendment?.length ? (
+                <button
+                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:border-white/5 disabled:text-ink-500"
+                  onClick={() =>
+                    void handleDecision(
+                      approval,
+                      "acceptWithExecpolicyAmendment",
+                    )
+                  }
+                  disabled={approval.status !== "pending"}
+                >
+                  Accept + allow rule
+                </button>
+              ) : null}
               <button
                 className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:border-white/5 disabled:text-ink-500"
                 onClick={() => void handleDecision(approval, "decline")}

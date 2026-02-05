@@ -4,12 +4,12 @@ This repo includes a Windows-first desktop app scaffold (Tauri + React) that act
 
 Key docs:
 
-- `docs/PHILOSOPHY.md`
-- `docs/WORKFLOW_UI.md`
-- `docs/ARCHITECTURE.md`
-- `docs/APP_SERVER.md`
-- `docs/UI_SPEC.md`
-- `docs/ROADMAP.md`
+- `docs/product/PHILOSOPHY.md`
+- `docs/product/WORKFLOW_UI.md`
+- `docs/product/ARCHITECTURE.md`
+- `docs/platform/APP_SERVER.md`
+- `docs/product/UI_SPEC.md`
+- `docs/product/ROADMAP.md`
 
 ---
 
@@ -67,8 +67,8 @@ You can also use Codex with an API key, but this requires [additional setup](htt
 ## Docs
 
 - [**Codex Documentation**](https://developers.openai.com/codex)
-- [**Contributing**](./docs/contributing.md)
-- [**Installing & building**](./docs/install.md)
-- [**Open source fund**](./docs/open-source-fund.md)
+- [**Contributing**](./docs/legal/contributing.md)
+- [**Installing & building**](./docs/cli/install.md)
+- [**Open source fund**](./docs/legal/open-source-fund.md)
 
 This repository is licensed under the [Apache-2.0 License](LICENSE).

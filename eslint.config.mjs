@@ -18,8 +18,8 @@ const tsRules = {
     "error",
     {
       argsIgnorePattern: "^_",
-      varsIgnorePattern: "^_"
-    }
+      varsIgnorePattern: "^_",
+    },
   ],
   "@typescript-eslint/no-floating-promises": ["error", { ignoreVoid: true }],
   "@typescript-eslint/await-thenable": "error",
@@ -29,9 +29,9 @@ const tsRules = {
     "error",
     {
       prefer: "type-imports",
-      fixStyle: "inline-type-imports"
-    }
-  ]
+      fixStyle: "inline-type-imports",
+    },
+  ],
 };
 
 const reactRules = {
@@ -44,7 +44,10 @@ const reactRules = {
   "react/jsx-uses-react": "off",
   "react/self-closing-comp": "error",
   "react/jsx-no-target-blank": "error",
-  "react/jsx-curly-brace-presence": ["error", { props: "never", children: "never" }]
+  "react/jsx-curly-brace-presence": [
+    "error",
+    { props: "never", children: "never" },
+  ],
 };
 
 const importRules = {
@@ -53,20 +56,26 @@ const importRules = {
   "import/order": [
     "error",
     {
-      groups: ["builtin", "external", "internal", ["parent", "sibling", "index"], "type"],
+      "groups": [
+        "builtin",
+        "external",
+        "internal",
+        ["parent", "sibling", "index"],
+        "type",
+      ],
       "newlines-between": "always",
-      alphabetize: { order: "asc", caseInsensitive: true },
-      pathGroups: [
+      "alphabetize": { order: "asc", caseInsensitive: true },
+      "pathGroups": [
         {
           pattern: "@/**",
           group: "internal",
-          position: "after"
-        }
+          position: "after",
+        },
       ],
-      pathGroupsExcludedImportTypes: ["builtin"]
-    }
+      "pathGroupsExcludedImportTypes": ["builtin"],
+    },
   ],
-  "no-console": ["warn", { allow: ["warn", "error"] }]
+  "no-console": ["warn", { allow: ["warn", "error"] }],
 };
 
 export default [
@@ -77,8 +86,8 @@ export default [
       "**/build/**",
       "**/coverage/**",
       "**/.next/**",
-      "src-tauri/target/**"
-    ]
+      "src-tauri/target/**",
+    ],
   },
   js.configs.recommended,
   {
@@ -89,31 +98,31 @@ export default [
         ecmaVersion: "latest",
         sourceType: "module",
         ecmaFeatures: {
-          jsx: true
+          jsx: true,
         },
         project: ["./tsconfig.json"],
-        tsconfigRootDir
+        tsconfigRootDir,
       },
       globals: {
         ...globals.browser,
-        ...globals.es2022
-      }
+        ...globals.es2022,
+      },
     },
     plugins: {
       "@typescript-eslint": tsPlugin,
-      import: importPlugin
+      "import": importPlugin,
     },
     settings: {
       "import/resolver": {
         typescript: {
-          project: "./tsconfig.json"
-        }
-      }
+          project: "./tsconfig.json",
+        },
+      },
     },
     rules: {
       ...tsRules,
-      ...importRules
-    }
+      ...importRules,
+    },
   },
   {
     files: ["**/*.{tsx,jsx}"],
@@ -121,16 +130,16 @@ export default [
       react,
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
-      "jsx-a11y": jsxA11y
+      "jsx-a11y": jsxA11y,
     },
     settings: {
       react: {
-        version: "detect"
-      }
+        version: "detect",
+      },
     },
     rules: {
-      ...reactRules
-    }
+      ...reactRules,
+    },
   },
-  prettier
+  prettier,
 ];

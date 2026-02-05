@@ -72,9 +72,9 @@
 //!
 //! Markdown docs remain supplemental:
 //!
-//! - `docs/tui-stream-chunking-review.md`
-//! - `docs/tui-stream-chunking-tuning.md`
-//! - `docs/tui-stream-chunking-validation.md`
+//! - `docs/tui/tui-stream-chunking-review.md`
+//! - `docs/tui/tui-stream-chunking-tuning.md`
+//! - `docs/tui/tui-stream-chunking-validation.md`
 
 use std::time::Duration;
 use std::time::Instant;

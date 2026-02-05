@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { useActiveRuns } from "@/app/services/cli/useActiveRuns";
@@ -52,9 +53,12 @@ export function ControlRoomPage() {
             </p>
             <h2 className="font-display text-xl">Recent investigations</h2>
           </div>
-          <button className="rounded-full border border-white/10 px-4 py-2 text-xs hover:border-flare-300">
+          <Link
+            to="/threads"
+            className="rounded-full border border-white/10 px-4 py-2 text-xs hover:border-flare-300"
+          >
             View all
-          </button>
+          </Link>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
           <input

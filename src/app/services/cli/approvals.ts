@@ -1,5 +1,6 @@
 import {
   getArray,
+  getNumber,
   getObject,
   getString,
   getStringArray,
@@ -11,7 +12,11 @@ import { summarizeChanges } from "@/app/services/cli/diffSummary";
 import type { DiffFile } from "@/app/types";
 
 export type ApprovalKind = "command" | "fileChange";
-export type ApprovalDecision = "accept" | "acceptForSession" | "decline";
+export type ApprovalDecision =
+  | "accept"
+  | "acceptForSession"
+  | "acceptWithExecpolicyAmendment"
+  | "decline";
 export type ApprovalStatus =
   | "pending"
   | "responded"
@@ -30,19 +35,27 @@ export interface ApprovalRequest {
   decision?: ApprovalDecision;
   result?: "completed" | "failed" | "declined";
   error?: string;
+  execPolicyAmendment?: string[];
   command?: string;
   commandActions?: string[];
   cwd?: string;
   reason?: string;
   files?: DiffFile[];
+  commandOutput?: string;
+  exitCode?: number;
+  durationMs?: number;
 }
 
 interface ApprovalItemContext {
   itemId: string;
   kind: ApprovalKind;
+  execPolicyAmendment?: string[];
   command?: string;
   commandActions?: string[];
   files?: DiffFile[];
+  commandOutput?: string;
+  exitCode?: number;
+  durationMs?: number;
 }
 
 const approvals = new Map<string, ApprovalRequest>();
@@ -85,6 +98,10 @@ export function registerApprovalRequest(request: AppServerRequest) {
     getArray(params, "commandActions"),
   );
   const cwd = getString(params, "cwd");
+  const execPolicyAmendment = getStringArray(
+    params,
+    "proposedExecpolicyAmendment",
+  );
   const context = approvalItems.get(itemId);
 
   approvals.set(String(request.id), {
@@ -101,7 +118,13 @@ export function registerApprovalRequest(request: AppServerRequest) {
       : context?.commandActions,
     cwd,
     reason: getString(params, "reason"),
+    execPolicyAmendment: execPolicyAmendment?.length
+      ? execPolicyAmendment
+      : undefined,
     files: context?.files,
+    commandOutput: context?.commandOutput,
+    exitCode: context?.exitCode,
+    durationMs: context?.durationMs,
   });
   emit();
 }
@@ -145,11 +168,17 @@ export function registerApprovalItem(notification: AppServerNotification) {
     const commandActions = summarizeCommandActions(
       getArray(item, "commandActions"),
     );
+    const aggregatedOutput = getString(item, "aggregatedOutput");
+    const exitCode = getNumber(item, "exitCode");
+    const durationMs = getNumber(item, "durationMs");
     approvalItems.set(itemId, {
       itemId,
       kind: "command",
       command,
       commandActions: commandActions?.length ? commandActions : undefined,
+      commandOutput: aggregatedOutput ?? undefined,
+      exitCode,
+      durationMs,
     });
   }
 
@@ -162,6 +191,9 @@ export function registerApprovalItem(notification: AppServerNotification) {
       command: approval.command ?? context.command,
       commandActions: approval.commandActions ?? context.commandActions,
       files: approval.files ?? context.files,
+      commandOutput: approval.commandOutput ?? context.commandOutput,
+      exitCode: approval.exitCode ?? context.exitCode,
+      durationMs: approval.durationMs ?? context.durationMs,
     });
   });
   emit();

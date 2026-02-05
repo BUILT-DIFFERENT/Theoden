@@ -20,7 +20,7 @@ This guide is about tuning behavior, not redesigning the policy.
   - `codex_tui::streaming::commit_tick`
 - Evaluate on sustained, bursty, and mixed-output prompts.
 
-See `docs/tui-stream-chunking-validation.md` for the measurement process.
+See `docs/tui/tui-stream-chunking-validation.md` for the measurement process.
 
 ## Tuning goals
 
