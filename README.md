@@ -1,6 +1,6 @@
 # Theoden Command Center (Desktop)
 
-This repo includes a Windows-first desktop app scaffold (Tauri + React) that acts as a UI wrapper around the Codex CLI. It is intentionally threads-first and run-timeline-first, with the CLI (`codex app-server` and `codex cloud exec`) as the source of truth.
+This repo includes a Windows-first desktop app scaffold (Tauri + React) that acts as a UI wrapper around the Codex CLI. It does not bundle the officially released macOS native Codex app from OpenAI; the desktop app here is the Rust/Tauri scaffold. It is intentionally threads-first and run-timeline-first, with the CLI (`codex app-server` and `codex cloud exec`) as the source of truth.
 
 Key docs:
 
