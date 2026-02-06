@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Copy,
   GitBranch,
+  GitCommitHorizontal,
   MoreHorizontal,
   Play,
   Terminal,
@@ -13,6 +14,7 @@ import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { resumeThread, startThread, startTurn } from "@/app/services/cli/turns";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { createPullRequest, pushBranch } from "@/app/services/git/commits";
 import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
 import { checkoutBranch } from "@/app/services/git/worktrees";
 import { mockThreadDetail } from "@/app/state/mockData";
@@ -86,13 +88,19 @@ export function ThreadTopBar({
 
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [openMenuOpen, setOpenMenuOpen] = useState(false);
+  const [gitMenuOpen, setGitMenuOpen] = useState(false);
   const [runModalOpen, setRunModalOpen] = useState(false);
   const [runPrompt, setRunPrompt] = useState("");
   const [runError, setRunError] = useState<string | null>(null);
   const [runSubmitting, setRunSubmitting] = useState(false);
   const [openMessage, setOpenMessage] = useState<string | null>(null);
+  const [gitMessage, setGitMessage] = useState<string | null>(null);
+  const [gitSubmitting, setGitSubmitting] = useState<"push" | "pr" | null>(
+    null,
+  );
   const runMenuRef = useRef<HTMLDivElement | null>(null);
   const openMenuRef = useRef<HTMLDivElement | null>(null);
+  const gitMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!runMenuOpen) return;
@@ -113,6 +121,16 @@ export function ThreadTopBar({
     window.addEventListener("mousedown", handleClick);
     return () => window.removeEventListener("mousedown", handleClick);
   }, [openMenuOpen]);
+
+  useEffect(() => {
+    if (!gitMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (gitMenuRef.current?.contains(event.target as Node)) return;
+      setGitMenuOpen(false);
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [gitMenuOpen]);
 
   const handleCheckoutLocal = async () => {
     const branch = metadata.branch ?? detail.branch;
@@ -200,6 +218,55 @@ export function ThreadTopBar({
     }
     console.info(label, resolvedWorkspacePath);
     showOpenMessage(`${label} requested.`);
+  };
+
+  const showGitMessage = (message: string) => {
+    setGitMessage(message);
+    window.setTimeout(() => setGitMessage(null), 2500);
+  };
+
+  const handlePush = async () => {
+    if (!resolvedWorkspacePath) {
+      showGitMessage("No workspace selected.");
+      return;
+    }
+    if (!isTauri()) {
+      showGitMessage("Push is available in the desktop app.");
+      return;
+    }
+    setGitSubmitting("push");
+    try {
+      await pushBranch(resolvedWorkspacePath, gitBranch);
+      showGitMessage(`Pushed ${gitBranch}.`);
+    } catch (error) {
+      showGitMessage(
+        error instanceof Error ? error.message : "Failed to push branch.",
+      );
+    } finally {
+      setGitSubmitting(null);
+    }
+  };
+
+  const handleCreatePr = async () => {
+    if (!resolvedWorkspacePath) {
+      showGitMessage("No workspace selected.");
+      return;
+    }
+    if (!isTauri()) {
+      showGitMessage("Create PR is available in the desktop app.");
+      return;
+    }
+    setGitSubmitting("pr");
+    try {
+      await createPullRequest(resolvedWorkspacePath);
+      showGitMessage("Pull request created.");
+    } catch (error) {
+      showGitMessage(
+        error instanceof Error ? error.message : "Failed to create PR.",
+      );
+    } finally {
+      setGitSubmitting(null);
+    }
   };
 
   return (
@@ -317,6 +384,54 @@ export function ThreadTopBar({
             <ChevronDown className="h-3.5 w-3.5" />
           </button>
         ) : null}
+        <div className="relative" ref={gitMenuRef}>
+          <button
+            className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+            onClick={() => setGitMenuOpen((open) => !open)}
+          >
+            <GitCommitHorizontal className="h-3.5 w-3.5" />
+            Git
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+          {gitMenuOpen ? (
+            <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-white/10 bg-ink-900/95 p-2 text-[0.7rem] text-ink-200 shadow-card">
+              <button
+                className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                onClick={() => {
+                  setGitMenuOpen(false);
+                  setActiveModal("commit");
+                }}
+              >
+                Commit changes
+              </button>
+              <button
+                className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  setGitMenuOpen(false);
+                  void handlePush();
+                }}
+                disabled={gitSubmitting !== null}
+              >
+                {gitSubmitting === "push" ? "Pushing…" : `Push ${gitBranch}`}
+              </button>
+              <button
+                className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  setGitMenuOpen(false);
+                  void handleCreatePr();
+                }}
+                disabled={gitSubmitting !== null}
+              >
+                {gitSubmitting === "pr" ? "Creating PR…" : "Create PR"}
+              </button>
+              {gitMessage ? (
+                <p className="px-3 py-2 text-[0.65rem] text-ink-400">
+                  {gitMessage}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
         <button
           className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${
             reviewOpen
