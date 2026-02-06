@@ -61,3 +61,8 @@ body {
     #0d1117;
   min-height: 100vh;
 }
+
+[data-ui-audit-dead-action="true"] {
+  outline: 2px dashed rgba(251, 113, 133, 0.95);
+  outline-offset: 2px;
+}

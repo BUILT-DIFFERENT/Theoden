@@ -14,6 +14,7 @@ import {
 } from "@/app/services/cli/appServer";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
+import { useInteractionAudit } from "@/app/services/dev/useInteractionAudit";
 import { useAppUi } from "@/app/state/appUi";
 import { EnvironmentUiProvider } from "@/app/state/environmentUi";
 import { ThreadUiProvider, type ThreadModal } from "@/app/state/threadUi";
@@ -33,6 +34,7 @@ export function AppShell() {
   const [activeModal, setActiveModal] = useState<ThreadModal>(null);
   const { isTerminalOpen, toggleTerminal } = useAppUi();
   useAppServerStream();
+  useInteractionAudit();
 
   useEffect(() => {
     if (!isTauri()) return;

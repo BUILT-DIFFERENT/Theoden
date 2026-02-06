@@ -1,8 +1,63 @@
+import { useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { useAppUi } from "@/app/state/appUi";
 import { mockInstalledSkills, mockRemoteSkills } from "@/app/state/skillsData";
 import type { RemoteSkillSummary, SkillSummary } from "@/app/types";
+
+const SKILLS_STORAGE_KEY = "theoden.skills.installed";
+
+function loadStoredInstalledSkillIds() {
+  const fallback = new Set(mockInstalledSkills.map((skill) => skill.id));
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+  try {
+    const raw = window.localStorage.getItem(SKILLS_STORAGE_KEY);
+    if (!raw) {
+      return fallback;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return fallback;
+    }
+    return new Set([
+      ...fallback,
+      ...parsed.filter((value): value is string => typeof value === "string"),
+    ]);
+  } catch {
+    return fallback;
+  }
+}
+
+function storeInstalledSkillIds(ids: Set<string>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    const serializableIds = Array.from(ids.values()).sort();
+    window.localStorage.setItem(
+      SKILLS_STORAGE_KEY,
+      JSON.stringify(serializableIds),
+    );
+  } catch {
+    // Best-effort only.
+  }
+}
+
+function remoteSkillToInstalled(skill: RemoteSkillSummary): SkillSummary {
+  return {
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    documentation: skill.documentation,
+    installed: true,
+    version: skill.version,
+    source: skill.source,
+    permissions: skill.tags.length ? skill.tags : ["workspace"],
+  };
+}
 
 function renderDocumentationBlocks(documentation: string) {
   return documentation
@@ -35,11 +90,14 @@ function renderDocumentationBlocks(documentation: string) {
 }
 
 export function SkillsPage() {
+  const navigate = useNavigate();
+  const { setComposerDraft } = useAppUi();
   const [search, setSearch] = useState("");
   const [newSkillOpen, setNewSkillOpen] = useState(false);
-  const [installedSkillIds, setInstalledSkillIds] = useState<Set<string>>(
-    () => new Set(mockInstalledSkills.map((skill) => skill.id)),
+  const [installedSkillIds, setInstalledSkillIds] = useState<Set<string>>(() =>
+    loadStoredInstalledSkillIds(),
   );
+  const [customSkills, setCustomSkills] = useState<SkillSummary[]>([]);
   const [detailSkill, setDetailSkill] = useState<
     SkillSummary | RemoteSkillSummary | null
   >(null);
@@ -62,17 +120,35 @@ export function SkillsPage() {
     return () => window.clearTimeout(timeoutId);
   }, [refreshMessage]);
 
+  useEffect(() => {
+    storeInstalledSkillIds(installedSkillIds);
+  }, [installedSkillIds]);
+
   const normalizedSearch = search.trim().toLowerCase();
   const installedSkills = useMemo(() => {
-    const activeInstalledSkills = mockInstalledSkills.filter((skill) =>
+    const defaultInstalledSkills = mockInstalledSkills.filter((skill) =>
       installedSkillIds.has(skill.id),
     );
+    const installedRemoteSkills = mockRemoteSkills
+      .filter((skill) => installedSkillIds.has(skill.id))
+      .filter(
+        (skill) =>
+          !defaultInstalledSkills.some(
+            (installedSkill) => installedSkill.id === skill.id,
+          ),
+      )
+      .map(remoteSkillToInstalled);
+    const activeInstalledSkills = [
+      ...defaultInstalledSkills,
+      ...customSkills.filter((skill) => installedSkillIds.has(skill.id)),
+      ...installedRemoteSkills,
+    ];
     if (!normalizedSearch) return activeInstalledSkills;
     return activeInstalledSkills.filter((skill) => {
       const haystack = `${skill.name} ${skill.description}`.toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [installedSkillIds, normalizedSearch]);
+  }, [customSkills, installedSkillIds, normalizedSearch]);
   const remoteSkills = useMemo(() => {
     if (!normalizedSearch) return mockRemoteSkills;
     return mockRemoteSkills.filter((skill) => {
@@ -83,11 +159,32 @@ export function SkillsPage() {
   }, [normalizedSearch]);
 
   const handleCreateSkill = () => {
-    if (!skillName.trim()) {
+    const trimmedName = skillName.trim();
+    const trimmedDescription = skillDescription.trim();
+    if (!trimmedName) {
       setSkillError("Name is required.");
       return;
     }
-    console.warn("Create skill", { skillName, skillDescription });
+    if (!trimmedDescription) {
+      setSkillError("Description is required.");
+      return;
+    }
+    const createdSkill: SkillSummary = {
+      id: `custom-skill-${Date.now()}`,
+      name: trimmedName,
+      description: trimmedDescription,
+      documentation: `${trimmedDescription}\n\nCreated locally from the Skills page.`,
+      installed: true,
+      version: "0.1.0",
+      source: "Community",
+      permissions: ["workspace"],
+    };
+    setCustomSkills((current) => [createdSkill, ...current]);
+    setInstalledSkillIds((current) => {
+      const next = new Set(current);
+      next.add(createdSkill.id);
+      return next;
+    });
     setSkillName("");
     setSkillDescription("");
     setSkillError(null);
@@ -100,7 +197,6 @@ export function SkillsPage() {
   };
 
   const handleRefresh = () => {
-    console.warn("Refresh skill catalog");
     setRefreshMessage("Skill catalog refreshed.");
   };
 
@@ -113,10 +209,28 @@ export function SkillsPage() {
     ? installedSkillIds.has(detailSkill.id)
     : false;
 
-  const handleTrySkill = () => {
+  const handleInstallSkill = (skill: RemoteSkillSummary) => {
+    if (!skill.installable) {
+      setDetailMessage(`${skill.name} is not installable.`);
+      return;
+    }
+    setInstalledSkillIds((current) => {
+      if (current.has(skill.id)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(skill.id);
+      return next;
+    });
+    setDetailMessage(`Installed ${skill.name}.`);
+  };
+
+  const handleTrySkill = async () => {
     if (!detailSkill) return;
-    console.warn("Try skill", { skillId: detailSkill.id });
-    setDetailMessage(`Queued ${detailSkill.name}.`);
+    const skillPrompt = `Use @${detailSkill.name} (${detailSkill.id}) to help with this task.`;
+    setComposerDraft(skillPrompt);
+    await navigate({ to: "/" });
+    setDetailMessage(`Prepared ${detailSkill.name} in the composer.`);
   };
 
   const handleOpenSkill = () => {
@@ -125,8 +239,7 @@ export function SkillsPage() {
       setDetailMessage("Install this skill before opening it.");
       return;
     }
-    console.warn("Open skill", { skillId: detailSkill.id });
-    setDetailMessage(`Opened ${detailSkill.name}.`);
+    setDetailMessage(`${detailSkill.name} is ready in this workspace.`);
   };
 
   const handleUninstallSkill = () => {
@@ -157,7 +270,6 @@ export function SkillsPage() {
       void handleCopySkillId();
       return;
     }
-    console.warn("Report skill", { skillId: detailSkill.id });
     setDetailMessage("Thanks, feedback captured.");
   };
 
@@ -287,8 +399,14 @@ export function SkillsPage() {
                 >
                   View details
                 </button>
-                <button className="rounded-full border border-flare-300 bg-flare-400/20 px-3 py-1 text-ink-50 shadow-glow">
-                  Download
+                <button
+                  className="rounded-full border border-flare-300 bg-flare-400/20 px-3 py-1 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => handleInstallSkill(skill)}
+                  disabled={
+                    !skill.installable || installedSkillIds.has(skill.id)
+                  }
+                >
+                  {installedSkillIds.has(skill.id) ? "Installed" : "Download"}
                 </button>
               </div>
             </div>
@@ -438,10 +556,20 @@ export function SkillsPage() {
               <div className="flex justify-end gap-2 text-xs">
                 <button
                   className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-                  onClick={handleTrySkill}
+                  onClick={() => {
+                    void handleTrySkill();
+                  }}
                 >
                   Try
                 </button>
+                {"installable" in detailSkill && !detailInstalled ? (
+                  <button
+                    className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20"
+                    onClick={() => handleInstallSkill(detailSkill)}
+                  >
+                    Install
+                  </button>
+                ) : null}
                 <button
                   className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={handleOpenSkill}

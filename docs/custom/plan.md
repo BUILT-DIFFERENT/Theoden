@@ -8,9 +8,9 @@ This doc enumerates **all known UI + interaction gaps** between the **current cl
 
 - [x] **Workspace selection is non-functional**: Fixed by normalizing selection updates, persisting selected workspace/workspace list in local storage for desktop + web mode, and auto-resolving selection from the available workspace set.
 - [ ] **Buttons are no-ops** across the app (top toolbar buttons, “Add workspace”, “New automation”, “View details”, “Download”, etc.). Wire all onClick handlers and route transitions.
-- [ ] Add an **interaction audit harness**:
-  - [ ] log/telemetry for button clicks + route changes in dev mode
-  - [ ] a temporary “UI smoke test” mode that highlights any clickable element without a handler
+- [x] Add an **interaction audit harness**:
+  - [x] log/telemetry for button clicks + route changes in dev mode
+  - [x] a temporary “UI smoke test” mode that highlights any clickable element without a handler
 
 ---
 
