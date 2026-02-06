@@ -1,3 +1,4 @@
+import { MoreHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { mockInstalledSkills, mockRemoteSkills } from "@/app/state/skillsData";
@@ -6,9 +7,14 @@ import type { RemoteSkillSummary, SkillSummary } from "@/app/types";
 export function SkillsPage() {
   const [search, setSearch] = useState("");
   const [newSkillOpen, setNewSkillOpen] = useState(false);
+  const [installedSkillIds, setInstalledSkillIds] = useState<Set<string>>(
+    () => new Set(mockInstalledSkills.map((skill) => skill.id)),
+  );
   const [detailSkill, setDetailSkill] = useState<
     SkillSummary | RemoteSkillSummary | null
   >(null);
+  const [detailMenuOpen, setDetailMenuOpen] = useState(false);
+  const [detailMessage, setDetailMessage] = useState<string | null>(null);
   const [skillName, setSkillName] = useState("");
   const [skillDescription, setSkillDescription] = useState("");
   const [skillError, setSkillError] = useState<string | null>(null);
@@ -17,12 +23,15 @@ export function SkillsPage() {
 
   const normalizedSearch = search.trim().toLowerCase();
   const installedSkills = useMemo(() => {
-    if (!normalizedSearch) return mockInstalledSkills;
-    return mockInstalledSkills.filter((skill) => {
+    const activeInstalledSkills = mockInstalledSkills.filter((skill) =>
+      installedSkillIds.has(skill.id),
+    );
+    if (!normalizedSearch) return activeInstalledSkills;
+    return activeInstalledSkills.filter((skill) => {
       const haystack = `${skill.name} ${skill.description}`.toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [normalizedSearch]);
+  }, [installedSkillIds, normalizedSearch]);
   const remoteSkills = useMemo(() => {
     if (!normalizedSearch) return mockRemoteSkills;
     return mockRemoteSkills.filter((skill) => {
@@ -47,6 +56,62 @@ export function SkillsPage() {
   const handleCloseNewSkill = () => {
     setNewSkillOpen(false);
     setSkillError(null);
+  };
+  const handleDetailOpen = (skill: SkillSummary | RemoteSkillSummary) => {
+    setDetailSkill(skill);
+    setDetailMenuOpen(false);
+    setDetailMessage(null);
+  };
+  const detailInstalled = detailSkill
+    ? installedSkillIds.has(detailSkill.id)
+    : false;
+
+  const handleTrySkill = () => {
+    if (!detailSkill) return;
+    console.warn("Try skill", { skillId: detailSkill.id });
+    setDetailMessage(`Queued ${detailSkill.name}.`);
+  };
+
+  const handleOpenSkill = () => {
+    if (!detailSkill) return;
+    if (!detailInstalled) {
+      setDetailMessage("Install this skill before opening it.");
+      return;
+    }
+    console.warn("Open skill", { skillId: detailSkill.id });
+    setDetailMessage(`Opened ${detailSkill.name}.`);
+  };
+
+  const handleUninstallSkill = () => {
+    if (!detailSkill || !detailInstalled) return;
+    setInstalledSkillIds((current) => {
+      const next = new Set(current);
+      next.delete(detailSkill.id);
+      return next;
+    });
+    setDetailMessage(`Uninstalled ${detailSkill.name}.`);
+  };
+
+  const handleCopySkillId = async () => {
+    if (!detailSkill) return;
+    try {
+      await navigator.clipboard.writeText(detailSkill.id);
+      setDetailMessage("Skill ID copied.");
+    } catch (error) {
+      console.warn("Failed to copy skill ID", error);
+      setDetailMessage("Unable to copy skill ID.");
+    }
+  };
+
+  const handleOverflowAction = (action: "copy-id" | "report") => {
+    setDetailMenuOpen(false);
+    if (!detailSkill) return;
+    if (action === "copy-id") {
+      void handleCopySkillId();
+      return;
+    }
+    console.warn("Report skill", { skillId: detailSkill.id });
+    setDetailMessage("Thanks, feedback captured.");
   };
 
   return (
@@ -114,7 +179,7 @@ export function SkillsPage() {
               <div className="mt-3 flex items-center gap-2 text-xs">
                 <button
                   className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-                  onClick={() => setDetailSkill(skill)}
+                  onClick={() => handleDetailOpen(skill)}
                 >
                   View details
                 </button>
@@ -165,7 +230,7 @@ export function SkillsPage() {
               <div className="mt-3 flex items-center gap-2 text-xs">
                 <button
                   className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-                  onClick={() => setDetailSkill(skill)}
+                  onClick={() => handleDetailOpen(skill)}
                 >
                   View details
                 </button>
@@ -263,6 +328,19 @@ export function SkillsPage() {
               </button>
             </div>
             <div className="mt-4 space-y-3 text-sm text-ink-300">
+              <div className="flex flex-wrap items-center gap-2 text-[0.7rem] text-ink-400">
+                <span className="rounded-full border border-white/10 px-2 py-0.5">
+                  v{detailSkill.version}
+                </span>
+                <span className="rounded-full border border-white/10 px-2 py-0.5">
+                  {detailSkill.source}
+                </span>
+                {"publisher" in detailSkill ? (
+                  <span className="rounded-full border border-white/10 px-2 py-0.5">
+                    {detailSkill.publisher}
+                  </span>
+                ) : null}
+              </div>
               <p>{detailSkill.description}</p>
               {"publisher" in detailSkill ? (
                 <p className="text-xs text-ink-400">
@@ -293,22 +371,66 @@ export function SkillsPage() {
                   ))}
                 </div>
               ) : null}
+              {detailMessage ? (
+                <p className="text-xs text-ink-400">{detailMessage}</p>
+              ) : null}
               <div className="flex justify-end gap-2 text-xs">
                 <button
                   className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-                  onClick={() => setDetailSkill(null)}
+                  onClick={handleTrySkill}
+                >
+                  Try
+                </button>
+                <button
+                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={handleOpenSkill}
+                  disabled={!detailInstalled}
+                >
+                  Open
+                </button>
+                {detailInstalled ? (
+                  <button
+                    className="rounded-full border border-rose-400/40 px-3 py-1 text-rose-200 hover:bg-rose-500/10"
+                    onClick={handleUninstallSkill}
+                  >
+                    Uninstall
+                  </button>
+                ) : null}
+                <div className="relative">
+                  <button
+                    className="rounded-full border border-white/10 p-1.5 hover:border-flare-300"
+                    onClick={() => setDetailMenuOpen((open) => !open)}
+                    aria-label="More skill actions"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </button>
+                  {detailMenuOpen ? (
+                    <div className="absolute right-0 mt-2 w-40 rounded-xl border border-white/10 bg-ink-900/95 p-1 shadow-card">
+                      <button
+                        className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                        onClick={() => handleOverflowAction("copy-id")}
+                      >
+                        Copy skill ID
+                      </button>
+                      <button
+                        className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                        onClick={() => handleOverflowAction("report")}
+                      >
+                        Report skill
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <button
+                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+                  onClick={() => {
+                    setDetailSkill(null);
+                    setDetailMenuOpen(false);
+                    setDetailMessage(null);
+                  }}
                 >
                   Close
                 </button>
-                {"installed" in detailSkill ? (
-                  <button className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
-                    Open
-                  </button>
-                ) : (
-                  <button className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20">
-                    Try
-                  </button>
-                )}
               </div>
             </div>
           </div>

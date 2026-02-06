@@ -117,11 +117,15 @@ export interface AutomationSummary {
   nextRun: string;
 }
 
+export type SkillSource = "Team" | "Community";
+
 export interface SkillSummary {
   id: string;
   name: string;
   description: string;
   installed: boolean;
+  version: string;
+  source: SkillSource;
   permissions: string[];
 }
 
@@ -129,6 +133,8 @@ export interface RemoteSkillSummary {
   id: string;
   name: string;
   description: string;
+  version: string;
+  source: SkillSource;
   publisher: string;
   tags: string[];
   installable: boolean;
