@@ -14,17 +14,19 @@ Main folders:
 
 - `src/`: frontend app code.
 - `src-tauri/`: Tauri Rust host commands and menu/process plumbing.
-- `third_party/CodexDesktop-Rebuild/`: official desktop app (Electron) submodule used for behavior tracing and parity checks.
+- `third_party/CodexDesktop-Rebuild/`: official desktop debug/parity harness artifacts (not a full source-code reference), used for behavior tracing on hard architecture/parity issues.
 - `codex-cli/`: official Codex CLI implementation and runtime behavior reference.
 - `codex-rs/`: Rust workspace for Codex crates and protocol.
 - `docs/custom/`: parity plan and checklist docs.
 
 ## 1.1) Required Reference Implementations
 
-For parity-sensitive work, agents must treat these as primary reference sources before inventing new behavior:
+For parity-sensitive work, agents should default to `codex-cli/` + `codex-rs/` for implementation behavior and protocol expectations. Use `third_party/CodexDesktop-Rebuild/` only for debugging and hard architecture/parity investigations.
 
-- Official desktop app reference: `third_party/CodexDesktop-Rebuild/`
-  - Inspect bridge semantics, IPC channels, renderer/main message flow, streaming behavior, and chat/thread sync behavior.
+- Official desktop app debug reference: `third_party/CodexDesktop-Rebuild/`
+  - This is a debugging/parity harness and does not provide the full official desktop source code.
+  - Do not use this as the default place to inspect implementation details for routine tasks.
+  - Use it when investigating hard issues in bridge semantics, IPC channels, renderer/main message flow, streaming behavior, and chat/thread sync behavior.
 - Official CLI reference: `codex-cli/` (and related protocol/runtime crates in `codex-rs/`)
   - Match API interaction patterns, auth/session handling, task execution, config behavior, and cloud/off-cloud flows.
   - Prefer reusing existing CLI/protocol behavior over one-off desktop implementations.
@@ -35,7 +37,7 @@ For parity-sensitive work, agents must treat these as primary reference sources 
 
 ## 1.2) Official Desktop Debugging Workflow (Submodule)
 
-Use the official desktop app debug harness in `third_party/CodexDesktop-Rebuild/` as the first debugging path for parity issues (bridge, cloud tasks, approvals, MCP auth/status, renderer interaction).
+Use the official desktop app debug harness in `third_party/CodexDesktop-Rebuild/` for hard parity/architecture debugging issues (bridge, cloud tasks, approvals, MCP auth/status, renderer interaction). It is not the default reference for routine implementation work.
 
 Run from `third_party/CodexDesktop-Rebuild`:
 

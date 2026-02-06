@@ -1,10 +1,12 @@
 import { Outlet, useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DiffPanel } from "@/app/components/diff/DiffPanel";
 import { BottomBar } from "@/app/components/layout/BottomBar";
 import { TerminalDrawer } from "@/app/components/layout/TerminalDrawer";
+import { WindowTitlebar } from "@/app/components/layout/WindowTitlebar";
 import { AppSidebar } from "@/app/components/sidebar/AppSidebar";
 import { ThreadTopBar } from "@/app/components/threads/ThreadTopBar";
 import { WorkspaceModal } from "@/app/components/workspaces/WorkspaceModal";
@@ -16,6 +18,11 @@ import { requestAppServer } from "@/app/services/cli/rpc";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useInteractionAudit } from "@/app/services/dev/useInteractionAudit";
+import {
+  executeMenuCommand,
+  type MenuCommandId,
+  resolveMenuShortcut,
+} from "@/app/services/menu/menuCommands";
 import {
   AppServerHealthProvider,
   type AppServerHealthStatus,
@@ -45,6 +52,7 @@ export function AppShell() {
   const [appServerError, setAppServerError] = useState<string | null>(null);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const { isTerminalOpen, toggleTerminal, setComposerDraft } = useAppUi();
+  const isDesktop = isTauri();
   const bootstrapInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -53,7 +61,7 @@ export function AppShell() {
 
   const bootstrapAppServer = useCallback(
     async (status: AppServerHealthStatus) => {
-      if (!isTauri()) {
+      if (!isDesktop) {
         return;
       }
       if (bootstrapInFlightRef.current) {
@@ -89,12 +97,12 @@ export function AppShell() {
         bootstrapInFlightRef.current = false;
       }
     },
-    [],
+    [isDesktop],
   );
 
   const scheduleReconnect = useCallback(
     (reason: string) => {
-      if (!isTauri()) {
+      if (!isDesktop) {
         return;
       }
       reconnectAttemptRef.current += 1;
@@ -111,7 +119,7 @@ export function AppShell() {
         void bootstrapAppServer("reconnecting");
       }, delayMs);
     },
-    [bootstrapAppServer],
+    [bootstrapAppServer, isDesktop],
   );
 
   const restartAppServer = useCallback(() => {
@@ -126,7 +134,7 @@ export function AppShell() {
   }, [bootstrapAppServer]);
 
   useEffect(() => {
-    if (!isTauri()) {
+    if (!isDesktop) {
       return;
     }
     void bootstrapAppServer("booting");
@@ -136,10 +144,10 @@ export function AppShell() {
         reconnectTimerRef.current = null;
       }
     };
-  }, [bootstrapAppServer]);
+  }, [bootstrapAppServer, isDesktop]);
 
   useEffect(() => {
-    if (!isTauri()) {
+    if (!isDesktop) {
       return;
     }
 
@@ -191,138 +199,95 @@ export function AppShell() {
       unlistenExit?.();
       unlistenTimeout?.();
     };
-  }, [scheduleReconnect]);
+  }, [isDesktop, scheduleReconnect]);
+
+  const handleMenuCommand = useCallback(
+    async (command: MenuCommandId) => {
+      const closeCurrentWindow = async () => {
+        if (!isDesktop) {
+          return;
+        }
+        await getCurrentWindow().close();
+      };
+
+      await executeMenuCommand(command, {
+        navigateHome: () => {
+          setComposerDraft("");
+          setReviewOpen(false);
+          setActiveModal(null);
+          void navigate({ to: "/" });
+        },
+        navigateAutomations: () => {
+          void navigate({ to: "/automations" });
+        },
+        navigateSkills: () => {
+          void navigate({ to: "/skills" });
+        },
+        navigateSettings: () => {
+          void navigate({
+            to: "/settings/$section",
+            params: { section: defaultSettingsSection },
+          });
+        },
+        reloadUi: () => {
+          window.location.reload();
+        },
+        toggleTerminal,
+        toggleReviewPanel: () => {
+          setReviewOpen((open) => !open);
+        },
+        openDocs: () => {
+          window.open(
+            "https://developers.openai.com/codex/",
+            "_blank",
+            "noopener,noreferrer",
+          );
+        },
+        closeWindow: closeCurrentWindow,
+        quitApp: closeCurrentWindow,
+        minimizeWindow: async () => {
+          if (!isDesktop) {
+            return;
+          }
+          await getCurrentWindow().minimize();
+        },
+        toggleMaximizeWindow: async () => {
+          if (!isDesktop) {
+            return;
+          }
+          await getCurrentWindow().toggleMaximize();
+        },
+        performEditAction: (action) => {
+          if (typeof document === "undefined" || !document.execCommand) {
+            return;
+          }
+          document.execCommand(action);
+        },
+        showAbout: () => {
+          window.open(
+            "https://developers.openai.com/codex/",
+            "_blank",
+            "noopener,noreferrer",
+          );
+        },
+      });
+    },
+    [isDesktop, navigate, setComposerDraft, toggleTerminal],
+  );
 
   useEffect(() => {
-    const isTypingTarget = (target: EventTarget | null) => {
-      if (!(target instanceof HTMLElement)) {
-        return false;
-      }
-      if (target.isContentEditable) {
-        return true;
-      }
-      const tagName = target.tagName.toLowerCase();
-      if (tagName === "textarea") {
-        return true;
-      }
-      if (tagName !== "input") {
-        return false;
-      }
-      const input = target as HTMLInputElement;
-      const type = (input.type || "text").toLowerCase();
-      return !["button", "checkbox", "radio", "submit"].includes(type);
-    };
-
     const handleKeyDown = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      const isShortcutModifier = event.metaKey || event.ctrlKey;
-      if (isShortcutModifier && key === "j") {
-        event.preventDefault();
-        toggleTerminal();
-        return;
-      }
-
-      if (
-        event.altKey ||
-        isShortcutModifier ||
-        event.shiftKey ||
-        event.repeat ||
-        isTypingTarget(event.target)
-      ) {
-        return;
-      }
-
-      if (key === "n") {
-        event.preventDefault();
-        setComposerDraft("");
-        setReviewOpen(false);
-        setActiveModal(null);
-        void navigate({ to: "/" });
-        return;
-      }
-      if (key === "a") {
-        event.preventDefault();
-        void navigate({ to: "/automations" });
-        return;
-      }
-      if (key !== "s") {
+      const command = resolveMenuShortcut(event);
+      if (!command) {
         return;
       }
       event.preventDefault();
-      void navigate({ to: "/skills" });
+      void handleMenuCommand(command);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    navigate,
-    setActiveModal,
-    setComposerDraft,
-    setReviewOpen,
-    toggleTerminal,
-  ]);
-
-  useEffect(() => {
-    if (!isTauri()) {
-      return;
-    }
-
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-
-    const listenForMenuCommands = async () => {
-      const detach = await listen<string>("codex-menu-command", (event) => {
-        switch (event.payload) {
-          case "new-thread":
-            void navigate({ to: "/" });
-            break;
-          case "open-automations":
-            void navigate({ to: "/automations" });
-            break;
-          case "open-skills":
-            void navigate({ to: "/skills" });
-            break;
-          case "open-settings":
-            void navigate({
-              to: "/settings/$section",
-              params: { section: defaultSettingsSection },
-            });
-            break;
-          case "reload-ui":
-            window.location.reload();
-            break;
-          case "toggle-terminal":
-            toggleTerminal();
-            break;
-          case "toggle-review-panel":
-            setReviewOpen((open) => !open);
-            break;
-          case "open-docs":
-            window.open(
-              "https://developers.openai.com/codex/",
-              "_blank",
-              "noopener,noreferrer",
-            );
-            break;
-          default:
-            break;
-        }
-      });
-
-      if (cancelled) {
-        detach();
-        return;
-      }
-      unlisten = detach;
-    };
-
-    void listenForMenuCommands();
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [navigate, toggleTerminal]);
+  }, [handleMenuCommand]);
 
   const threadUi = useMemo(
     () => ({
@@ -364,10 +329,13 @@ export function AppShell() {
       <EnvironmentUiProvider>
         <AppServerHealthProvider value={appServerHealth}>
           <ThreadUiProvider value={threadUi}>
-            <div className="min-h-screen text-ink-50">
-              <div className="flex min-h-screen">
+            <div className="flex min-h-screen flex-col text-ink-50">
+              {isDesktop ? (
+                <WindowTitlebar onCommand={handleMenuCommand} />
+              ) : null}
+              <div className="flex min-h-0 flex-1">
                 <AppSidebar />
-                <main className="flex min-h-screen flex-1 flex-col">
+                <main className="flex min-h-0 flex-1 flex-col">
                   <ThreadTopBar
                     variant={topBarVariant}
                     title={topBarTitle}

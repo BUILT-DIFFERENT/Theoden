@@ -6,11 +6,9 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::menu::{
-    AboutMetadataBuilder, Menu, MenuBuilder, MenuItem, SubmenuBuilder, HELP_SUBMENU_ID,
-    WINDOW_SUBMENU_ID,
-};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+#[cfg(target_os = "windows")]
+use tauri_plugin_decorum::WebviewWindowExt;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, Mutex};
@@ -36,17 +34,8 @@ struct AppServerBridge {
     pending: Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>,
 }
 
-const MENU_COMMAND_EVENT: &str = "codex-menu-command";
 const APP_SERVER_EXIT_EVENT: &str = "app-server-exit";
 const APP_SERVER_TIMEOUT_EVENT: &str = "app-server-timeout";
-const MENU_NEW_THREAD_ID: &str = "codex.menu.new-thread";
-const MENU_AUTOMATIONS_ID: &str = "codex.menu.automations";
-const MENU_SKILLS_ID: &str = "codex.menu.skills";
-const MENU_SETTINGS_ID: &str = "codex.menu.settings";
-const MENU_RELOAD_UI_ID: &str = "codex.menu.reload-ui";
-const MENU_TOGGLE_TERMINAL_ID: &str = "codex.menu.toggle-terminal";
-const MENU_TOGGLE_REVIEW_PANEL_ID: &str = "codex.menu.toggle-review-panel";
-const MENU_OPEN_DOCS_ID: &str = "codex.menu.open-docs";
 
 impl AppServerBridge {
     fn new() -> Self {
@@ -570,138 +559,19 @@ fn id_to_string(value: &serde_json::Value) -> Option<String> {
     }
 }
 
-fn build_app_menu<R: tauri::Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    let new_thread = MenuItem::with_id(
-        app,
-        MENU_NEW_THREAD_ID,
-        "New Thread",
-        true,
-        Some("CmdOrCtrl+N"),
-    )?;
-    let automations = MenuItem::with_id(
-        app,
-        MENU_AUTOMATIONS_ID,
-        "Automations",
-        true,
-        Some("CmdOrCtrl+Shift+A"),
-    )?;
-    let skills = MenuItem::with_id(
-        app,
-        MENU_SKILLS_ID,
-        "Skills",
-        true,
-        Some("CmdOrCtrl+Shift+S"),
-    )?;
-    let settings = MenuItem::with_id(
-        app,
-        MENU_SETTINGS_ID,
-        "Settings",
-        true,
-        Some("CmdOrCtrl+Comma"),
-    )?;
-    let reload_ui = MenuItem::with_id(
-        app,
-        MENU_RELOAD_UI_ID,
-        "Reload UI",
-        true,
-        Some("CmdOrCtrl+R"),
-    )?;
-    let toggle_terminal = MenuItem::with_id(
-        app,
-        MENU_TOGGLE_TERMINAL_ID,
-        "Toggle Terminal",
-        true,
-        Some("CmdOrCtrl+J"),
-    )?;
-    let toggle_review_panel = MenuItem::with_id(
-        app,
-        MENU_TOGGLE_REVIEW_PANEL_ID,
-        "Toggle Review Panel",
-        true,
-        Some("CmdOrCtrl+Shift+R"),
-    )?;
-    let open_docs = MenuItem::with_id(app, MENU_OPEN_DOCS_ID, "Codex Docs", true, Some("F1"))?;
-
-    let file_menu = SubmenuBuilder::new(app, "File")
-        .item(&new_thread)
-        .item(&automations)
-        .item(&skills)
-        .separator()
-        .item(&settings)
-        .separator()
-        .close_window()
-        .quit()
-        .build()?;
-
-    let edit_menu = SubmenuBuilder::new(app, "Edit")
-        .undo()
-        .redo()
-        .separator()
-        .cut()
-        .copy()
-        .paste()
-        .select_all()
-        .build()?;
-
-    let view_menu = SubmenuBuilder::new(app, "View")
-        .item(&reload_ui)
-        .item(&toggle_terminal)
-        .item(&toggle_review_panel)
-        .build()?;
-
-    let window_menu = SubmenuBuilder::with_id(app, WINDOW_SUBMENU_ID, "Window")
-        .minimize()
-        .maximize()
-        .separator()
-        .close_window()
-        .build()?;
-
-    let about_metadata = AboutMetadataBuilder::new()
-        .name(Some("Codex"))
-        .version(Some("0.1.0"))
-        .build();
-    let help_menu = SubmenuBuilder::with_id(app, HELP_SUBMENU_ID, "Help")
-        .item(&open_docs)
-        .separator()
-        .about(Some(about_metadata))
-        .build()?;
-
-    MenuBuilder::new(app)
-        .item(&file_menu)
-        .item(&edit_menu)
-        .item(&view_menu)
-        .item(&window_menu)
-        .item(&help_menu)
-        .build()
-}
-
-fn route_menu_command<R: tauri::Runtime>(app: &AppHandle<R>, menu_id: &str) {
-    let command = match menu_id {
-        MENU_NEW_THREAD_ID => Some("new-thread"),
-        MENU_AUTOMATIONS_ID => Some("open-automations"),
-        MENU_SKILLS_ID => Some("open-skills"),
-        MENU_SETTINGS_ID => Some("open-settings"),
-        MENU_RELOAD_UI_ID => Some("reload-ui"),
-        MENU_TOGGLE_TERMINAL_ID => Some("toggle-terminal"),
-        MENU_TOGGLE_REVIEW_PANEL_ID => Some("toggle-review-panel"),
-        MENU_OPEN_DOCS_ID => Some("open-docs"),
-        _ => None,
-    };
-
-    if let Some(command) = command {
-        if let Err(error) = app.emit(MENU_COMMAND_EVENT, command) {
-            eprintln!("failed to emit {MENU_COMMAND_EVENT} for {menu_id}: {error}");
-        }
-    }
-}
-
 fn main() {
     tauri::Builder::default()
-        .menu(|app| build_app_menu(app))
-        .on_menu_event(|app, event| {
-            route_menu_command(app, event.id().as_ref());
-        })
+        .plugin(tauri_plugin_decorum::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.create_overlay_titlebar();
+                }
+            }
+            Ok(())
+        })
         .manage(Arc::new(AppServerBridge::new()))
         .invoke_handler(tauri::generate_handler![
             load_config,

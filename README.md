@@ -3,6 +3,11 @@
 This repository contains a Codex desktop app built with a Tauri host and React frontend.
 It is targeted to and used by Windows and Linux desktop users, and it connects to `codex app-server` for thread, turn, config, skills, and command APIs.
 
+## Platform Support
+
+- Supported: Windows, Linux
+- Unsupported / out of scope: macOS
+
 ## Vision
 
 Codex Desktop is a command center for agent-driven software work:

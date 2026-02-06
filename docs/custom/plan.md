@@ -11,6 +11,8 @@ This document lists **everything I can confirm from the two screen recordings**:
 
 ## 0) Executive summary (P0 blockers)
 
+Platform scope: this Tauri app targets Windows and Linux only. macOS is out of scope.
+
 ### P0 — must fix before “full clone” is even testable
 1. [ ] **Remove/repair the “app-server bootstrap” dependency**: the clone UI is effectively non-functional due to a hard error panel (“APP‑SERVER UNAVAILABLE / App‑server bootstrap failed.”). The real app does **not** present this gate during normal use.
 2. [x] **Rebuild left navigation + thread list to match the real app** (information architecture, spacing, typography, grouping, row affordances).

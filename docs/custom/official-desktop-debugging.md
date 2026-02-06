@@ -141,3 +141,4 @@ OAuth fixture parity is explicitly deferred to a v2 follow-up.
 
 - `third_party/CodexDesktop-Rebuild/.gitignore` ignores `logs/` outputs by default.
 - Keep intentional parity deviations documented in `docs/custom/` when Tauri behavior cannot exactly match the official reference.
+- Current intentional deviation: Windows/Linux use an integrated custom titlebar/menubar (frameless window + webview controls) instead of the native Tauri menu row.
