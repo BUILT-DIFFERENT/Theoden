@@ -4,6 +4,8 @@ const fg = require("fast-glob");
 const { runTransformationRules, transformationRules } = require("@wakaru/unminify");
 
 const forbidden = new Set([
+  "prettier",
+  "prettier-1",
   "un-esm",
   "un-type-constructor",
   "un-async-await",
