@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
+import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import {
   revertAllPaths,
   revertPath,
@@ -20,11 +21,13 @@ import {
   stagePath,
   unstagePath,
 } from "@/app/services/git/changes";
+import { getGitWorkspaceDiff } from "@/app/services/git/diff";
 import { getGitWorkspaceStatus } from "@/app/services/git/status";
-import { mockThreadDetail } from "@/app/state/mockData";
 import { useThreadUi } from "@/app/state/threadUi";
+import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { DiffSummary, ThreadDetail } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
+import { isLikelyWorkspacePath } from "@/app/utils/workspace";
 
 interface DiffSection {
   path: string;
@@ -43,6 +46,12 @@ type DiffRenderableChunk =
   | { kind: "context"; startLineNumber: number; lines: DiffLineEntry[] };
 
 const COLLAPSIBLE_CONTEXT_MIN_LINES = 4;
+const EMPTY_SUMMARY: DiffSummary = {
+  filesChanged: 0,
+  additions: 0,
+  deletions: 0,
+  files: [],
+};
 
 function isContextLine(line: string) {
   return line.startsWith(" ");
@@ -140,28 +149,35 @@ interface DiffPanelProps {
 
 export function DiffPanel({ thread }: DiffPanelProps) {
   const { setActiveModal, setReviewOpen } = useThreadUi();
+  const { selectedWorkspace } = useWorkspaceUi();
+  const { workspaces } = useWorkspaces();
   const queryClient = useQueryClient();
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
-  const detail = thread ?? mockThreadDetail;
-  const workspacePath = detail.subtitle;
-  const diffText = detail.diffText ?? "";
+  const threadWorkspacePath =
+    thread?.subtitle && isLikelyWorkspacePath(thread.subtitle)
+      ? thread.subtitle
+      : null;
+  const resolvedWorkspacePath =
+    threadWorkspacePath ?? selectedWorkspace ?? workspaces[0]?.path ?? null;
+  const diffText = thread?.diffText ?? "";
   const liveDiffText = useThreadDiffText(threadId, diffText);
   const hasLiveDiff = liveDiffText.trim().length > 0;
+  const detailSummary = thread?.diffSummary ?? EMPTY_SUMMARY;
   const diffStats = hasLiveDiff
     ? diffStatsFromText(liveDiffText)
     : {
-        additions: detail.diffSummary.additions,
-        deletions: detail.diffSummary.deletions,
+        additions: detailSummary.additions,
+        deletions: detailSummary.deletions,
       };
   const summary = useMemo(
     () => ({
-      ...detail.diffSummary,
+      ...detailSummary,
       additions: diffStats.additions,
       deletions: diffStats.deletions,
     }),
-    [detail.diffSummary, diffStats.additions, diffStats.deletions],
+    [detailSummary, diffStats.additions, diffStats.deletions],
   );
   const [activeTab, setActiveTab] = useState<"unstaged" | "staged">("unstaged");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -188,10 +204,11 @@ export function DiffPanel({ thread }: DiffPanelProps) {
       createdAt: number;
     }>
   >([]);
+  const canRunGitActions = isTauri() && Boolean(resolvedWorkspacePath);
   const gitStatus = useQuery({
-    queryKey: ["git", "status", workspacePath],
-    queryFn: () => getGitWorkspaceStatus(workspacePath),
-    enabled: isTauri() && Boolean(workspacePath),
+    queryKey: ["git", "status", resolvedWorkspacePath],
+    queryFn: () => getGitWorkspaceStatus(resolvedWorkspacePath ?? ""),
+    enabled: isTauri() && Boolean(resolvedWorkspacePath),
     refetchInterval: isTauri() ? 5000 : false,
   });
 
@@ -271,66 +288,125 @@ export function DiffPanel({ thread }: DiffPanelProps) {
       null
     );
   }, [activeSections, selectedPath]);
+  const selectedSectionDiff = useQuery({
+    queryKey: [
+      "git",
+      "diff",
+      resolvedWorkspacePath,
+      activeTab,
+      selectedSection?.path,
+    ],
+    queryFn: () =>
+      getGitWorkspaceDiff({
+        cwd: resolvedWorkspacePath ?? "",
+        path: selectedSection?.path ?? "",
+        staged: activeTab === "staged",
+      }),
+    enabled:
+      canRunGitActions &&
+      Boolean(selectedSection?.path) &&
+      Boolean(selectedSection && selectedSection.lines.length === 0),
+    staleTime: 1000,
+  });
+  const selectedSectionWithLiveDiff = useMemo(() => {
+    if (!selectedSection) {
+      return null;
+    }
+    if (selectedSection.lines.length > 0) {
+      return selectedSection;
+    }
+    const fallbackDiffText = selectedSectionDiff.data ?? "";
+    if (!fallbackDiffText.trim()) {
+      return selectedSection;
+    }
+    const parsed = parseDiffSections(fallbackDiffText, EMPTY_SUMMARY);
+    const parsedSection =
+      parsed.find((section) => section.path === selectedSection.path) ??
+      parsed[0];
+    if (!parsedSection) {
+      return selectedSection;
+    }
+    return {
+      ...selectedSection,
+      additions: parsedSection.additions,
+      deletions: parsedSection.deletions,
+      lines: parsedSection.lines,
+    };
+  }, [selectedSection, selectedSectionDiff.data]);
   const selectedSectionChunks = useMemo(
-    () => (selectedSection ? toRenderableChunks(selectedSection.lines) : []),
-    [selectedSection],
+    () =>
+      selectedSectionWithLiveDiff
+        ? toRenderableChunks(selectedSectionWithLiveDiff.lines)
+        : [],
+    [selectedSectionWithLiveDiff],
   );
   const collapsedContextLineCount = useMemo(() => {
-    if (!selectedSection) {
+    if (!selectedSectionWithLiveDiff) {
       return 0;
     }
     return selectedSectionChunks.reduce((count, chunk) => {
       if (chunk.kind !== "context") {
         return count;
       }
-      const contextKey = `${selectedSection.path}:${chunk.startLineNumber}`;
+      const contextKey = `${selectedSectionWithLiveDiff.path}:${chunk.startLineNumber}`;
       return expandedContextBlocks[contextKey]
         ? count
         : count + chunk.lines.length;
     }, 0);
-  }, [expandedContextBlocks, selectedSection, selectedSectionChunks]);
+  }, [
+    expandedContextBlocks,
+    selectedSectionChunks,
+    selectedSectionWithLiveDiff,
+  ]);
 
   const stagedCount = stagedSections.length;
   const unstagedCount = unstagedSections.length;
-  const canRunGitActions = isTauri() && Boolean(workspacePath);
   const hunkActionMutation = useMutation({
     mutationFn: async (action: {
       kind: "stage" | "unstage" | "revert" | "stage_all" | "revert_all";
       path?: string;
       includeStaged?: boolean;
     }) => {
-      if (!workspacePath) {
+      if (!resolvedWorkspacePath) {
         throw new Error("No workspace available for diff actions.");
       }
       if (action.kind === "stage_all") {
-        await stageAllPaths(workspacePath);
+        await stageAllPaths(resolvedWorkspacePath);
         return;
       }
       if (action.kind === "revert_all") {
-        await revertAllPaths(workspacePath, action.includeStaged ?? false);
+        await revertAllPaths(
+          resolvedWorkspacePath,
+          action.includeStaged ?? false,
+        );
         return;
       }
       if (!action.path) {
         throw new Error("No file path available for this diff action.");
       }
       if (action.kind === "stage") {
-        await stagePath(workspacePath, action.path);
+        await stagePath(resolvedWorkspacePath, action.path);
         return;
       }
       if (action.kind === "unstage") {
-        await unstagePath(workspacePath, action.path);
+        await unstagePath(resolvedWorkspacePath, action.path);
         return;
       }
       await revertPath(
-        workspacePath,
+        resolvedWorkspacePath,
         action.path,
         action.includeStaged ?? false,
       );
     },
     onSuccess: async (_, action) => {
-      await queryClient.invalidateQueries({
-        queryKey: ["git", "status", workspacePath],
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["git", "status", resolvedWorkspacePath],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["git", "diff", resolvedWorkspacePath],
+        }),
+      ]);
       setHunkActionError(null);
       if (action.kind === "stage_all") {
         setHunkActionFeedback("Staged all changes.");
@@ -581,15 +657,18 @@ export function DiffPanel({ thread }: DiffPanelProps) {
               </div>
             </div>
           ) : null}
-          {selectedSection ? (
+          {selectedSectionWithLiveDiff ? (
             <div
-              key={selectedSection.path}
+              key={selectedSectionWithLiveDiff.path}
               className="rounded-xl border border-white/10 bg-black/20"
             >
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-xs">
-                <span className="text-ink-100">{selectedSection.path}</span>
+                <span className="text-ink-100">
+                  {selectedSectionWithLiveDiff.path}
+                </span>
                 <span className="text-ink-400">
-                  +{selectedSection.additions} -{selectedSection.deletions}
+                  +{selectedSectionWithLiveDiff.additions} -
+                  {selectedSectionWithLiveDiff.deletions}
                 </span>
               </div>
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[0.65rem] text-ink-500">
@@ -635,10 +714,13 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                 <div className="divide-y divide-white/5 font-mono text-[0.65rem]">
                   {selectedSectionChunks.map((chunk) => {
                     if (chunk.kind === "line") {
-                      return renderDiffLine(selectedSection.path, chunk.entry);
+                      return renderDiffLine(
+                        selectedSectionWithLiveDiff.path,
+                        chunk.entry,
+                      );
                     }
 
-                    const contextKey = `${selectedSection.path}:${chunk.startLineNumber}`;
+                    const contextKey = `${selectedSectionWithLiveDiff.path}:${chunk.startLineNumber}`;
                     const isExpanded =
                       expandedContextBlocks[contextKey] ?? false;
                     if (!isExpanded) {
@@ -679,7 +761,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                         </button>
                         {chunk.lines.map((entry) =>
                           renderDiffLine(
-                            selectedSection.path,
+                            selectedSectionWithLiveDiff.path,
                             entry,
                             "text-ink-400 border-transparent bg-black/20",
                           ),
@@ -690,7 +772,9 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                 </div>
               ) : (
                 <div className="px-3 py-3 text-xs text-ink-500">
-                  Diff preview pending.
+                  {selectedSectionDiff.isFetching
+                    ? "Loading diff preview..."
+                    : "Diff preview pending."}
                 </div>
               )}
             </div>
