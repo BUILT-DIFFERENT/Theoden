@@ -14,9 +14,15 @@ import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { resumeThread, startThread, startTurn } from "@/app/services/cli/turns";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import {
+  openInEditor,
+  openPathInExplorer,
+  openPathInTerminal,
+} from "@/app/services/desktop/open";
 import { createPullRequest, pushBranch } from "@/app/services/git/commits";
 import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
 import { checkoutBranch } from "@/app/services/git/worktrees";
+import { mockEditors } from "@/app/state/settingsData";
 import { useThreadMetadata } from "@/app/state/threadMetadata";
 import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
@@ -31,6 +37,8 @@ interface ThreadTopBarProps {
   isTerminalOpen: boolean;
   onToggleTerminal: () => void;
 }
+
+type OpenAction = "editor" | "terminal" | "explorer";
 
 function isLikelyWorkspacePath(value: string): boolean {
   const trimmedValue = value.trim();
@@ -122,6 +130,10 @@ export function ThreadTopBar({
   const runMenuRef = useRef<HTMLDivElement | null>(null);
   const openMenuRef = useRef<HTMLDivElement | null>(null);
   const gitMenuRef = useRef<HTMLDivElement | null>(null);
+  const preferredEditor =
+    mockEditors.find((editor) => editor.detected) ?? mockEditors[0];
+  const preferredEditorName = preferredEditor?.name ?? "Editor";
+  const preferredEditorCommand = preferredEditor?.command ?? "code";
 
   useEffect(() => {
     if (!runMenuOpen) return;
@@ -229,7 +241,7 @@ export function ThreadTopBar({
     }
   };
 
-  const handleOpenAction = (label: string) => {
+  const handleOpenAction = async (action: OpenAction) => {
     if (!resolvedWorkspacePath) {
       showOpenMessage("No workspace selected.");
       return;
@@ -238,8 +250,24 @@ export function ThreadTopBar({
       showOpenMessage("Open actions are available in the desktop app.");
       return;
     }
-    console.info(label, resolvedWorkspacePath);
-    showOpenMessage(`${label} requested.`);
+    try {
+      if (action === "editor") {
+        await openInEditor(resolvedWorkspacePath, preferredEditorCommand);
+        showOpenMessage(`Opened in ${preferredEditorName}.`);
+        return;
+      }
+      if (action === "terminal") {
+        await openPathInTerminal(resolvedWorkspacePath);
+        showOpenMessage("Opened in terminal.");
+        return;
+      }
+      await openPathInExplorer(resolvedWorkspacePath);
+      showOpenMessage("Opened in file explorer.");
+    } catch (error) {
+      showOpenMessage(
+        error instanceof Error ? error.message : "Open action failed.",
+      );
+    }
   };
 
   const showGitMessage = (message: string) => {
@@ -357,7 +385,16 @@ export function ThreadTopBar({
               <button
                 className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
                 onClick={() => {
-                  handleOpenAction("Open in terminal");
+                  void handleOpenAction("editor");
+                  setOpenMenuOpen(false);
+                }}
+              >
+                Open in {preferredEditorName}
+              </button>
+              <button
+                className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                onClick={() => {
+                  void handleOpenAction("terminal");
                   setOpenMenuOpen(false);
                 }}
               >
@@ -366,7 +403,7 @@ export function ThreadTopBar({
               <button
                 className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
                 onClick={() => {
-                  handleOpenAction("Open in file explorer");
+                  void handleOpenAction("explorer");
                   setOpenMenuOpen(false);
                 }}
               >
