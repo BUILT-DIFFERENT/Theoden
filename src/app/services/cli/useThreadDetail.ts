@@ -5,11 +5,12 @@ import {
   diffTextFromTurns,
   summarizeTurns,
 } from "@/app/services/cli/diffSummary";
+import { messagesFromTurns } from "@/app/services/cli/threadMessages";
 import { readThread } from "@/app/services/cli/threads";
 import { buildTimelineFromTurns } from "@/app/services/cli/timeline";
 import { mockThreadDetail } from "@/app/state/mockData";
 import { getThreadMetadata } from "@/app/state/threadMetadata";
-import type { ThreadDetail } from "@/app/types";
+import type { ThreadDetail, ThreadMessage } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
 import { formatRelativeTimeFromSeconds } from "@/app/utils/time";
 
@@ -46,10 +47,28 @@ export function useThreadDetail(threadId: string | undefined) {
       diffText: diffTextFromTurns(query.data.turns ?? []),
     } satisfies ThreadDetail;
   }, [isDesktop, mockThreadDetail, query.data, threadId]);
+  const messages = useMemo<ThreadMessage[]>(() => {
+    if (!isDesktop || !threadId) {
+      return [
+        {
+          id: "mock-user-1",
+          role: "user",
+          content: mockThreadDetail.title,
+        },
+        {
+          id: "mock-assistant-1",
+          role: "assistant",
+          content:
+            "Updated invoice export timestamp parsing and prepared changes for review.",
+        },
+      ];
+    }
+    return messagesFromTurns(query.data?.turns ?? []);
+  }, [isDesktop, mockThreadDetail.title, query.data?.turns, threadId]);
 
   if (!isDesktop || !threadId) {
-    return { thread, isLoading: false };
+    return { thread, messages, isLoading: false };
   }
 
-  return { thread, isLoading: query.isPending };
+  return { thread, messages, isLoading: query.isPending };
 }

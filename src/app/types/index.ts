@@ -54,6 +54,12 @@ export interface ThreadAttachment {
   path: string;
 }
 
+export interface ThreadMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
 export interface DiffSummary {
   filesChanged: number;
   additions: number;

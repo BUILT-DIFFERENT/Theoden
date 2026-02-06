@@ -34,11 +34,15 @@ const agentOptions = ["Default", "Review", "Docs"] as const;
 interface ThreadComposerProps {
   prefillPrompt?: string;
   workspaceName?: string;
+  placeholder?: string;
+  onSubmitted?: (message: string) => void;
 }
 
 export function ThreadComposer({
   prefillPrompt,
   workspaceName,
+  placeholder,
+  onSubmitted,
 }: ThreadComposerProps) {
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/threads/$threadId" });
@@ -132,6 +136,7 @@ export function ThreadComposer({
         cwd,
         effort,
       });
+      onSubmitted?.(prompt.trim());
       setPrompt("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start run.");
@@ -156,9 +161,16 @@ export function ThreadComposer({
       <div className="rounded-[28px] bg-black/25 p-4 backdrop-blur-xl ring-1 ring-white/10">
         <textarea
           className="h-28 w-full resize-none bg-transparent p-2 text-base text-ink-100 placeholder:text-ink-500 focus:outline-none"
-          placeholder="Type your request (use @ to attach files or / for commands)"
+          placeholder={
+            placeholder ?? "Ask Codex anything, @ to add files, / for commands"
+          }
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey) return;
+            event.preventDefault();
+            void handleSubmit();
+          }}
         />
         {error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">

@@ -350,9 +350,9 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 - [x] Skills/Automations CTAs open modals / routes
 
 ### Thread lifecycle (P1)
-- [ ] New thread creation in active workspace
-- [ ] Thread view renders message list + composer state changes
-- [ ] Composer supports sending and appending messages
+- [x] New thread creation in active workspace
+- [x] Thread view renders message list + composer state changes
+- [x] Composer supports sending and appending messages
 
 ### Diff panel (P1)
 - [x] Git status displayed in top bar
