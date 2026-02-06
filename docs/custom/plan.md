@@ -32,9 +32,9 @@ Real app uses a **single left sidebar** containing:
 
 ### 1.2 New thread home (real app)
 The “New thread” screen is intentionally minimal:
-- [ ] Empty main canvas with a large **“Let’s build”** headline.
-- [ ] A **workspace selector** rendered near the “Let’s build” label (dropdown caret).
-- [ ] A large floating/illustrative icon near the headline.
+- [x] Empty main canvas with a large **“Let’s build”** headline.
+- [x] A **workspace selector** rendered near the “Let’s build” label (dropdown caret).
+- [x] A large floating/illustrative icon near the headline.
 
 ### 1.3 Thread view (real app)
 The thread view is a **chat-like transcript**, but *not* “bubble chat”:
@@ -139,20 +139,20 @@ The real app shows git-related UI in at least two ways:
 ### 2.4 New thread home (“Let’s build”)
 
 #### ✅ Real app
-- [ ] Large “Let’s build” text at the lower-right quadrant.
-- [ ] Workspace name below with dropdown caret.
-- [ ] Minimal rest of the canvas.
+- [x] Large “Let’s build” text at the lower-right quadrant.
+- [x] Workspace name below with dropdown caret.
+- [x] Minimal rest of the canvas.
 
 #### ❌ Clone
 - [ ] Shows “New thread” in top bar with “Pick a workspace” microcopy.
 - [ ] Main canvas occupied by the app-server error card.
 
 #### Required changes
-- [ ] Implement real layout:
-  - [ ] Center/empty canvas
-  - [ ] “Let’s build” + workspace dropdown anchored at bottom-right area
-  - [ ] Decorative icon near the headline (real app uses a large outline icon)
-- [ ] Ensure no blocking system errors cover this surface.
+- [x] Implement real layout:
+  - [x] Center/empty canvas
+  - [x] “Let’s build” + workspace dropdown anchored at bottom-right area
+  - [x] Decorative icon near the headline (real app uses a large outline icon)
+- [x] Ensure no blocking system errors cover this surface.
 
 ---
 
@@ -376,7 +376,7 @@ The real app shows git-related UI in at least two ways:
    - [x] top nav icons
    - [x] threads grouped by workspace
 3. [ ] Replace top bar with real app semantics (thread title/workspace/overflow).
-4. [ ] Implement New thread home “Let’s build” layout.
+4. [x] Implement New thread home “Let’s build” layout.
 
 ### Phase 2 — Core thread experience
 1. [ ] Message renderer that matches typography + markdown + inline code pills.
