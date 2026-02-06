@@ -8,6 +8,7 @@ import {
 import { readThread } from "@/app/services/cli/threads";
 import { buildTimelineFromTurns } from "@/app/services/cli/timeline";
 import { mockThreadDetail } from "@/app/state/mockData";
+import { getThreadMetadata } from "@/app/state/threadMetadata";
 import type { ThreadDetail } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
 import { formatRelativeTimeFromSeconds } from "@/app/utils/time";
@@ -27,6 +28,7 @@ export function useThreadDetail(threadId: string | undefined) {
     if (!query.data) {
       return undefined;
     }
+    const metadata = getThreadMetadata(threadId);
     return {
       id: query.data.id,
       title: query.data.preview?.trim() || "Untitled thread",
@@ -36,6 +38,8 @@ export function useThreadDetail(threadId: string | undefined) {
       lastUpdated: formatRelativeTimeFromSeconds(query.data.updatedAt),
       mode: "local",
       effort: "medium",
+      worktreePath: metadata.worktreePath,
+      branch: metadata.branch ?? query.data.gitInfo?.branch,
       events: buildTimelineFromTurns(query.data.turns ?? []),
       attachments: [],
       diffSummary: summarizeTurns(query.data.turns ?? []),

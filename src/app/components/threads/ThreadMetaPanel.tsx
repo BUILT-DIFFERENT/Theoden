@@ -1,4 +1,9 @@
+import { useMatchRoute } from "@tanstack/react-router";
+
+import { diffStatsFromText } from "@/app/services/cli/diffSummary";
+import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
 import { mockThreadDetail } from "@/app/state/mockData";
+import { useThreadUi } from "@/app/state/threadUi";
 import type { ThreadDetail } from "@/app/types";
 
 interface ThreadMetaPanelProps {
@@ -6,14 +11,27 @@ interface ThreadMetaPanelProps {
 }
 
 export function ThreadMetaPanel({ thread }: ThreadMetaPanelProps) {
+  const { setActiveModal, setReviewOpen } = useThreadUi();
+  const matchRoute = useMatchRoute();
+  const threadMatch = matchRoute({ to: "/threads/$threadId" });
+  const threadId = threadMatch ? threadMatch.threadId : undefined;
   const detail = thread ?? mockThreadDetail;
-  const summary = detail.diffSummary;
+  const liveDiffText = useThreadDiffText(threadId, detail.diffText ?? "");
+  const hasLiveDiff = liveDiffText.trim().length > 0;
+  const diffStats = hasLiveDiff
+    ? diffStatsFromText(liveDiffText)
+    : {
+        additions: detail.diffSummary.additions,
+        deletions: detail.diffSummary.deletions,
+      };
+  const summary = {
+    ...detail.diffSummary,
+    additions: diffStats.additions,
+    deletions: diffStats.deletions,
+  };
   const hasChanges = summary.filesChanged > 0;
   const handleReviewChanges = () => {
-    const panel = document.getElementById("diff-panel");
-    if (panel) {
-      panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    setReviewOpen(true);
   };
   return (
     <div className="sticky top-6 space-y-4">
@@ -74,7 +92,10 @@ export function ThreadMetaPanel({ thread }: ThreadMetaPanelProps) {
             Review changes · {summary.filesChanged} files · +{summary.additions}{" "}
             / -{summary.deletions}
           </button>
-          <button className="w-full rounded-xl border border-white/10 px-3 py-2 text-left hover:border-flare-300">
+          <button
+            className="w-full rounded-xl border border-white/10 px-3 py-2 text-left hover:border-flare-300"
+            onClick={() => setActiveModal("commit")}
+          >
             Commit and push
           </button>
           <button className="w-full rounded-xl border border-white/10 px-3 py-2 text-left hover:border-flare-300">

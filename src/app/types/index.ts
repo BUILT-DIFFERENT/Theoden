@@ -38,6 +38,8 @@ export interface ThreadSummary {
 export interface ThreadDetail extends ThreadSummary {
   mode: RunMode;
   worktreeStrategy?: WorkspaceStrategy;
+  worktreePath?: string;
+  branch?: string;
   effort: "medium" | "high" | "extra_high";
   events: RunEvent[];
   attachments: ThreadAttachment[];

@@ -1,7 +1,9 @@
 import { RootRoute, Route, Router } from "@tanstack/react-router";
 
 import { AppShell } from "@/app/components/layout/AppShell";
+import { AutomationsPage } from "@/app/routes/AutomationsPage";
 import { ControlRoomPage } from "@/app/routes/ControlRoomPage";
+import { NewThreadPage } from "@/app/routes/NewThreadPage";
 import { SettingsPage } from "@/app/routes/SettingsPage";
 import { SkillsPage } from "@/app/routes/SkillsPage";
 import { ThreadPage } from "@/app/routes/ThreadPage";
@@ -23,10 +25,22 @@ const threadRoute = new Route({
   component: ThreadPage,
 });
 
+const newThreadRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/threads/new",
+  component: NewThreadPage,
+});
+
 const threadListRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/threads",
   component: ThreadsPage,
+});
+
+const automationsRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/automations",
+  component: AutomationsPage,
 });
 
 const settingsRoute = new Route({
@@ -44,7 +58,9 @@ const skillsRoute = new Route({
 const routeTree = rootRoute.addChildren([
   controlRoomRoute,
   threadListRoute,
+  newThreadRoute,
   threadRoute,
+  automationsRoute,
   settingsRoute,
   skillsRoute,
 ]);

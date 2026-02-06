@@ -1,9 +1,9 @@
 import { Link, Outlet, useMatchRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ControlRoomSidebar } from "@/app/components/control-room/ControlRoomSidebar";
-import { ApprovalsPanel } from "@/app/components/threads/ApprovalsPanel";
-import { ThreadMetaPanel } from "@/app/components/threads/ThreadMetaPanel";
+import { DiffPanel } from "@/app/components/diff/DiffPanel";
+import { ThreadTopBar } from "@/app/components/threads/ThreadTopBar";
 import {
   sendAppServerNotification,
   sendAppServerRequest,
@@ -11,13 +11,18 @@ import {
 } from "@/app/services/cli/appServer";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
+import { ThreadUiProvider, type ThreadModal } from "@/app/state/threadUi";
 import { isTauri } from "@/app/utils/tauri";
 
 export function AppShell() {
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/threads/$threadId" });
+  const newThreadMatch = matchRoute({ to: "/threads/new" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const { thread } = useThreadDetail(threadId);
+  const showThreadHeader = Boolean(threadMatch || newThreadMatch);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [activeModal, setActiveModal] = useState<ThreadModal>(null);
   useAppServerStream();
 
   useEffect(() => {
@@ -48,60 +53,86 @@ export function AppShell() {
     void bootstrap();
   }, []);
 
+  const threadUi = useMemo(
+    () => ({
+      reviewOpen,
+      setReviewOpen,
+      activeModal,
+      setActiveModal,
+    }),
+    [activeModal, reviewOpen],
+  );
+
+  const showReviewPanel = showThreadHeader && reviewOpen;
+
   return (
-    <div className="min-h-screen text-ink-50">
-      <div className="flex min-h-screen">
-        <ControlRoomSidebar />
-        <main className="flex-1 border-x border-white/5">
-          <header className="flex items-center justify-between border-b border-white/5 px-6 py-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-ink-300">
-                Command Center
-              </p>
-              <h1 className="font-display text-2xl">
-                Threads, runs, and outcomes
-              </h1>
+    <ThreadUiProvider value={threadUi}>
+      <div className="min-h-screen text-ink-50">
+        <div className="flex min-h-screen">
+          <ControlRoomSidebar />
+          <main className="flex-1 border-x border-white/5">
+            {showThreadHeader ? (
+              <ThreadTopBar
+                thread={thread}
+                isNewThread={Boolean(newThreadMatch)}
+              />
+            ) : (
+              <header className="flex items-center justify-between border-b border-white/5 px-6 py-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-ink-300">
+                    Command Center
+                  </p>
+                  <h1 className="font-display text-2xl">
+                    Threads, runs, and outcomes
+                  </h1>
+                </div>
+                <nav className="flex items-center gap-3 text-sm text-ink-200">
+                  <Link
+                    to="/"
+                    className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
+                  >
+                    Control Room
+                  </Link>
+                  <Link
+                    to="/threads"
+                    className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
+                  >
+                    Threads
+                  </Link>
+                  <Link
+                    to="/skills"
+                    className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
+                  >
+                    Skills
+                  </Link>
+                  <Link
+                    to="/settings"
+                    className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
+                  >
+                    Settings
+                  </Link>
+                </nav>
+              </header>
+            )}
+            <div
+              className={
+                showReviewPanel
+                  ? "grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]"
+                  : "px-6 py-6"
+              }
+            >
+              <section className="min-h-[70vh]">
+                <Outlet />
+              </section>
+              {showReviewPanel ? (
+                <aside className="hidden lg:block">
+                  <DiffPanel thread={thread} />
+                </aside>
+              ) : null}
             </div>
-            <nav className="flex items-center gap-3 text-sm text-ink-200">
-              <Link
-                to="/"
-                className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
-              >
-                Control Room
-              </Link>
-              <Link
-                to="/threads"
-                className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
-              >
-                Threads
-              </Link>
-              <Link
-                to="/skills"
-                className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
-              >
-                Skills
-              </Link>
-              <Link
-                to="/settings"
-                className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
-              >
-                Settings
-              </Link>
-            </nav>
-          </header>
-          <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="min-h-[70vh]">
-              <Outlet />
-            </section>
-            <aside className="hidden lg:block">
-              <div className="space-y-6">
-                <ApprovalsPanel threadId={threadId} />
-                <ThreadMetaPanel thread={thread} />
-              </div>
-            </aside>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
-    </div>
+    </ThreadUiProvider>
   );
 }

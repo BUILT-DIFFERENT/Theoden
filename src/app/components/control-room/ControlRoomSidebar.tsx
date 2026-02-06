@@ -1,216 +1,177 @@
-import { Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Link, useMatchRoute } from "@tanstack/react-router";
+import { Filter, Folder, Plus, Settings } from "lucide-react";
+import { useMemo } from "react";
 
-import { useActiveRuns } from "@/app/services/cli/useActiveRuns";
 import { useThreadList } from "@/app/services/cli/useThreads";
 
 export function ControlRoomSidebar() {
-  const [archivedOnly, setArchivedOnly] = useState(false);
-  const [providerFilters, setProviderFilters] = useState<string[]>([]);
-  const [sourceFilters, setSourceFilters] = useState<string[]>([]);
-  const {
-    projects,
-    threads,
-    allThreads,
-    providers,
-    sources,
-    hasMore,
-    loadMore,
-    isFetchingMore,
-  } = useThreadList({
-    archived: archivedOnly ? true : undefined,
-    modelProviders: providerFilters,
-    sourceKinds: sourceFilters,
+  const matchRoute = useMatchRoute();
+  const threadMatch = matchRoute({ to: "/threads/$threadId" });
+  const selectedThreadId = threadMatch ? threadMatch.threadId : undefined;
+  const { projects, threads, providers, sources } = useThreadList({
     limit: 25,
   });
-  const activeRuns = useActiveRuns(allThreads);
-  const hasActiveRuns = activeRuns.length > 0;
-  const hasFilters =
-    archivedOnly || providerFilters.length > 0 || sourceFilters.length > 0;
 
-  const toggleFilter = (
-    value: string,
-    setValue: (updater: (current: string[]) => string[]) => void,
-  ) => {
-    setValue((current) => {
-      if (current.includes(value)) {
-        return current.filter((item) => item !== value);
-      }
-      return [...current, value];
-    });
-  };
-
-  const providerOptions = useMemo(
+  const recents = useMemo(() => threads.slice(0, 6), [threads]);
+  const providerTags = useMemo(
     () => (providers.length ? providers : ["openai"]),
     [providers],
   );
-  const sourceOptions = useMemo(
+  const sourceTags = useMemo(
     () => (sources.length ? sources : ["cli", "vscode", "app-server"]),
     [sources],
   );
 
   return (
-    <aside className="w-72 border-r border-white/5 bg-ink-900/60 px-4 py-6">
+    <aside className="flex min-h-screen w-60 flex-col border-r border-white/5 bg-ink-900/70 px-4 py-6 backdrop-blur-xl">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Codex</p>
-        <h2 className="font-display text-lg">Situation Room</h2>
+        <h2 className="font-display text-lg">Thread Control</h2>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-white/10 bg-ink-900/70 p-4 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-          Active
-        </p>
-        <div className="mt-3 space-y-3 text-sm">
-          {hasActiveRuns ? (
-            activeRuns.map((run) => (
-              <div
-                key={run.id}
-                className="rounded-xl border border-white/5 bg-black/20 p-3"
-              >
-                <p className="text-ink-100">{run.title}</p>
-                <p className="text-xs text-ink-400">{run.statusLabel}</p>
-              </div>
-            ))
+      <nav className="space-y-2 text-sm">
+        <Link
+          to="/threads/new"
+          className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 hover:border-flare-300"
+        >
+          <span>New thread</span>
+          <span className="text-xs text-ink-400">N</span>
+        </Link>
+        <Link
+          to="/automations"
+          className="flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-ink-300 hover:border-flare-300"
+        >
+          <span>Automations</span>
+          <span className="text-xs text-ink-500">A</span>
+        </Link>
+        <Link
+          to="/skills"
+          className="flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-ink-300 hover:border-flare-300"
+        >
+          <span>Skills</span>
+          <span className="text-xs text-ink-500">S</span>
+        </Link>
+      </nav>
+
+      <div className="mt-6">
+        <div className="flex items-center justify-between">
+          <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+            Recents
+          </p>
+          <span className="text-[0.65rem] text-ink-500">
+            {recents.length} showing
+          </span>
+        </div>
+        <div className="mt-3 space-y-2 text-xs">
+          {recents.length ? (
+            recents.map((thread) => {
+              const isSelected = thread.id === selectedThreadId;
+              const showDot =
+                thread.status === "needs_review" || thread.status === "running";
+              return (
+                <Link
+                  key={thread.id}
+                  to="/threads/$threadId"
+                  params={{ threadId: thread.id }}
+                  className={`flex items-center justify-between rounded-xl border px-3 py-2 transition ${
+                    isSelected
+                      ? "border-white/20 bg-white/5 text-ink-50"
+                      : "border-white/5 text-ink-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {showDot ? (
+                      <span className="h-2 w-2 rounded-full bg-sky-400" />
+                    ) : (
+                      <span className="h-2 w-2 rounded-full border border-white/10" />
+                    )}
+                    <span className="max-w-[110px] truncate">
+                      {thread.title}
+                    </span>
+                  </div>
+                  <span className="text-[0.65rem] text-ink-500">
+                    {thread.lastUpdated}
+                  </span>
+                </Link>
+              );
+            })
           ) : (
-            <div className="rounded-xl border border-white/5 bg-black/20 p-3 text-xs text-ink-400">
-              No active runs.
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-ink-500">
+              No recent threads.
             </div>
           )}
         </div>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-white/10 bg-ink-900/70 p-4 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-          Filters
-        </p>
-        <div className="mt-3 space-y-3 text-xs text-ink-300">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-flare-300"
-              checked={archivedOnly}
-              onChange={(event) => setArchivedOnly(event.target.checked)}
-            />
-            Archived only
-          </label>
-          <div className="space-y-2">
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-ink-500">
-              Providers
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {providerOptions.map((provider) => {
-                const active = providerFilters.includes(provider);
-                return (
-                  <button
-                    key={provider}
-                    className={`rounded-full border px-2 py-1 text-[0.65rem] ${
-                      active
-                        ? "border-flare-300 text-ink-50"
-                        : "border-white/10 text-ink-300"
-                    }`}
-                    onClick={() => toggleFilter(provider, setProviderFilters)}
-                  >
-                    {provider}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-ink-500">
-              Sources
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {sourceOptions.map((source) => {
-                const active = sourceFilters.includes(source);
-                return (
-                  <button
-                    key={source}
-                    className={`rounded-full border px-2 py-1 text-[0.65rem] ${
-                      active
-                        ? "border-flare-300 text-ink-50"
-                        : "border-white/10 text-ink-300"
-                    }`}
-                    onClick={() => toggleFilter(source, setSourceFilters)}
-                  >
-                    {source}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[0.65rem] text-ink-500">
-            <span>{threads.length} threads</span>
-            {hasFilters ? (
-              <button
-                className="rounded-full border border-white/10 px-2 py-0.5 text-[0.65rem] hover:border-flare-300"
-                onClick={() => {
-                  setArchivedOnly(false);
-                  setProviderFilters([]);
-                  setSourceFilters([]);
-                }}
-              >
-                Clear
-              </button>
-            ) : null}
+      <div className="mt-6">
+        <div className="flex items-center justify-between">
+          <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+            Threads
+          </p>
+          <div className="flex items-center gap-2 text-ink-400">
+            <button className="rounded-full border border-white/10 p-1 hover:border-flare-300">
+              <Plus className="h-3 w-3" />
+            </button>
+            <button className="rounded-full border border-white/10 p-1 hover:border-flare-300">
+              <Filter className="h-3 w-3" />
+            </button>
           </div>
         </div>
-      </div>
-
-      <div className="space-y-4">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-          Projects
-        </p>
-        <div className="space-y-3">
+        <div className="mt-3 space-y-2 text-xs">
           {projects.map((project) => (
             <div
               key={project.id}
-              className="rounded-2xl border border-white/10 bg-ink-900/50 p-3"
+              className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2"
             >
-              <p className="text-sm text-ink-100">{project.name}</p>
-              <p className="text-xs text-ink-400">{project.path}</p>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-ink-300">
-                {project.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-white/10 px-2 py-0.5"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                {project.lastThreadId ? (
-                  <Link
-                    to="/threads/$threadId"
-                    params={{ threadId: project.lastThreadId }}
-                    className="rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300"
-                  >
-                    Latest Thread
-                  </Link>
-                ) : (
-                  <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-ink-400">
-                    No threads yet
-                  </span>
-                )}
-                <button className="rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300">
-                  New Run
-                </button>
+              <Folder className="h-3.5 w-3.5 text-ink-400" />
+              <div className="min-w-0">
+                <p className="truncate text-ink-100">{project.name}</p>
+                <p className="truncate text-[0.65rem] text-ink-500">
+                  {project.path}
+                </p>
               </div>
             </div>
           ))}
+          {!projects.length ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-ink-500">
+              No workspaces detected.
+            </div>
+          ) : null}
         </div>
-        {hasMore ? (
-          <div className="pt-2">
-            <button
-              className="w-full rounded-full border border-white/10 px-3 py-2 text-xs hover:border-flare-300"
-              onClick={() => void loadMore()}
-              disabled={isFetchingMore}
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-ink-900/60 p-3 text-xs text-ink-300">
+        <p className="text-[0.65rem] uppercase tracking-[0.3em] text-ink-500">
+          Providers
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {providerTags.map((provider) => (
+            <span
+              key={provider}
+              className="rounded-full border border-white/10 px-2 py-0.5"
             >
-              {isFetchingMore ? "Loading…" : "Load more"}
-            </button>
-          </div>
-        ) : null}
+              {provider}
+            </span>
+          ))}
+          {sourceTags.map((source) => (
+            <span
+              key={source}
+              className="rounded-full border border-white/10 px-2 py-0.5 text-ink-400"
+            >
+              {source}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-auto pt-6 text-xs text-ink-400">
+        <Link
+          to="/settings"
+          className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 hover:border-flare-300"
+        >
+          <Settings className="h-3.5 w-3.5" />
+          Settings
+        </Link>
       </div>
     </aside>
   );
