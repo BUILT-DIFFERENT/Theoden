@@ -344,8 +344,8 @@ This document enumerates **all required UI/UX + functional changes** to bring th
   - [x] “Add new workspace” action (can be stubbed)
 
 ### Buttons do something (P0)
-- [ ] `Run` dispatches `runActiveThread()` or `runWorkspaceTask()`
-- [ ] `Open` opens a menu and dispatches open actions
+- [x] `Run` dispatches `runActiveThread()` or `runWorkspaceTask()`
+- [x] `Open` opens a menu and dispatches open actions
 - [ ] Sidebar nav changes routes
 - [ ] Skills/Automations CTAs open modals / routes
 
