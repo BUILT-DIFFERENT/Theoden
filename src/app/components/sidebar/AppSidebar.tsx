@@ -6,7 +6,7 @@ import { useThreadList } from "@/app/services/cli/useThreads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 
-export function ControlRoomSidebar() {
+export function AppSidebar() {
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const selectedThreadId = threadMatch ? threadMatch.threadId : undefined;
@@ -44,7 +44,7 @@ export function ControlRoomSidebar() {
     <aside className="flex min-h-screen w-60 flex-col border-r border-white/5 bg-black/20 px-4 py-6 backdrop-blur-xl">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Codex</p>
-        <h2 className="font-display text-lg">Thread Control</h2>
+        <h2 className="font-display text-lg">Navigation</h2>
       </div>
 
       <nav className="space-y-1 text-sm">

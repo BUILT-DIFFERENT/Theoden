@@ -1,10 +1,10 @@
 import { Outlet, useMatchRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
-import { ControlRoomSidebar } from "@/app/components/control-room/ControlRoomSidebar";
 import { DiffPanel } from "@/app/components/diff/DiffPanel";
 import { BottomBar } from "@/app/components/layout/BottomBar";
 import { TerminalDrawer } from "@/app/components/layout/TerminalDrawer";
+import { AppSidebar } from "@/app/components/sidebar/AppSidebar";
 import { ThreadTopBar } from "@/app/components/threads/ThreadTopBar";
 import { WorkspaceModal } from "@/app/components/workspaces/WorkspaceModal";
 import {
@@ -96,7 +96,7 @@ export function AppShell() {
       <ThreadUiProvider value={threadUi}>
         <div className="min-h-screen text-ink-50">
           <div className="flex min-h-screen">
-            <ControlRoomSidebar />
+            <AppSidebar />
             <main className="flex min-h-screen flex-1 flex-col">
               <ThreadTopBar
                 title={topBarTitle}
