@@ -71,10 +71,6 @@ coverage/
 # personal files
 personal/
 
-# local agent tooling
-.agents/
-.codex/
-.opencode/
 
 # os
 .DS_Store
