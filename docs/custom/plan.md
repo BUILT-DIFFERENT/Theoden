@@ -44,16 +44,16 @@ The thread view is a **chat-like transcript**, but *not* “bubble chat”:
 
 ### 1.4 Automations (real app)
 Automations has:
-- [ ] Page title **“Automations”** with a **“Beta”** pill badge.
-- [ ] Subtitle: “Automate work by setting up scheduled threads.” with a **Learn more** link.
-- [ ] A “Start with a template” section showing **template cards in a grid** (2 columns in the recording), each card with:
-  - [ ] A small icon/emoji tile top-left
-  - [ ] Title/description copy
-  - [ ] Hover/focus affordances
-- [ ] Clicking a template opens a **right-side creation sheet** (“Create automation”) containing:
-  - [ ] A prominent **red warning callout** about sandbox settings and risk, with inline links (“rules”, etc.).
-  - [ ] Fields: **Name**, **Projects** (chip/tokens), **Prompt** (multiline).
-  - [ ] The sheet overlays the main page while leaving the left sidebar visible.
+- [x] Page title **“Automations”** with a **“Beta”** pill badge.
+- [x] Subtitle: “Automate work by setting up scheduled threads.” with a **Learn more** link.
+- [x] A “Start with a template” section showing **template cards in a grid** (2 columns in the recording), each card with:
+  - [x] A small icon/emoji tile top-left
+  - [x] Title/description copy
+  - [x] Hover/focus affordances
+- [x] Clicking a template opens a **right-side creation sheet** (“Create automation”) containing:
+  - [x] A prominent **red warning callout** about sandbox settings and risk, with inline links (“rules”, etc.).
+  - [x] Fields: **Name**, **Projects** (chip/tokens), **Prompt** (multiline).
+  - [x] The sheet overlays the main page while leaving the left sidebar visible.
 
 ### 1.5 Settings (real app)
 Settings is a distinct section with its own internal navigation list:
@@ -242,48 +242,48 @@ The real app shows git-related UI in at least two ways:
 ### 2.8 Automations page (templates grid)
 
 #### ✅ Real app
-- [ ] “Automations” title with **Beta** badge
-- [ ] Subtitle and Learn more link
-- [ ] Template cards grid with consistent card sizing and icon tile
+- [x] “Automations” title with **Beta** badge
+- [x] Subtitle and Learn more link
+- [x] Template cards grid with consistent card sizing and icon tile
 
 #### ❌ Clone
 - [ ] Navigates to an “Automations” page but content is blocked by app-server error.
 - [ ] Sidebar styling differs from real app.
 
 #### Required changes
-- [ ] Match the Automations page layout:
-  - [ ] Header typography (“Automations” large)
-  - [ ] Beta badge size/shape
-  - [ ] Template cards: padding, corner radius, hover elevation, icon tile
-  - [ ] Two-column responsive grid (in the recording window size)
-- [ ] Ensure templates populate even without workspaces (or show a soft empty state explaining requirement).
+- [x] Match the Automations page layout:
+  - [x] Header typography (“Automations” large)
+  - [x] Beta badge size/shape
+  - [x] Template cards: padding, corner radius, hover elevation, icon tile
+  - [x] Two-column responsive grid (in the recording window size)
+- [x] Ensure templates populate even without workspaces (or show a soft empty state explaining requirement).
 
 ---
 
 ### 2.9 Create automation sheet (modal)
 
 #### ✅ Real app
-- [ ] Opens as a **right-side overlay sheet** (“Create automation”)
+- [x] Opens as a **right-side overlay sheet** (“Create automation”)
 - [ ] Contains:
-  - [ ] Red warning callout about sandbox settings
-  - [ ] Name field
-  - [ ] Projects chips/tokens
-  - [ ] Prompt textarea
+  - [x] Red warning callout about sandbox settings
+  - [x] Name field
+  - [x] Projects chips/tokens
+  - [x] Prompt textarea
 
 #### ❌ Clone
 - [ ] Not shown.
 
 #### Required changes
-- [ ] Implement a right-side sheet component with:
-  - [ ] Rounded corners and shadow
-  - [ ] Scrollable internal content
-  - [ ] Escape key to close, click-outside to close
-  - [ ] Focus trap for accessibility
-- [ ] Implement form components that visually match real app:
-  - [ ] Text input styling
-  - [ ] Chip/tokens with remove “x”
-  - [ ] Multiline prompt box
-  - [ ] Primary/secondary actions (not visible in frame; ensure there is a save/create CTA consistent with real app)
+- [x] Implement a right-side sheet component with:
+  - [x] Rounded corners and shadow
+  - [x] Scrollable internal content
+  - [x] Escape key to close, click-outside to close
+  - [x] Focus trap for accessibility
+- [x] Implement form components that visually match real app:
+  - [x] Text input styling
+  - [x] Chip/tokens with remove “x”
+  - [x] Multiline prompt box
+  - [x] Primary/secondary actions (not visible in frame; ensure there is a save/create CTA consistent with real app)
 
 ---
 
@@ -349,8 +349,8 @@ The real app shows git-related UI in at least two ways:
 - [ ] Git status panel + diff viewer
 
 ### 4.2 Automations
-- [ ] Templates page
-- [ ] Create automation sheet
+- [x] Templates page
+- [x] Create automation sheet
 - [ ] Scheduling + background execution on worktrees
 - [ ] Inbox/archiving behavior for automation results
 
@@ -384,8 +384,8 @@ The real app shows git-related UI in at least two ways:
 3. [x] Copy icon + affordances.
 
 ### Phase 3 — Automations
-1. [ ] Templates grid
-2. [ ] Create automation sheet
+1. [x] Templates grid
+2. [x] Create automation sheet
 3. [ ] Wire up to CLI automation primitives
 
 ### Phase 4 — Settings + Git UI
