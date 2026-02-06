@@ -13,6 +13,7 @@ import { useThreadList } from "@/app/services/cli/useThreads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import {
+  isLikelyWorkspacePath,
   normalizeWorkspacePath,
   workspaceNameFromPath,
 } from "@/app/utils/workspace";
@@ -173,6 +174,11 @@ export function AppSidebar() {
                       ? "bg-white/10 text-ink-50"
                       : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
                   }`}
+                  onClick={() => {
+                    if (isLikelyWorkspacePath(thread.subtitle)) {
+                      setSelectedWorkspace(thread.subtitle);
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-2">
                     {showDot ? (

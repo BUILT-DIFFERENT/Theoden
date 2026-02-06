@@ -10,12 +10,18 @@ import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
 import { mockThreadDetail } from "@/app/state/mockData";
 import { useThreadUi } from "@/app/state/threadUi";
+import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { ThreadMessage } from "@/app/types";
+import {
+  isLikelyWorkspacePath,
+  normalizeWorkspacePath,
+} from "@/app/utils/workspace";
 
 export function ThreadPage() {
   const { threadId } = useParams({ from: "/t/$threadId" });
   const { thread, messages } = useThreadDetail(threadId);
   const { setReviewOpen } = useThreadUi();
+  const { selectedWorkspace, setSelectedWorkspace } = useWorkspaceUi();
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<ThreadMessage[]>(
     [],
@@ -58,6 +64,23 @@ export function ThreadPage() {
       ),
     );
   }, [messages]);
+
+  useEffect(() => {
+    if (!thread?.subtitle) {
+      return;
+    }
+    if (!isLikelyWorkspacePath(thread.subtitle)) {
+      return;
+    }
+    if (
+      selectedWorkspace &&
+      normalizeWorkspacePath(selectedWorkspace).toLowerCase() ===
+        normalizeWorkspacePath(thread.subtitle).toLowerCase()
+    ) {
+      return;
+    }
+    setSelectedWorkspace(thread.subtitle);
+  }, [selectedWorkspace, setSelectedWorkspace, thread?.subtitle]);
 
   useEffect(() => {
     if (!stickToBottom) return;

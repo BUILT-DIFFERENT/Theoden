@@ -28,7 +28,10 @@ import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { ThreadDetail } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
-import { workspaceNameFromPath } from "@/app/utils/workspace";
+import {
+  isLikelyWorkspacePath,
+  workspaceNameFromPath,
+} from "@/app/utils/workspace";
 
 interface ThreadTopBarProps {
   thread?: ThreadDetail;
@@ -39,18 +42,6 @@ interface ThreadTopBarProps {
 }
 
 type OpenAction = "editor" | "terminal" | "explorer";
-
-function isLikelyWorkspacePath(value: string): boolean {
-  const trimmedValue = value.trim();
-  if (!trimmedValue) {
-    return false;
-  }
-  return (
-    /^[a-zA-Z]:[\\/]/.test(trimmedValue) ||
-    trimmedValue.startsWith("/") ||
-    trimmedValue.startsWith("\\\\")
-  );
-}
 
 export function ThreadTopBar({
   thread,
