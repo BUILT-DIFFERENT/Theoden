@@ -6,7 +6,7 @@ This doc enumerates **all known UI + interaction gaps** between the **current cl
 
 ## 0) Global “Stop the Bleeding” Functional Gaps (currently broken)
 
-- [ ] **Workspace selection is non-functional**: “Pick a workspace” / workspace dropdown does not update app state; selection is not persisted; downstream UI does not react.
+- [x] **Workspace selection is non-functional**: Fixed by normalizing selection updates, persisting selected workspace/workspace list in local storage for desktop + web mode, and auto-resolving selection from the available workspace set.
 - [ ] **Buttons are no-ops** across the app (top toolbar buttons, “Add workspace”, “New automation”, “View details”, “Download”, etc.). Wire all onClick handlers and route transitions.
 - [ ] Add an **interaction audit harness**:
   - [ ] log/telemetry for button clicks + route changes in dev mode

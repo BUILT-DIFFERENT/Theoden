@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
+  useCallback,
   createContext,
   useContext,
   useEffect,
@@ -8,10 +9,12 @@ import {
   type ReactNode,
 } from "react";
 
+import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import {
   loadSelectedWorkspace,
   storeSelectedWorkspace,
 } from "@/app/state/workspaces";
+import { normalizeWorkspacePath } from "@/app/utils/workspace";
 
 export interface WorkspaceUiState {
   selectedWorkspace: string | null;
@@ -31,18 +34,47 @@ export function useWorkspaceUi() {
 }
 
 export function WorkspaceUiProvider({ children }: { children: ReactNode }) {
+  const { workspaces } = useWorkspaces();
   const [selectedWorkspace, setSelectedWorkspaceState] = useState<
     string | null
   >(() => loadSelectedWorkspace());
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
 
   useEffect(() => {
+    if (selectedWorkspace || !workspaces.length) {
+      return;
+    }
+    setSelectedWorkspaceState(workspaces[0].path);
+  }, [selectedWorkspace, workspaces]);
+
+  useEffect(() => {
+    if (!selectedWorkspace) {
+      return;
+    }
+    const selectedWorkspaceKey =
+      normalizeWorkspacePath(selectedWorkspace).toLowerCase();
+    const matchingWorkspace = workspaces.find(
+      (workspace) =>
+        normalizeWorkspacePath(workspace.path).toLowerCase() ===
+        selectedWorkspaceKey,
+    );
+    if (!matchingWorkspace || matchingWorkspace.path === selectedWorkspace) {
+      return;
+    }
+    setSelectedWorkspaceState(matchingWorkspace.path);
+  }, [selectedWorkspace, workspaces]);
+
+  useEffect(() => {
     storeSelectedWorkspace(selectedWorkspace);
   }, [selectedWorkspace]);
 
-  const setSelectedWorkspace = (path: string | null) => {
-    setSelectedWorkspaceState(path);
-  };
+  const setSelectedWorkspace = useCallback((path: string | null) => {
+    if (!path) {
+      setSelectedWorkspaceState(null);
+      return;
+    }
+    setSelectedWorkspaceState(normalizeWorkspacePath(path));
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -51,7 +83,7 @@ export function WorkspaceUiProvider({ children }: { children: ReactNode }) {
       workspacePickerOpen,
       setWorkspacePickerOpen,
     }),
-    [selectedWorkspace, workspacePickerOpen],
+    [selectedWorkspace, setSelectedWorkspace, workspacePickerOpen],
   );
 
   return (
