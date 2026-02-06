@@ -1,11 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ThreadComposer } from "@/app/components/threads/ThreadComposer";
 import { ThreadEmptyState } from "@/app/components/threads/ThreadEmptyState";
 import { ThreadModals } from "@/app/components/threads/ThreadModals";
+import { useAppUi } from "@/app/state/appUi";
+import { useThreadUi } from "@/app/state/threadUi";
 
 export function NewThreadPage() {
   const [prefill, setPrefill] = useState("");
+  const { setComposerDraft } = useAppUi();
+  const { setActiveModal, setReviewOpen } = useThreadUi();
+
+  useEffect(() => {
+    setPrefill("");
+    setComposerDraft("");
+    setReviewOpen(false);
+    setActiveModal(null);
+  }, [setActiveModal, setComposerDraft, setReviewOpen]);
 
   return (
     <div className="flex min-h-[70vh] flex-col justify-between gap-10">

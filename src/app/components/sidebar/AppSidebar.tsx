@@ -11,6 +11,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useThreadList } from "@/app/services/cli/useThreads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { useAppUi } from "@/app/state/appUi";
+import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import {
   isLikelyWorkspacePath,
@@ -19,6 +21,8 @@ import {
 } from "@/app/utils/workspace";
 
 export function AppSidebar() {
+  const { setComposerDraft } = useAppUi();
+  const { setActiveModal, setReviewOpen } = useThreadUi();
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const selectedThreadId = threadMatch ? threadMatch.threadId : undefined;
@@ -129,6 +133,11 @@ export function AppSidebar() {
         <Link
           to="/"
           className="flex items-center justify-between rounded-xl px-3 py-2 text-ink-200 transition hover:bg-white/5 hover:text-ink-50"
+          onClick={() => {
+            setComposerDraft("");
+            setReviewOpen(false);
+            setActiveModal(null);
+          }}
         >
           <span>New thread</span>
           <span className="text-xs text-ink-400">N</span>
