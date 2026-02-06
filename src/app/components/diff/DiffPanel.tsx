@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatchRoute } from "@tanstack/react-router";
 import {
+  ChevronRight,
   ChevronDown,
   FolderOpen,
   MoreHorizontal,
@@ -30,6 +31,55 @@ interface DiffSection {
   additions: number;
   deletions: number;
   lines: string[];
+}
+
+interface DiffLineEntry {
+  line: string;
+  lineNumber: number;
+}
+
+type DiffRenderableChunk =
+  | { kind: "line"; entry: DiffLineEntry }
+  | { kind: "context"; startLineNumber: number; lines: DiffLineEntry[] };
+
+const COLLAPSIBLE_CONTEXT_MIN_LINES = 4;
+
+function isContextLine(line: string) {
+  return line.startsWith(" ");
+}
+
+function toRenderableChunks(lines: string[]): DiffRenderableChunk[] {
+  const chunks: DiffRenderableChunk[] = [];
+  let contextBuffer: DiffLineEntry[] = [];
+
+  const flushContextBuffer = () => {
+    if (!contextBuffer.length) {
+      return;
+    }
+    if (contextBuffer.length >= COLLAPSIBLE_CONTEXT_MIN_LINES) {
+      chunks.push({
+        kind: "context",
+        startLineNumber: contextBuffer[0].lineNumber,
+        lines: contextBuffer,
+      });
+    } else {
+      contextBuffer.forEach((entry) => chunks.push({ kind: "line", entry }));
+    }
+    contextBuffer = [];
+  };
+
+  lines.forEach((line, index) => {
+    const entry = { line, lineNumber: index + 1 };
+    if (isContextLine(line)) {
+      contextBuffer.push(entry);
+      return;
+    }
+    flushContextBuffer();
+    chunks.push({ kind: "line", entry });
+  });
+
+  flushContextBuffer();
+  return chunks;
 }
 
 function parseDiffSections(
@@ -125,6 +175,9 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     null,
   );
   const [hunkActionError, setHunkActionError] = useState<string | null>(null);
+  const [expandedContextBlocks, setExpandedContextBlocks] = useState<
+    Record<string, boolean>
+  >({});
   const [annotations, setAnnotations] = useState<
     Array<{
       id: string;
@@ -218,6 +271,24 @@ export function DiffPanel({ thread }: DiffPanelProps) {
       null
     );
   }, [activeSections, selectedPath]);
+  const selectedSectionChunks = useMemo(
+    () => (selectedSection ? toRenderableChunks(selectedSection.lines) : []),
+    [selectedSection],
+  );
+  const collapsedContextLineCount = useMemo(() => {
+    if (!selectedSection) {
+      return 0;
+    }
+    return selectedSectionChunks.reduce((count, chunk) => {
+      if (chunk.kind !== "context") {
+        return count;
+      }
+      const contextKey = `${selectedSection.path}:${chunk.startLineNumber}`;
+      return expandedContextBlocks[contextKey]
+        ? count
+        : count + chunk.lines.length;
+    }, 0);
+  }, [expandedContextBlocks, selectedSection, selectedSectionChunks]);
 
   const stagedCount = stagedSections.length;
   const unstagedCount = unstagedSections.length;
@@ -317,6 +388,10 @@ export function DiffPanel({ thread }: DiffPanelProps) {
   }, [selectedLine, selectedSection?.path]);
 
   useEffect(() => {
+    setExpandedContextBlocks({});
+  }, [selectedSection?.path]);
+
+  useEffect(() => {
     if (!hunkActionFeedback) {
       return;
     }
@@ -378,9 +453,55 @@ export function DiffPanel({ thread }: DiffPanelProps) {
       createdAt: Date.now(),
     };
     setAnnotations((current) => [...current, annotation]);
-    console.info("Diff annotation submitted", annotation);
+    try {
+      window.dispatchEvent(
+        new CustomEvent("theoden:diff-annotation", {
+          detail: annotation,
+        }),
+      );
+    } catch (error) {
+      console.warn("Failed to dispatch diff annotation event", error);
+    }
     setCommentDraft("");
     setSelectedLine(null);
+  };
+
+  const renderDiffLine = (
+    path: string,
+    entry: DiffLineEntry,
+    fallbackColorClass = "text-ink-300 border-transparent",
+  ) => {
+    const line = entry.line;
+    const isAdd = line.startsWith("+") && !line.startsWith("+++");
+    const isRemove = line.startsWith("-") && !line.startsWith("---");
+    const isSelectedLine =
+      selectedLine?.path === path &&
+      selectedLine.lineNumber === entry.lineNumber;
+    const colorClass = isSelectedLine
+      ? "text-ink-100 bg-flare-500/10 border-flare-400"
+      : isAdd
+        ? "text-emerald-300 bg-emerald-500/5 border-emerald-500/40"
+        : isRemove
+          ? "text-rose-300 bg-rose-500/5 border-rose-500/40"
+          : fallbackColorClass;
+    return (
+      <button
+        key={`${path}-${entry.lineNumber}`}
+        type="button"
+        className={`grid w-full grid-cols-[36px_1fr] items-start gap-2 border-l-2 px-3 py-1 text-left ${colorClass}`}
+        onClick={() => {
+          setSelectedLine({
+            path,
+            lineNumber: entry.lineNumber,
+            content: line,
+          });
+          setCommentDraft("");
+        }}
+      >
+        <span className="text-[0.6rem] text-ink-500">{entry.lineNumber}</span>
+        <span className="whitespace-pre-wrap">{line || " "}</span>
+      </button>
+    );
   };
 
   return (
@@ -472,7 +593,11 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                 </span>
               </div>
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[0.65rem] text-ink-500">
-                <span>99 unmodified lines</span>
+                <span>
+                  {collapsedContextLineCount > 0
+                    ? `${collapsedContextLineCount} unmodified lines collapsed`
+                    : "All unmodified lines shown"}
+                </span>
                 <div className="flex items-center gap-2">
                   <button
                     className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
@@ -506,44 +631,60 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                   </button>
                 </div>
               </div>
-              {selectedSection.lines.length ? (
+              {selectedSectionChunks.length ? (
                 <div className="divide-y divide-white/5 font-mono text-[0.65rem]">
-                  {selectedSection.lines.map((line, index) => {
-                    const isAdd =
-                      line.startsWith("+") && !line.startsWith("+++");
-                    const isRemove =
-                      line.startsWith("-") && !line.startsWith("---");
-                    const isSelectedLine =
-                      selectedLine?.path === selectedSection.path &&
-                      selectedLine.lineNumber === index + 1;
-                    const colorClass = isSelectedLine
-                      ? "text-ink-100 bg-flare-500/10 border-flare-400"
-                      : isAdd
-                        ? "text-emerald-300 bg-emerald-500/5 border-emerald-500/40"
-                        : isRemove
-                          ? "text-rose-300 bg-rose-500/5 border-rose-500/40"
-                          : "text-ink-300 border-transparent";
+                  {selectedSectionChunks.map((chunk) => {
+                    if (chunk.kind === "line") {
+                      return renderDiffLine(selectedSection.path, chunk.entry);
+                    }
+
+                    const contextKey = `${selectedSection.path}:${chunk.startLineNumber}`;
+                    const isExpanded =
+                      expandedContextBlocks[contextKey] ?? false;
+                    if (!isExpanded) {
+                      return (
+                        <button
+                          key={contextKey}
+                          type="button"
+                          className="flex w-full items-center justify-between border-l-2 border-transparent px-3 py-1 text-left text-ink-500 hover:bg-white/5"
+                          onClick={() =>
+                            setExpandedContextBlocks((current) => ({
+                              ...current,
+                              [contextKey]: true,
+                            }))
+                          }
+                        >
+                          <span>{chunk.lines.length} unmodified lines</span>
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+                      );
+                    }
+
                     return (
-                      <button
-                        key={`${selectedSection.path}-${index}`}
-                        type="button"
-                        className={`grid w-full grid-cols-[36px_1fr] items-start gap-2 border-l-2 px-3 py-1 text-left ${colorClass}`}
-                        onClick={() => {
-                          setSelectedLine({
-                            path: selectedSection.path,
-                            lineNumber: index + 1,
-                            content: line,
-                          });
-                          setCommentDraft("");
-                        }}
-                      >
-                        <span className="text-[0.6rem] text-ink-500">
-                          {index + 1}
-                        </span>
-                        <span className="whitespace-pre-wrap">
-                          {line || " "}
-                        </span>
-                      </button>
+                      <div key={contextKey}>
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between border-l-2 border-transparent px-3 py-1 text-left text-ink-500 hover:bg-white/5"
+                          onClick={() =>
+                            setExpandedContextBlocks((current) => ({
+                              ...current,
+                              [contextKey]: false,
+                            }))
+                          }
+                        >
+                          <span>
+                            Hide {chunk.lines.length} unmodified lines
+                          </span>
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                        {chunk.lines.map((entry) =>
+                          renderDiffLine(
+                            selectedSection.path,
+                            entry,
+                            "text-ink-400 border-transparent bg-black/20",
+                          ),
+                        )}
+                      </div>
                     );
                   })}
                 </div>
