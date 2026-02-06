@@ -435,8 +435,8 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 - [x] Implement terminal toggle in the global top bar with visible panel/drawer state changes.
 - [x] Render rich markdown (headings/lists) in thread messages and add per-code-block copy actions.
 - [x] Add message auto-scroll behavior for new assistant output unless user manually scrolls up.
-- [ ] Implement composer `@` file attach interaction (picker/drawer + visible attachments).
-- [ ] Implement composer `/` command interaction (palette or inline suggestions).
+- [x] Implement composer `@` file attach interaction (picker/drawer + visible attachments).
+- [x] Implement composer `/` command interaction (palette or inline suggestions).
 - [ ] Make diff file list selectable so clicking a file focuses that file's hunks.
 - [ ] Wire per-hunk controls (stage/unstage/undo) to real state/actions instead of static buttons.
 - [ ] Show request-change input only after clicking a diff line and dispatch a comment annotation event on submit.
