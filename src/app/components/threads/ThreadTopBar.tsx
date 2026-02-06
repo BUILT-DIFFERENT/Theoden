@@ -22,6 +22,7 @@ import {
 import { createPullRequest, pushBranch } from "@/app/services/git/commits";
 import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
 import { checkoutBranch } from "@/app/services/git/worktrees";
+import { useAppUi } from "@/app/state/appUi";
 import { mockEditors } from "@/app/state/settingsData";
 import { useThreadMetadata } from "@/app/state/threadMetadata";
 import { useThreadUi } from "@/app/state/threadUi";
@@ -52,6 +53,7 @@ export function ThreadTopBar({
 }: ThreadTopBarProps) {
   const { reviewOpen, setActiveModal, setReviewOpen } = useThreadUi();
   const { selectedWorkspace } = useWorkspaceUi();
+  const { composerDraft, setComposerDraft } = useAppUi();
   const { workspaces } = useWorkspaces();
   const navigate = useNavigate();
   const matchRoute = useMatchRoute();
@@ -168,45 +170,68 @@ export function ThreadTopBar({
     }
   };
 
-  const handleRun = async () => {
+  const startRunForPrompt = async (prompt: string) => {
     if (!isTauri()) {
-      setRunError("Runs are available in the desktop app.");
-      return;
-    }
-    if (!runPrompt.trim()) {
-      setRunError("Enter a prompt to run.");
-      return;
+      throw new Error("Runs are available in the desktop app.");
     }
     if (!resolvedWorkspacePath) {
-      setRunError("Select a workspace before running.");
+      throw new Error("Select a workspace before running.");
+    }
+    let targetThreadId = threadId;
+    if (!targetThreadId) {
+      const newThread = await startThread({ cwd: resolvedWorkspacePath });
+      targetThreadId = newThread?.id;
+      if (targetThreadId) {
+        await navigate({
+          to: "/t/$threadId",
+          params: { threadId: targetThreadId },
+        });
+      }
+    }
+    if (!targetThreadId) {
+      throw new Error("Unable to start a new thread.");
+    }
+    await resumeThread({ threadId: targetThreadId });
+    await startTurn({
+      threadId: targetThreadId,
+      input: prompt,
+      cwd: resolvedWorkspacePath,
+    });
+  };
+
+  const handleRun = async () => {
+    if (!runPrompt.trim()) {
+      setRunError("Enter a prompt to run.");
       return;
     }
     setRunSubmitting(true);
     setRunError(null);
     try {
-      let targetThreadId = threadId;
-      if (!targetThreadId) {
-        const newThread = await startThread({ cwd: resolvedWorkspacePath });
-        targetThreadId = newThread?.id;
-        if (targetThreadId) {
-          await navigate({
-            to: "/t/$threadId",
-            params: { threadId: targetThreadId },
-          });
-        }
-      }
-      if (!targetThreadId) {
-        throw new Error("Unable to start a new thread.");
-      }
-      await resumeThread({ threadId: targetThreadId });
-      await startTurn({
-        threadId: targetThreadId,
-        input: runPrompt.trim(),
-        cwd: resolvedWorkspacePath,
-      });
+      await startRunForPrompt(runPrompt.trim());
       setRunPrompt("");
       setRunModalOpen(false);
     } catch (error) {
+      setRunError(error instanceof Error ? error.message : "Failed to run.");
+    } finally {
+      setRunSubmitting(false);
+    }
+  };
+
+  const handleRunPrimary = async () => {
+    const draft = composerDraft.trim();
+    if (!draft) {
+      setRunError(null);
+      setRunModalOpen(true);
+      return;
+    }
+    setRunSubmitting(true);
+    setRunError(null);
+    try {
+      await startRunForPrompt(draft);
+      setComposerDraft("");
+    } catch (error) {
+      setRunPrompt(draft);
+      setRunModalOpen(true);
       setRunError(error instanceof Error ? error.message : "Failed to run.");
     } finally {
       setRunSubmitting(false);
@@ -323,14 +348,26 @@ export function ThreadTopBar({
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <div className="relative" ref={runMenuRef}>
-          <button
-            className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-            onClick={() => setRunMenuOpen((open) => !open)}
-          >
-            <Play className="h-3.5 w-3.5" />
-            Run
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center">
+            <button
+              className="flex items-center gap-2 rounded-l-full border border-white/10 border-r-0 px-3 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                void handleRunPrimary();
+              }}
+              disabled={runSubmitting}
+            >
+              <Play className="h-3.5 w-3.5" />
+              {runSubmitting ? "Running…" : "Run"}
+            </button>
+            <button
+              className="rounded-r-full border border-white/10 px-2 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => setRunMenuOpen((open) => !open)}
+              aria-label="Run options"
+              disabled={runSubmitting}
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
           {runMenuOpen ? (
             <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-white/10 bg-ink-900/95 p-2 text-[0.7rem] text-ink-200 shadow-card">
               <button
