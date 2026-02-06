@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import {
   diffTextFromTurns,
@@ -9,6 +9,10 @@ import { messagesFromTurns } from "@/app/services/cli/threadMessages";
 import { readThread } from "@/app/services/cli/threads";
 import { buildTimelineFromTurns } from "@/app/services/cli/timeline";
 import { mockThreadDetail } from "@/app/state/mockData";
+import {
+  loadCachedThreadDetail,
+  storeCachedThreadDetail,
+} from "@/app/state/threadCache";
 import { getThreadMetadata } from "@/app/state/threadMetadata";
 import type { ThreadDetail, ThreadMessage } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
@@ -23,13 +27,42 @@ export function useThreadDetail(threadId: string | undefined) {
     refetchOnWindowFocus: isDesktop,
     refetchInterval: isDesktop && threadId ? 5000 : false,
   });
-
-  const thread = useMemo(() => {
-    if (!isDesktop || !threadId) {
-      return mockThreadDetail;
-    }
-    if (!query.data) {
-      return undefined;
+  const fallbackMessages = useMemo<ThreadMessage[]>(
+    () => [
+      {
+        id: "mock-user-1",
+        role: "user",
+        content: mockThreadDetail.title,
+      },
+      {
+        id: "mock-assistant-1",
+        role: "assistant",
+        content:
+          "Updated invoice export timestamp parsing and prepared changes for review.",
+        activities: [
+          {
+            id: "mock-activity-1",
+            kind: "command",
+            label: "pnpm lint",
+            status: "completed",
+            durationMs: 18000,
+          },
+          {
+            id: "mock-activity-2",
+            kind: "command",
+            label: "pnpm app:test",
+            status: "completed",
+            durationMs: 42000,
+          },
+        ],
+        workedDurationMs: 60000,
+      },
+    ],
+    [mockThreadDetail.title],
+  );
+  const remoteThread = useMemo(() => {
+    if (!isDesktop || !threadId || !query.data) {
+      return null;
     }
     const metadata = getThreadMetadata(threadId);
     return {
@@ -48,42 +81,69 @@ export function useThreadDetail(threadId: string | undefined) {
       diffSummary: summarizeTurns(query.data.turns ?? []),
       diffText: diffTextFromTurns(query.data.turns ?? []),
     } satisfies ThreadDetail;
-  }, [isDesktop, mockThreadDetail, query.data, threadId]);
+  }, [isDesktop, query.data, threadId]);
+  const remoteMessages = useMemo<ThreadMessage[]>(
+    () => messagesFromTurns(query.data?.turns ?? []),
+    [query.data?.turns],
+  );
+  const cachedDetail = useMemo(() => {
+    if (!isDesktop || !threadId) {
+      return null;
+    }
+    return loadCachedThreadDetail(threadId);
+  }, [isDesktop, threadId]);
+
+  useEffect(() => {
+    if (!threadId || !remoteThread) {
+      return;
+    }
+    storeCachedThreadDetail(threadId, {
+      thread: remoteThread,
+      messages: remoteMessages,
+    });
+  }, [remoteMessages, remoteThread, threadId]);
+
+  const thread = useMemo(() => {
+    if (!isDesktop || !threadId) {
+      return mockThreadDetail;
+    }
+    if (remoteThread) {
+      return remoteThread;
+    }
+    if (cachedDetail?.thread) {
+      return cachedDetail.thread;
+    }
+    return mockThreadDetail;
+  }, [
+    cachedDetail?.thread,
+    isDesktop,
+    mockThreadDetail,
+    remoteThread,
+    threadId,
+  ]);
   const messages = useMemo<ThreadMessage[]>(() => {
     if (!isDesktop || !threadId) {
-      return [
-        {
-          id: "mock-user-1",
-          role: "user",
-          content: mockThreadDetail.title,
-        },
-        {
-          id: "mock-assistant-1",
-          role: "assistant",
-          content:
-            "Updated invoice export timestamp parsing and prepared changes for review.",
-          activities: [
-            {
-              id: "mock-activity-1",
-              kind: "command",
-              label: "pnpm lint",
-              status: "completed",
-              durationMs: 18000,
-            },
-            {
-              id: "mock-activity-2",
-              kind: "command",
-              label: "pnpm app:test",
-              status: "completed",
-              durationMs: 42000,
-            },
-          ],
-          workedDurationMs: 60000,
-        },
-      ];
+      return fallbackMessages;
     }
-    return messagesFromTurns(query.data?.turns ?? []);
-  }, [isDesktop, mockThreadDetail.title, query.data?.turns, threadId]);
+    if (query.data) {
+      return remoteMessages;
+    }
+    if (cachedDetail) {
+      return cachedDetail.messages;
+    }
+    if (query.isError) {
+      return fallbackMessages;
+    }
+    return [];
+  }, [
+    cachedDetail,
+    fallbackMessages,
+    isDesktop,
+    query.data,
+    query.isError,
+    remoteMessages,
+    threadId,
+  ]);
 
   if (!isDesktop || !threadId) {
     return { thread, messages, isLoading: false };

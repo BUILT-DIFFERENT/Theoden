@@ -1,11 +1,15 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import {
   listThreads,
   type ThreadListResponse,
 } from "@/app/services/cli/threads";
 import { mockProjects, mockThreads } from "@/app/state/mockData";
+import {
+  loadCachedThreadSummaries,
+  storeCachedThreadSummaries,
+} from "@/app/state/threadCache";
 import type { Project, ThreadSummary } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
 import { formatRelativeTimeFromSeconds } from "@/app/utils/time";
@@ -87,6 +91,17 @@ export function useThreadList(options: ThreadListOptions = {}) {
   const normalizedProviders = normalizeArray(options.modelProviders);
   const normalizedSources = normalizeArray(options.sourceKinds);
   const archived = options.archived ?? false;
+  const canUsePrimaryCache =
+    !archived &&
+    normalizedProviders.length === 0 &&
+    normalizedSources.length === 0;
+  const cachedThreads = useMemo(
+    () =>
+      isDesktop && canUsePrimaryCache
+        ? loadCachedThreadSummaries()
+        : ([] as ThreadSummary[]),
+    [canUsePrimaryCache, isDesktop],
+  );
   const normalizedWorkspace = useMemo(() => {
     if (!options.workspacePath) return null;
     return normalizeWorkspacePath(options.workspacePath).toLowerCase();
@@ -114,12 +129,38 @@ export function useThreadList(options: ThreadListOptions = {}) {
     refetchOnWindowFocus: isDesktop,
     refetchInterval: isDesktop ? 5000 : false,
   });
+  const remoteThreads = useMemo(() => {
+    const pages = query.data?.pages ?? [];
+    return pages.flatMap((page) => page.data).map(mapThreadToSummary);
+  }, [query.data]);
+
+  useEffect(() => {
+    if (!isDesktop || !canUsePrimaryCache || !query.data) {
+      return;
+    }
+    storeCachedThreadSummaries(remoteThreads);
+  }, [canUsePrimaryCache, isDesktop, query.data, remoteThreads]);
 
   const allThreads = useMemo(() => {
     if (!isDesktop) return mockThreads;
-    const pages = query.data?.pages ?? [];
-    return pages.flatMap((page) => page.data).map(mapThreadToSummary);
-  }, [isDesktop, mockThreads, query.data]);
+    if (query.data) {
+      return remoteThreads;
+    }
+    if (cachedThreads.length) {
+      return cachedThreads;
+    }
+    if (query.isError) {
+      return mockThreads;
+    }
+    return [];
+  }, [
+    cachedThreads,
+    isDesktop,
+    mockThreads,
+    query.data,
+    query.isError,
+    remoteThreads,
+  ]);
   const workspaceThreads = useMemo(() => {
     if (!normalizedWorkspace) return allThreads;
     return allThreads.filter((thread) => {
@@ -164,6 +205,9 @@ export function useThreadList(options: ThreadListOptions = {}) {
     () => (isDesktop ? mapThreadsToProjects(workspaceThreads) : mockProjects),
     [isDesktop, mockProjects, workspaceThreads],
   );
+  const isMockData =
+    !isDesktop ||
+    (isDesktop && !query.data && !cachedThreads.length && query.isError);
   return {
     threads,
     allThreads,
@@ -174,7 +218,7 @@ export function useThreadList(options: ThreadListOptions = {}) {
     loadMore: query.fetchNextPage,
     isFetchingMore: isDesktop ? query.isFetchingNextPage : false,
     isLoading: isDesktop ? query.isPending : false,
-    isMock: !isDesktop,
+    isMock: isMockData,
   };
 }
 

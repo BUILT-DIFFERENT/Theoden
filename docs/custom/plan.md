@@ -124,15 +124,16 @@ The real app shows git-related UI in at least two ways:
 - [x] Shows a non-blocking banner when the app-server is unavailable; routes remain accessible.
 
 #### Required changes (P0)
-- [ ] Rework backend architecture so the UI can render and be usable even if:
-  - [ ] the CLI is not found / not configured
-  - [ ] the selected workspace has issues
-  - [ ] background services are down  
+- [x] Rework backend architecture so the UI can render and be usable even if:
+  - [x] the CLI is not found / not configured
+  - [x] the selected workspace has issues
+  - [x] background services are down  
 - [ ] Replace “app-server” with a Codex-native model:
   - [ ] Use Tauri/Rust commands (IPC) to call the Codex CLI directly and stream results
   - [ ] Or, if a local server is necessary, embed lifecycle management so it starts reliably and the UI degrades gracefully.
 - [ ] Implement a real-app-like empty/error state:
   - [x] Show a small banner/toast and guidance, **not** a full-page block that prevents navigation.
+  - [x] Keep thread list + thread detail usable via cached/mock fallback data while reconnecting or disconnected.
 
 ---
 
