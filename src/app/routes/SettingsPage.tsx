@@ -1,67 +1,748 @@
-import { mockProviders, mockEditors } from "@/app/state/settingsData";
+import { Link, useParams } from "@tanstack/react-router";
+import { useState } from "react";
+
+import {
+  defaultSettingsSection,
+  mockEditors,
+  mockProviders,
+  settingsSections,
+  type SettingsSectionId,
+} from "@/app/state/settingsData";
+
+const mockMcpServers = [
+  {
+    id: "filesystem",
+    name: "Filesystem",
+    endpoint: "mcp://filesystem",
+    status: "connected",
+  },
+  {
+    id: "github",
+    name: "GitHub",
+    endpoint: "https://mcp.github.local",
+    status: "connected",
+  },
+  {
+    id: "internal-jira",
+    name: "Jira",
+    endpoint: "https://mcp.jira.local",
+    status: "disabled",
+  },
+] as const;
+
+const fallbackEditorId =
+  mockEditors.find((editor) => editor.detected)?.id ?? mockEditors[0]?.id;
+
+const actionButtonClass =
+  "rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300";
+
+const formInputClass =
+  "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none";
 
 export function SettingsPage() {
+  const { section } = useParams({ from: "/settings/$section" });
+  const activeSection = settingsSections.find((item) => item.id === section);
+  const activeSectionId = activeSection?.id ?? defaultSettingsSection;
+  const activeSectionLabel = activeSection?.label ?? "General";
+  const activeSectionDescription =
+    activeSection?.description ??
+    "Default editor destination and basic preferences.";
+
+  const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
+  const [openDestination, setOpenDestination] = useState(
+    fallbackEditorId ?? "vscode",
+  );
+  const [followUpBehavior, setFollowUpBehavior] = useState<
+    "append" | "new-thread" | "ask"
+  >("append");
+  const [compactComposer, setCompactComposer] = useState(true);
+  const [displayName, setDisplayName] = useState("Codex Operator");
+  const [responseTone, setResponseTone] = useState<
+    "balanced" | "concise" | "verbose"
+  >("balanced");
+  const [showTimestamps, setShowTimestamps] = useState(true);
+  const [includeProjectOverrides, setIncludeProjectOverrides] = useState(true);
+  const [showExperimentalConfig, setShowExperimentalConfig] = useState(false);
+  const [mcpRequestTimeout, setMcpRequestTimeout] = useState("30");
+  const [allowCommunitySkills, setAllowCommunitySkills] = useState(true);
+  const [autoRefreshSkills, setAutoRefreshSkills] = useState(true);
+  const [requireSkillReview, setRequireSkillReview] = useState(true);
+  const [gitAuthorName, setGitAuthorName] = useState("Codex Bot");
+  const [gitAuthorEmail, setGitAuthorEmail] = useState("codex@example.com");
+  const [defaultBranch, setDefaultBranch] = useState("main");
+  const [autoSignCommits, setAutoSignCommits] = useState(false);
+  const [defaultEnvironment, setDefaultEnvironment] = useState<
+    "local" | "worktree" | "cloud"
+  >("local");
+  const [autoCreateWorktrees, setAutoCreateWorktrees] = useState(true);
+  const [cloudRegion, setCloudRegion] = useState("us-east");
+  const [worktreeStrategy, setWorktreeStrategy] = useState<
+    "clone" | "git_worktree"
+  >("git_worktree");
+  const [worktreeBranchPrefix, setWorktreeBranchPrefix] =
+    useState("codex/thread");
+  const [worktreeRetentionDays, setWorktreeRetentionDays] = useState("7");
+  const [autoPruneMergedWorktrees, setAutoPruneMergedWorktrees] =
+    useState(true);
+  const [archiveRetentionDays, setArchiveRetentionDays] = useState("30");
+  const [autoArchiveCompleted, setAutoArchiveCompleted] = useState(true);
+
+  const handleSave = (targetSection: SettingsSectionId) => {
+    console.warn("Save settings", { section: targetSection });
+  };
+
+  const renderFormForSection = (targetSection: SettingsSectionId) => {
+    switch (targetSection) {
+      case "general":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              General
+            </p>
+            <h2 className="font-display text-xl">Core experience defaults</h2>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-theme"
+                >
+                  Theme
+                </label>
+                <select
+                  id="settings-theme"
+                  className={formInputClass}
+                  value={theme}
+                  onChange={(event) =>
+                    setTheme(event.target.value as typeof theme)
+                  }
+                >
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-open-destination"
+                >
+                  Default open destination
+                </label>
+                <select
+                  id="settings-open-destination"
+                  className={formInputClass}
+                  value={openDestination}
+                  onChange={(event) => setOpenDestination(event.target.value)}
+                >
+                  {mockEditors.map((editor) => (
+                    <option key={editor.id} value={editor.id}>
+                      {editor.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2 lg:col-span-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-follow-up"
+                >
+                  Follow-up behavior
+                </label>
+                <select
+                  id="settings-follow-up"
+                  className={formInputClass}
+                  value={followUpBehavior}
+                  onChange={(event) =>
+                    setFollowUpBehavior(
+                      event.target.value as typeof followUpBehavior,
+                    )
+                  }
+                >
+                  <option value="append">Append in current thread</option>
+                  <option value="new-thread">
+                    Start a new thread after each run
+                  </option>
+                  <option value="ask">Ask each time</option>
+                </select>
+              </div>
+            </div>
+            <label className="mt-4 flex items-center gap-2 text-xs text-ink-300">
+              <input
+                type="checkbox"
+                checked={compactComposer}
+                onChange={(event) => setCompactComposer(event.target.checked)}
+              />
+              Use compact composer controls
+            </label>
+            <div className="mt-4">
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("general")}
+              >
+                Save general settings
+              </button>
+            </div>
+          </section>
+        );
+      case "configuration":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Configuration
+            </p>
+            <h2 className="font-display text-xl">Unified CLI configuration</h2>
+            <p className="mt-2 text-sm text-ink-300">
+              Review merged `config.toml` values for this workspace and global
+              defaults.
+            </p>
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-ink-300">
+              config.toml preview will live here.
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              <button className={actionButtonClass}>Open config file</button>
+              <button className={actionButtonClass}>Validate TOML</button>
+            </div>
+            <div className="mt-4 space-y-2 text-xs text-ink-300">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={includeProjectOverrides}
+                  onChange={(event) =>
+                    setIncludeProjectOverrides(event.target.checked)
+                  }
+                />
+                Include project overrides
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={showExperimentalConfig}
+                  onChange={(event) =>
+                    setShowExperimentalConfig(event.target.checked)
+                  }
+                />
+                Show experimental keys
+              </label>
+            </div>
+            <div className="mt-5 space-y-3">
+              <h3 className="font-display text-base text-ink-100">
+                Detected tools
+              </h3>
+              {mockEditors.map((editor) => (
+                <div
+                  key={editor.id}
+                  className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
+                >
+                  <span>{editor.name}</span>
+                  <span className="text-xs text-ink-400">
+                    {editor.detected ? "Detected" : "Not found"}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 space-y-3">
+              <h3 className="font-display text-base text-ink-100">
+                Execution backends
+              </h3>
+              {mockProviders.map((provider) => (
+                <div
+                  key={provider.id}
+                  className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
+                >
+                  <span>{provider.id}</span>
+                  <span className="text-xs text-ink-400">
+                    {provider.detail}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4">
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("configuration")}
+              >
+                Save configuration
+              </button>
+            </div>
+          </section>
+        );
+      case "personalization":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Personalization
+            </p>
+            <h2 className="font-display text-xl">Assistant presentation</h2>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-display-name"
+                >
+                  Display name
+                </label>
+                <input
+                  id="settings-display-name"
+                  className={formInputClass}
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-response-tone"
+                >
+                  Response tone
+                </label>
+                <select
+                  id="settings-response-tone"
+                  className={formInputClass}
+                  value={responseTone}
+                  onChange={(event) =>
+                    setResponseTone(event.target.value as typeof responseTone)
+                  }
+                >
+                  <option value="balanced">Balanced</option>
+                  <option value="concise">Concise</option>
+                  <option value="verbose">Verbose</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2 text-xs text-ink-300">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={showTimestamps}
+                  onChange={(event) => setShowTimestamps(event.target.checked)}
+                />
+                Show message timestamps
+              </label>
+            </div>
+            <div className="mt-4">
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("personalization")}
+              >
+                Save personalization
+              </button>
+            </div>
+          </section>
+        );
+      case "mcp-servers":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              MCP servers
+            </p>
+            <h2 className="font-display text-xl">Tool endpoints</h2>
+            <div className="mt-4 space-y-2">
+              {mockMcpServers.map((server) => (
+                <div
+                  key={server.id}
+                  className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
+                >
+                  <div>
+                    <p className="text-ink-100">{server.name}</p>
+                    <p className="text-xs text-ink-500">{server.endpoint}</p>
+                  </div>
+                  <span className="text-xs text-ink-300">{server.status}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 max-w-sm space-y-2">
+              <label
+                className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                htmlFor="settings-mcp-timeout"
+              >
+                Request timeout (seconds)
+              </label>
+              <input
+                id="settings-mcp-timeout"
+                className={formInputClass}
+                value={mcpRequestTimeout}
+                onChange={(event) => setMcpRequestTimeout(event.target.value)}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className={actionButtonClass}>+ Add MCP server</button>
+              <button className={actionButtonClass}>Reload connections</button>
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("mcp-servers")}
+              >
+                Save MCP settings
+              </button>
+            </div>
+          </section>
+        );
+      case "skills":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Skills
+            </p>
+            <h2 className="font-display text-xl">
+              Skill installation defaults
+            </h2>
+            <div className="mt-4 space-y-2 text-xs text-ink-300">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={allowCommunitySkills}
+                  onChange={(event) =>
+                    setAllowCommunitySkills(event.target.checked)
+                  }
+                />
+                Allow community skills
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={autoRefreshSkills}
+                  onChange={(event) =>
+                    setAutoRefreshSkills(event.target.checked)
+                  }
+                />
+                Refresh skill catalog on launch
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={requireSkillReview}
+                  onChange={(event) =>
+                    setRequireSkillReview(event.target.checked)
+                  }
+                />
+                Require permission review before install
+              </label>
+            </div>
+            <div className="mt-4">
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("skills")}
+              >
+                Save skill settings
+              </button>
+            </div>
+          </section>
+        );
+      case "git":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Git
+            </p>
+            <h2 className="font-display text-xl">Commit and branch defaults</h2>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-git-author-name"
+                >
+                  Author name
+                </label>
+                <input
+                  id="settings-git-author-name"
+                  className={formInputClass}
+                  value={gitAuthorName}
+                  onChange={(event) => setGitAuthorName(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-git-author-email"
+                >
+                  Author email
+                </label>
+                <input
+                  id="settings-git-author-email"
+                  className={formInputClass}
+                  value={gitAuthorEmail}
+                  onChange={(event) => setGitAuthorEmail(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2 lg:col-span-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-git-base-branch"
+                >
+                  Default base branch
+                </label>
+                <input
+                  id="settings-git-base-branch"
+                  className={formInputClass}
+                  value={defaultBranch}
+                  onChange={(event) => setDefaultBranch(event.target.value)}
+                />
+              </div>
+            </div>
+            <label className="mt-4 flex items-center gap-2 text-xs text-ink-300">
+              <input
+                type="checkbox"
+                checked={autoSignCommits}
+                onChange={(event) => setAutoSignCommits(event.target.checked)}
+              />
+              Sign commits automatically
+            </label>
+            <div className="mt-4">
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("git")}
+              >
+                Save git settings
+              </button>
+            </div>
+          </section>
+        );
+      case "environments":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Environments
+            </p>
+            <h2 className="font-display text-xl">Execution defaults</h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(["local", "worktree", "cloud"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  className={`rounded-full border px-3 py-1 text-xs transition hover:border-flare-300 ${
+                    defaultEnvironment === mode
+                      ? "border-flare-300 bg-flare-400/10 text-ink-50"
+                      : "border-white/10 text-ink-300"
+                  }`}
+                  onClick={() => setDefaultEnvironment(mode)}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 max-w-sm space-y-2">
+              <label
+                className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                htmlFor="settings-cloud-region"
+              >
+                Cloud region
+              </label>
+              <select
+                id="settings-cloud-region"
+                className={formInputClass}
+                value={cloudRegion}
+                onChange={(event) => setCloudRegion(event.target.value)}
+              >
+                <option value="us-east">US East</option>
+                <option value="us-west">US West</option>
+                <option value="eu-central">EU Central</option>
+              </select>
+            </div>
+            <div className="mt-4 space-y-2 text-xs text-ink-300">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={autoCreateWorktrees}
+                  onChange={(event) =>
+                    setAutoCreateWorktrees(event.target.checked)
+                  }
+                />
+                Auto-create worktrees for worktree runs
+              </label>
+            </div>
+            <div className="mt-5 space-y-2 text-sm">
+              {mockProviders.map((provider) => (
+                <div
+                  key={provider.id}
+                  className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2"
+                >
+                  <span>{provider.id}</span>
+                  <span className="text-xs text-ink-400">
+                    {provider.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4">
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("environments")}
+              >
+                Save environment settings
+              </button>
+            </div>
+          </section>
+        );
+      case "worktrees":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Worktrees
+            </p>
+            <h2 className="font-display text-xl">Worktree lifecycle</h2>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-worktree-strategy"
+                >
+                  Strategy
+                </label>
+                <select
+                  id="settings-worktree-strategy"
+                  className={formInputClass}
+                  value={worktreeStrategy}
+                  onChange={(event) =>
+                    setWorktreeStrategy(
+                      event.target.value as typeof worktreeStrategy,
+                    )
+                  }
+                >
+                  <option value="git_worktree">git worktree</option>
+                  <option value="clone">Clone workspace</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-worktree-prefix"
+                >
+                  Branch prefix
+                </label>
+                <input
+                  id="settings-worktree-prefix"
+                  className={formInputClass}
+                  value={worktreeBranchPrefix}
+                  onChange={(event) =>
+                    setWorktreeBranchPrefix(event.target.value)
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <label
+                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                  htmlFor="settings-worktree-retention"
+                >
+                  Keep merged worktrees (days)
+                </label>
+                <input
+                  id="settings-worktree-retention"
+                  className={formInputClass}
+                  value={worktreeRetentionDays}
+                  onChange={(event) =>
+                    setWorktreeRetentionDays(event.target.value)
+                  }
+                />
+              </div>
+            </div>
+            <label className="mt-4 flex items-center gap-2 text-xs text-ink-300">
+              <input
+                type="checkbox"
+                checked={autoPruneMergedWorktrees}
+                onChange={(event) =>
+                  setAutoPruneMergedWorktrees(event.target.checked)
+                }
+              />
+              Auto-prune merged worktrees
+            </label>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className={actionButtonClass}>Run prune now</button>
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("worktrees")}
+              >
+                Save worktree settings
+              </button>
+            </div>
+          </section>
+        );
+      case "archived-threads":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Archived threads
+            </p>
+            <h2 className="font-display text-xl">Archive retention</h2>
+            <div className="mt-4 max-w-sm space-y-2">
+              <label
+                className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                htmlFor="settings-archive-retention"
+              >
+                Retention (days)
+              </label>
+              <input
+                id="settings-archive-retention"
+                className={formInputClass}
+                value={archiveRetentionDays}
+                onChange={(event) =>
+                  setArchiveRetentionDays(event.target.value)
+                }
+              />
+            </div>
+            <label className="mt-4 flex items-center gap-2 text-xs text-ink-300">
+              <input
+                type="checkbox"
+                checked={autoArchiveCompleted}
+                onChange={(event) =>
+                  setAutoArchiveCompleted(event.target.checked)
+                }
+              />
+              Auto-archive completed threads
+            </label>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className={actionButtonClass}>
+                Open archived threads
+              </button>
+              <button className={actionButtonClass}>Restore all</button>
+              <button
+                className={actionButtonClass}
+                onClick={() => handleSave("archived-threads")}
+              >
+                Save archive settings
+              </button>
+            </div>
+          </section>
+        );
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-          Config
+    <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <aside className="rounded-2xl border border-white/10 bg-ink-900/50 p-3 shadow-card">
+        <p className="px-2 text-xs uppercase tracking-[0.3em] text-ink-400">
+          Settings
         </p>
-        <h2 className="font-display text-xl">Unified CLI configuration</h2>
-        <p className="mt-2 text-sm text-ink-300">
-          Shows the merged user config and per-project overrides from the Codex
-          CLI config TOML.
-        </p>
-        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-ink-300">
-          config.toml preview will live here.
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2 text-xs">
-          <button className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
-            Open config file
-          </button>
-          <button className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
-            Validate TOML
-          </button>
-        </div>
-      </section>
+        <nav className="mt-3 space-y-1 text-sm">
+          {settingsSections.map((item) => {
+            const isActive = item.id === activeSectionId;
+            return (
+              <Link
+                key={item.id}
+                to="/settings/$section"
+                params={{ section: item.id }}
+                className={`block rounded-xl px-3 py-2 transition ${
+                  isActive
+                    ? "bg-white/10 text-ink-50"
+                    : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-          Editors
-        </p>
-        <h2 className="font-display text-xl">Detected tools</h2>
-        <div className="mt-4 space-y-2 text-sm">
-          {mockEditors.map((editor) => (
-            <div
-              key={editor.id}
-              className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2"
-            >
-              <span>{editor.name}</span>
-              <span className="text-xs text-ink-400">
-                {editor.detected ? "Detected" : "Not found"}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-          Providers
-        </p>
-        <h2 className="font-display text-xl">Execution backends</h2>
-        <div className="mt-4 space-y-2 text-sm">
-          {mockProviders.map((provider) => (
-            <div
-              key={provider.id}
-              className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2"
-            >
-              <span>{provider.id}</span>
-              <span className="text-xs text-ink-400">{provider.detail}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="space-y-4">
+        <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+          <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+            {activeSectionLabel}
+          </p>
+          <h1 className="font-display text-2xl">Settings</h1>
+          <p className="mt-2 text-sm text-ink-300">
+            {activeSectionDescription}
+          </p>
+        </section>
+        {renderFormForSection(activeSectionId)}
+      </div>
     </div>
   );
 }
