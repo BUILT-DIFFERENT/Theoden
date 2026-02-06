@@ -108,6 +108,7 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 - `/skills` → Skills view
 - `/settings/*` → Settings view with left sub-nav
 - [x] Migrate legacy thread routing to canonical `/t/:threadId` across sidebar, thread links, and in-app navigation.
+- [x] Remove legacy `/threads` route from the primary app router so canonical navigation stays route-minimal.
 
 ### Sidebar navigation behavior
 - Clicking:
@@ -429,6 +430,17 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 - [x] Automations: create modal + listing
 - [x] Skills: search + installed/recommended + detail modal
 - [x] Settings: left-nav + core settings forms
+
+### Remaining Unfinished Tasks
+- [ ] Implement terminal toggle in the global top bar with visible panel/drawer state changes.
+- [ ] Render rich markdown (headings/lists) in thread messages and add per-code-block copy actions.
+- [ ] Add message auto-scroll behavior for new assistant output unless user manually scrolls up.
+- [ ] Implement composer `@` file attach interaction (picker/drawer + visible attachments).
+- [ ] Implement composer `/` command interaction (palette or inline suggestions).
+- [ ] Make diff file list selectable so clicking a file focuses that file's hunks.
+- [ ] Wire per-hunk controls (stage/unstage/undo) to real state/actions instead of static buttons.
+- [ ] Show request-change input only after clicking a diff line and dispatch a comment annotation event on submit.
+- [ ] Remove or repurpose legacy `ControlRoomPage` / `ThreadsPage` artifacts that no longer match target IA.
 
 ---
 

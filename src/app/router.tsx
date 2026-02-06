@@ -6,7 +6,6 @@ import { NewThreadPage } from "@/app/routes/NewThreadPage";
 import { SettingsPage } from "@/app/routes/SettingsPage";
 import { SkillsPage } from "@/app/routes/SkillsPage";
 import { ThreadPage } from "@/app/routes/ThreadPage";
-import { ThreadsPage } from "@/app/routes/ThreadsPage";
 import { defaultSettingsSection } from "@/app/state/settingsData";
 
 const rootRoute = new RootRoute({
@@ -23,12 +22,6 @@ const newThreadRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/",
   component: NewThreadPage,
-});
-
-const threadListRoute = new Route({
-  getParentRoute: () => rootRoute,
-  path: "/threads",
-  component: ThreadsPage,
 });
 
 const automationsRoute = new Route({
@@ -62,7 +55,6 @@ const skillsRoute = new Route({
 });
 
 const routeTree = rootRoute.addChildren([
-  threadListRoute,
   newThreadRoute,
   threadRoute,
   automationsRoute,
