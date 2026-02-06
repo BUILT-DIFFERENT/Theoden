@@ -1,8 +1,38 @@
 import { MoreHorizontal } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { mockInstalledSkills, mockRemoteSkills } from "@/app/state/skillsData";
 import type { RemoteSkillSummary, SkillSummary } from "@/app/types";
+
+function renderDocumentationBlocks(documentation: string) {
+  return documentation
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block, index) => {
+      const lines = block.split(/\r?\n/).map((line) => line.trim());
+      const listItems = lines
+        .filter((line) => line.startsWith("- "))
+        .map((line) => line.replace(/^- /, "").trim());
+      if (listItems.length && listItems.length === lines.length) {
+        return (
+          <ul
+            key={`doc-list-${index}`}
+            className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-ink-200"
+          >
+            {listItems.map((item, itemIndex) => (
+              <li key={`doc-list-${index}-item-${itemIndex}`}>{item}</li>
+            ))}
+          </ul>
+        );
+      }
+      return (
+        <p key={`doc-paragraph-${index}`} className="text-xs leading-relaxed">
+          {block}
+        </p>
+      );
+    });
+}
 
 export function SkillsPage() {
   const [search, setSearch] = useState("");
@@ -18,8 +48,19 @@ export function SkillsPage() {
   const [skillName, setSkillName] = useState("");
   const [skillDescription, setSkillDescription] = useState("");
   const [skillError, setSkillError] = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const skillNameInputId = "new-skill-name";
   const skillDescriptionInputId = "new-skill-description";
+
+  useEffect(() => {
+    if (!refreshMessage) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setRefreshMessage(null);
+    }, 2000);
+    return () => window.clearTimeout(timeoutId);
+  }, [refreshMessage]);
 
   const normalizedSearch = search.trim().toLowerCase();
   const installedSkills = useMemo(() => {
@@ -57,6 +98,12 @@ export function SkillsPage() {
     setNewSkillOpen(false);
     setSkillError(null);
   };
+
+  const handleRefresh = () => {
+    console.warn("Refresh skill catalog");
+    setRefreshMessage("Skill catalog refreshed.");
+  };
+
   const handleDetailOpen = (skill: SkillSummary | RemoteSkillSummary) => {
     setDetailSkill(skill);
     setDetailMenuOpen(false);
@@ -137,11 +184,17 @@ export function SkillsPage() {
             >
               + New skill
             </button>
-            <button className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
+            <button
+              className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+              onClick={handleRefresh}
+            >
               Refresh
             </button>
           </div>
         </div>
+        {refreshMessage ? (
+          <p className="mt-3 text-xs text-emerald-300">{refreshMessage}</p>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
@@ -342,6 +395,14 @@ export function SkillsPage() {
                 ) : null}
               </div>
               <p>{detailSkill.description}</p>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                  Documentation
+                </p>
+                <div className="mt-2 space-y-2 text-ink-200">
+                  {renderDocumentationBlocks(detailSkill.documentation)}
+                </div>
+              </div>
               {"publisher" in detailSkill ? (
                 <p className="text-xs text-ink-400">
                   Publisher: {detailSkill.publisher}

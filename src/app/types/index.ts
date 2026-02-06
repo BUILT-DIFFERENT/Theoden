@@ -123,6 +123,7 @@ export interface SkillSummary {
   id: string;
   name: string;
   description: string;
+  documentation: string;
   installed: boolean;
   version: string;
   source: SkillSource;
@@ -133,6 +134,7 @@ export interface RemoteSkillSummary {
   id: string;
   name: string;
   description: string;
+  documentation: string;
   version: string;
   source: SkillSource;
   publisher: string;
