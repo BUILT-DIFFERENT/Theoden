@@ -17,6 +17,8 @@ import {
   normalizeWorkspacePath,
 } from "@/app/utils/workspace";
 
+const MESSAGE_WINDOW_SIZE = 120;
+
 export function ThreadPage() {
   const { threadId } = useParams({ from: "/t/$threadId" });
   const { thread, messages } = useThreadDetail(threadId);
@@ -26,6 +28,7 @@ export function ThreadPage() {
   const [optimisticMessages, setOptimisticMessages] = useState<ThreadMessage[]>(
     [],
   );
+  const [visibleStartIndex, setVisibleStartIndex] = useState(0);
   const [stickToBottom, setStickToBottom] = useState(true);
   const detail = thread ?? mockThreadDetail;
   const liveDiffText = useThreadDiffText(threadId, detail.diffText ?? "");
@@ -46,9 +49,15 @@ export function ThreadPage() {
     () => [...messages, ...optimisticMessages],
     [messages, optimisticMessages],
   );
+  const visibleMessages = useMemo(
+    () => conversationMessages.slice(visibleStartIndex),
+    [conversationMessages, visibleStartIndex],
+  );
+  const hiddenMessagesCount = visibleStartIndex;
 
   useEffect(() => {
     setOptimisticMessages([]);
+    setVisibleStartIndex(0);
     setStickToBottom(true);
   }, [threadId]);
 
@@ -83,6 +92,16 @@ export function ThreadPage() {
   }, [selectedWorkspace, setSelectedWorkspace, thread?.subtitle]);
 
   useEffect(() => {
+    setVisibleStartIndex((current) => {
+      const maxStart = Math.max(0, conversationMessages.length - 1);
+      if (stickToBottom) {
+        return Math.max(0, conversationMessages.length - MESSAGE_WINDOW_SIZE);
+      }
+      return Math.min(current, maxStart);
+    });
+  }, [conversationMessages.length, stickToBottom]);
+
+  useEffect(() => {
     if (!stickToBottom) return;
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -102,6 +121,20 @@ export function ThreadPage() {
     setStickToBottom(distanceFromBottom <= 48);
   };
 
+  const handleLoadOlderMessages = () => {
+    const container = messagesContainerRef.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    setVisibleStartIndex((current) =>
+      Math.max(0, current - MESSAGE_WINDOW_SIZE),
+    );
+    window.requestAnimationFrame(() => {
+      const nextContainer = messagesContainerRef.current;
+      if (!nextContainer) return;
+      const nextHeight = nextContainer.scrollHeight;
+      nextContainer.scrollTop += nextHeight - previousHeight;
+    });
+  };
+
   return (
     <div className="flex min-h-[70vh] flex-col gap-4">
       <div
@@ -109,7 +142,23 @@ export function ThreadPage() {
         className="flex-1 overflow-auto"
         onScroll={handleMessagesScroll}
       >
-        <ThreadMessages messages={conversationMessages} />
+        {hiddenMessagesCount > 0 ? (
+          <div className="mb-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-ink-300">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                Showing {visibleMessages.length} of{" "}
+                {conversationMessages.length} messages
+              </span>
+              <button
+                className="rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300"
+                onClick={handleLoadOlderMessages}
+              >
+                Load {Math.min(MESSAGE_WINDOW_SIZE, hiddenMessagesCount)} older
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <ThreadMessages messages={visibleMessages} />
       </div>
       <div className="sticky bottom-4 z-10 space-y-3">
         {hasChanges ? (
