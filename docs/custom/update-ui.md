@@ -357,7 +357,7 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 ### Diff panel (P1)
 - [x] Git status displayed in top bar
 - [x] Clicking git indicator toggles diff panel
-- [ ] Tabs for staged/unstaged with correct counts
+- [x] Tabs for staged/unstaged with correct counts
 
 ---
 

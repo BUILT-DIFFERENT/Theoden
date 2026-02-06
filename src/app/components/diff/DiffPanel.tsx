@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useMatchRoute } from "@tanstack/react-router";
 import {
   ChevronDown,
@@ -11,9 +12,11 @@ import { useMemo, useState } from "react";
 
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
+import { getGitWorkspaceStatus } from "@/app/services/git/status";
 import { mockThreadDetail } from "@/app/state/mockData";
 import { useThreadUi } from "@/app/state/threadUi";
 import type { DiffSummary, ThreadDetail } from "@/app/types";
+import { isTauri } from "@/app/utils/tauri";
 
 interface DiffSection {
   path: string;
@@ -84,6 +87,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
   const threadMatch = matchRoute({ to: "/threads/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const detail = thread ?? mockThreadDetail;
+  const workspacePath = detail.subtitle;
   const diffText = detail.diffText ?? "";
   const liveDiffText = useThreadDiffText(threadId, diffText);
   const hasLiveDiff = liveDiffText.trim().length > 0;
@@ -102,14 +106,79 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     [detail.diffSummary, diffStats.additions, diffStats.deletions],
   );
   const [activeTab, setActiveTab] = useState<"unstaged" | "staged">("unstaged");
+  const gitStatus = useQuery({
+    queryKey: ["git", "status", workspacePath],
+    queryFn: () => getGitWorkspaceStatus(workspacePath),
+    enabled: isTauri() && Boolean(workspacePath),
+    refetchInterval: isTauri() ? 5000 : false,
+  });
 
   const sections = useMemo(
     () => parseDiffSections(liveDiffText, summary),
     [liveDiffText, summary],
   );
+  const sectionMap = useMemo(
+    () =>
+      new Map(
+        sections.map(
+          (section) => [section.path, section] satisfies [string, DiffSection],
+        ),
+      ),
+    [sections],
+  );
+  const summaryFileMap = useMemo(
+    () => new Map(summary.files.map((file) => [file.path, file])),
+    [summary.files],
+  );
 
-  const stagedCount = Math.max(0, summary.filesChanged - 1);
-  const unstagedCount = summary.filesChanged;
+  const statusPaths = useMemo(() => {
+    if (gitStatus.data) {
+      return {
+        staged: gitStatus.data.stagedPaths,
+        unstaged: gitStatus.data.unstagedPaths,
+      };
+    }
+    return {
+      staged: [] as string[],
+      unstaged: sections.map((section) => section.path),
+    };
+  }, [gitStatus.data, sections]);
+
+  const stagedSections = useMemo(
+    () =>
+      statusPaths.staged.map((path) => {
+        const knownSection = sectionMap.get(path);
+        if (knownSection) return knownSection;
+        const file = summaryFileMap.get(path);
+        return {
+          path,
+          additions: file?.additions ?? 0,
+          deletions: file?.deletions ?? 0,
+          lines: [],
+        };
+      }),
+    [sectionMap, statusPaths.staged, summaryFileMap],
+  );
+  const unstagedSections = useMemo(
+    () =>
+      statusPaths.unstaged.map((path) => {
+        const knownSection = sectionMap.get(path);
+        if (knownSection) return knownSection;
+        const file = summaryFileMap.get(path);
+        return {
+          path,
+          additions: file?.additions ?? 0,
+          deletions: file?.deletions ?? 0,
+          lines: [],
+        };
+      }),
+    [sectionMap, statusPaths.unstaged, summaryFileMap],
+  );
+  const activeSections =
+    activeTab === "staged" ? stagedSections : unstagedSections;
+
+  const stagedCount = stagedSections.length;
+  const unstagedCount = unstagedSections.length;
 
   return (
     <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl border border-white/10 bg-ink-900/70 shadow-card">
@@ -160,7 +229,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
 
       <div className="max-h-[65vh] overflow-auto px-4 py-4">
         <div className="space-y-4">
-          {sections.map((section) => (
+          {activeSections.map((section) => (
             <div
               key={section.path}
               className="rounded-xl border border-white/10 bg-black/20"
@@ -216,6 +285,13 @@ export function DiffPanel({ thread }: DiffPanelProps) {
               )}
             </div>
           ))}
+          {!activeSections.length ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-4 text-xs text-ink-500">
+              {activeTab === "staged"
+                ? "No staged files."
+                : "No unstaged files."}
+            </div>
+          ) : null}
         </div>
       </div>
 
