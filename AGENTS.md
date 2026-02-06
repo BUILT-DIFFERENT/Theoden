@@ -13,8 +13,27 @@ Main folders:
 
 - `src/`: frontend app code.
 - `src-tauri/`: Tauri Rust host commands and menu/process plumbing.
+- `third_party/CodexDesktop-Rebuild/`: official desktop app (Electron) submodule used for behavior tracing and parity checks.
+- `codex-cli/`: official Codex CLI implementation and runtime behavior reference.
 - `codex-rs/`: Rust workspace for Codex crates and protocol.
 - `docs/custom/`: parity plan and checklist docs.
+
+## 1.1) Required Reference Implementations
+
+For parity-sensitive work, agents must treat these as primary reference sources before inventing new behavior:
+
+- Official desktop app reference: `third_party/CodexDesktop-Rebuild/`
+  - Use this to inspect bridge semantics, IPC channels, renderer/main message flow, streaming behavior, and chat/thread sync behavior.
+  - Use the debug instrumentation in that repo when validating parity with Tauri implementation.
+- Official CLI reference: `codex-cli/` (and related protocol/runtime crates in `codex-rs/`)
+  - Use this to implement API interaction patterns, auth/session handling, task execution, config behavior, and cloud/off-cloud execution flows.
+  - Prefer reusing or matching existing CLI/protocol behavior over creating new one-off implementations in desktop code.
+
+When implementing features such as bridge wiring, chat sync, cloud tasks, off-cloud tasks, approvals, or MCP flows:
+
+- Compare Tauri behavior against `third_party/CodexDesktop-Rebuild/`.
+- Confirm protocol and API behavior against `codex-cli/` + `codex-rs/`.
+- Document intentional deviations in `docs/custom/` if parity is not exact.
 
 ## 2) App Route Model
 
