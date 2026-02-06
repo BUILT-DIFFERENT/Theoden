@@ -13,6 +13,12 @@ import {
 import { listThreads, unarchiveThread } from "@/app/services/cli/threads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import {
+  environmentProfileIdFromWorkspace,
+  loadStoredEnvironmentProfiles,
+  storeEnvironmentProfiles,
+  type EnvironmentProfile,
+} from "@/app/state/environmentProfiles";
+import {
   loadStoredSettings,
   storeSettings,
   type StoredSettingsSnapshot,
@@ -77,7 +83,7 @@ const formInputClass =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none";
 
 export function SettingsPage() {
-  const { selectedWorkspace } = useWorkspaceUi();
+  const { selectedWorkspace, setSelectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
   const { section } = useParams({ from: "/settings/$section" });
   const activeSection = settingsSections.find((item) => item.id === section);
@@ -187,6 +193,33 @@ export function SettingsPage() {
     Array<{ id: string; preview: string; updatedAt: number }>
   >([]);
   const [archivedThreadsLoading, setArchivedThreadsLoading] = useState(false);
+  const environmentProfileFallback = useMemo(
+    () => ({
+      executionMode: initialSettings.defaultEnvironment,
+      cloudRegion: initialSettings.cloudRegion,
+      autoCreateWorktrees: initialSettings.autoCreateWorktrees,
+    }),
+    [
+      initialSettings.autoCreateWorktrees,
+      initialSettings.cloudRegion,
+      initialSettings.defaultEnvironment,
+    ],
+  );
+  const loadedEnvironmentProfiles = useMemo(
+    () =>
+      loadStoredEnvironmentProfiles({
+        workspaces,
+        preferredWorkspacePath: selectedWorkspace,
+        fallback: environmentProfileFallback,
+      }),
+    [environmentProfileFallback, selectedWorkspace, workspaces],
+  );
+  const [environmentProfiles, setEnvironmentProfiles] = useState<
+    EnvironmentProfile[]
+  >(loadedEnvironmentProfiles.profiles);
+  const [activeEnvironmentProfileId, setActiveEnvironmentProfileId] = useState<
+    string | null
+  >(loadedEnvironmentProfiles.activeProfileId);
 
   useEffect(() => {
     if (!saveMessage) {
@@ -207,6 +240,52 @@ export function SettingsPage() {
     }, 3000);
     return () => window.clearTimeout(timeoutId);
   }, [actionMessage]);
+
+  useEffect(() => {
+    setEnvironmentProfiles((current) => {
+      const currentById = new Map(
+        current.map((profile) => [profile.id, profile]),
+      );
+      return loadedEnvironmentProfiles.profiles.map((profile) => {
+        const existing = currentById.get(profile.id);
+        if (!existing) {
+          return profile;
+        }
+        return {
+          ...profile,
+          name: existing.name,
+          executionMode: existing.executionMode,
+          cloudRegion: existing.cloudRegion,
+          autoCreateWorktrees: existing.autoCreateWorktrees,
+        };
+      });
+    });
+    setActiveEnvironmentProfileId((current) => {
+      if (
+        current &&
+        loadedEnvironmentProfiles.profiles.some(
+          (profile) => profile.id === current,
+        )
+      ) {
+        return current;
+      }
+      return loadedEnvironmentProfiles.activeProfileId;
+    });
+  }, [
+    loadedEnvironmentProfiles.activeProfileId,
+    loadedEnvironmentProfiles.profiles,
+  ]);
+
+  useEffect(() => {
+    const preferredId = environmentProfileIdFromWorkspace(selectedWorkspace);
+    if (!preferredId) {
+      return;
+    }
+    if (!environmentProfiles.some((profile) => profile.id === preferredId)) {
+      return;
+    }
+    setActiveEnvironmentProfileId(preferredId);
+  }, [environmentProfiles, selectedWorkspace]);
 
   const runAction = useCallback(
     async (
@@ -256,12 +335,80 @@ export function SettingsPage() {
     autoArchiveCompleted,
   });
 
-  const handleSave = (targetSection: SettingsSectionId) => {
-    storeSettings(buildSnapshot());
+  const handleSave = (
+    targetSection: SettingsSectionId,
+    overrides: Partial<StoredSettingsSnapshot> = {},
+  ) => {
+    storeSettings({
+      ...buildSnapshot(),
+      ...overrides,
+    });
     const label =
       settingsSections.find((item) => item.id === targetSection)?.label ??
       "Settings";
     setSaveMessage(`${label} settings saved.`);
+  };
+
+  const selectedEnvironmentProfile = useMemo(() => {
+    if (!environmentProfiles.length) {
+      return null;
+    }
+    if (!activeEnvironmentProfileId) {
+      return environmentProfiles[0];
+    }
+    return (
+      environmentProfiles.find(
+        (profile) => profile.id === activeEnvironmentProfileId,
+      ) ?? environmentProfiles[0]
+    );
+  }, [activeEnvironmentProfileId, environmentProfiles]);
+
+  const updateSelectedEnvironmentProfile = useCallback(
+    (
+      updater: (
+        profile: EnvironmentProfile,
+      ) => Pick<
+        EnvironmentProfile,
+        "name" | "executionMode" | "cloudRegion" | "autoCreateWorktrees"
+      >,
+    ) => {
+      if (!activeEnvironmentProfileId) {
+        return;
+      }
+      setEnvironmentProfiles((current) =>
+        current.map((profile) => {
+          if (profile.id !== activeEnvironmentProfileId) {
+            return profile;
+          }
+          return {
+            ...profile,
+            ...updater(profile),
+          };
+        }),
+      );
+    },
+    [activeEnvironmentProfileId],
+  );
+
+  const handleSaveEnvironmentSettings = () => {
+    const profile = selectedEnvironmentProfile;
+    storeEnvironmentProfiles({
+      activeProfileId: profile?.id ?? activeEnvironmentProfileId,
+      profiles: environmentProfiles,
+    });
+    if (profile?.workspacePath) {
+      setSelectedWorkspace(profile.workspacePath);
+    }
+    if (profile) {
+      setDefaultEnvironment(profile.executionMode);
+      setCloudRegion(profile.cloudRegion);
+      setAutoCreateWorktrees(profile.autoCreateWorktrees);
+    }
+    handleSave("environments", {
+      defaultEnvironment: profile?.executionMode ?? defaultEnvironment,
+      cloudRegion: profile?.cloudRegion ?? cloudRegion,
+      autoCreateWorktrees: profile?.autoCreateWorktrees ?? autoCreateWorktrees,
+    });
   };
 
   const inferredConfigPath = useMemo(() => {
@@ -855,51 +1002,154 @@ export function SettingsPage() {
             <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
               Environments
             </p>
-            <h2 className="font-display text-xl">Execution defaults</h2>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {(["local", "worktree", "cloud"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  className={`rounded-full border px-3 py-1 text-xs transition hover:border-flare-300 ${
-                    defaultEnvironment === mode
-                      ? "border-flare-300 bg-flare-400/10 text-ink-50"
-                      : "border-white/10 text-ink-300"
-                  }`}
-                  onClick={() => setDefaultEnvironment(mode)}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 max-w-sm space-y-2">
-              <label
-                className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                htmlFor="settings-cloud-region"
-              >
-                Cloud region
-              </label>
-              <select
-                id="settings-cloud-region"
-                className={formInputClass}
-                value={cloudRegion}
-                onChange={(event) => setCloudRegion(event.target.value)}
-              >
-                <option value="us-east">US East</option>
-                <option value="us-west">US West</option>
-                <option value="eu-central">EU Central</option>
-              </select>
-            </div>
-            <div className="mt-4 space-y-2 text-xs text-ink-300">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={autoCreateWorktrees}
-                  onChange={(event) =>
-                    setAutoCreateWorktrees(event.target.checked)
-                  }
-                />
-                Auto-create worktrees for worktree runs
-              </label>
+            <h2 className="font-display text-xl">Environment profiles</h2>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                  Available environments
+                </p>
+                <div className="mt-3 space-y-2">
+                  {environmentProfiles.map((profile) => {
+                    const isActive =
+                      profile.id === selectedEnvironmentProfile?.id;
+                    return (
+                      <button
+                        key={profile.id}
+                        className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                          isActive
+                            ? "border-flare-300 bg-flare-400/10 text-ink-50"
+                            : "border-white/10 text-ink-300 hover:border-flare-300"
+                        }`}
+                        onClick={() => {
+                          setActiveEnvironmentProfileId(profile.id);
+                          if (profile.workspacePath) {
+                            setSelectedWorkspace(profile.workspacePath);
+                          }
+                        }}
+                      >
+                        <p className="truncate text-sm">{profile.name}</p>
+                        <p className="truncate text-xs text-ink-500">
+                          {profile.workspacePath || "No workspace linked"}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="space-y-4">
+                {selectedEnvironmentProfile ? (
+                  <>
+                    <div className="space-y-2">
+                      <label
+                        className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                        htmlFor="settings-environment-name"
+                      >
+                        Name
+                      </label>
+                      <input
+                        id="settings-environment-name"
+                        className={formInputClass}
+                        value={selectedEnvironmentProfile.name}
+                        onChange={(event) =>
+                          updateSelectedEnvironmentProfile((profile) => ({
+                            ...profile,
+                            name: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label
+                        className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                        htmlFor="settings-environment-path"
+                      >
+                        Workspace path
+                      </label>
+                      <input
+                        id="settings-environment-path"
+                        className={formInputClass}
+                        value={
+                          selectedEnvironmentProfile.workspacePath ||
+                          "No workspace linked"
+                        }
+                        readOnly
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                        Execution mode
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {(["local", "worktree", "cloud"] as const).map(
+                          (mode) => (
+                            <button
+                              key={mode}
+                              className={`rounded-full border px-3 py-1 text-xs transition hover:border-flare-300 ${
+                                selectedEnvironmentProfile.executionMode ===
+                                mode
+                                  ? "border-flare-300 bg-flare-400/10 text-ink-50"
+                                  : "border-white/10 text-ink-300"
+                              }`}
+                              onClick={() =>
+                                updateSelectedEnvironmentProfile((profile) => ({
+                                  ...profile,
+                                  executionMode: mode,
+                                }))
+                              }
+                            >
+                              {mode}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                    <div className="max-w-sm space-y-2">
+                      <label
+                        className="text-xs uppercase tracking-[0.2em] text-ink-500"
+                        htmlFor="settings-environment-cloud-region"
+                      >
+                        Cloud region
+                      </label>
+                      <select
+                        id="settings-environment-cloud-region"
+                        className={formInputClass}
+                        value={selectedEnvironmentProfile.cloudRegion}
+                        onChange={(event) =>
+                          updateSelectedEnvironmentProfile((profile) => ({
+                            ...profile,
+                            cloudRegion: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="us-east">US East</option>
+                        <option value="us-west">US West</option>
+                        <option value="eu-central">EU Central</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2 text-xs text-ink-300">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={
+                            selectedEnvironmentProfile.autoCreateWorktrees
+                          }
+                          onChange={(event) =>
+                            updateSelectedEnvironmentProfile((profile) => ({
+                              ...profile,
+                              autoCreateWorktrees: event.target.checked,
+                            }))
+                          }
+                        />
+                        Auto-create worktrees for this environment
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-ink-300">
+                    Add a workspace to manage environment settings.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="mt-5 space-y-2 text-sm">
               {providerStatuses.map((provider) => (
@@ -917,7 +1167,7 @@ export function SettingsPage() {
             <div className="mt-4">
               <button
                 className={actionButtonClass}
-                onClick={() => handleSave("environments")}
+                onClick={handleSaveEnvironmentSettings}
               >
                 Save environment settings
               </button>

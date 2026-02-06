@@ -299,7 +299,7 @@ The real app shows git-related UI in at least two ways:
   - [ ] Environments
   - [ ] Worktrees
   - [ ] Archived threads
-- [ ] Environments page supports selecting and editing an environment.
+- [x] Environments page supports selecting and editing an environment.
 
 #### ❌ Clone
 - [ ] A “Settings” title exists but appears to be the same error canvas.
@@ -308,8 +308,8 @@ The real app shows git-related UI in at least two ways:
 - [ ] Implement Settings as a first-class route with internal nav.
 - [ ] Match nav typography, spacing, and active state.
 - [ ] Implement at minimum:
-  - [ ] Environments list
-  - [ ] Environment edit view (name, paths, etc.)
+  - [x] Environments list
+  - [x] Environment edit view (name, paths, etc.)
   - [ ] Git settings stub (if not fully implemented yet)
   - [ ] Archived threads view (list + restore/delete actions)
 
@@ -389,7 +389,7 @@ The real app shows git-related UI in at least two ways:
 3. [ ] Wire up to CLI automation primitives
 
 ### Phase 4 — Settings + Git UI
-1. [ ] Settings internal nav + pages (Environments first)
+1. [x] Settings internal nav + pages (Environments first)
 2. [ ] Git status panel + diff view
 
 ---
