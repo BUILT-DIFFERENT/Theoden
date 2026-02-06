@@ -1,3 +1,4 @@
+import { Check, Copy } from "lucide-react";
 import {
   type ComponentProps,
   type ReactNode,
@@ -9,7 +10,11 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
-import type { ThreadMessage } from "@/app/types";
+import type {
+  ThreadMessage,
+  ThreadMessageActivity,
+  ThreadMessageActivityStatus,
+} from "@/app/types";
 
 import type { PluggableList } from "unified";
 
@@ -56,6 +61,8 @@ interface ThreadMessagesProps {
   messages: ThreadMessage[];
 }
 
+const ACTIVITY_COLLAPSE_LIMIT = 4;
+
 function textFromNode(node: ReactNode): string {
   if (typeof node === "string") {
     return node;
@@ -69,8 +76,102 @@ function textFromNode(node: ReactNode): string {
   return "";
 }
 
+function formatActivityStatus(status: ThreadMessageActivityStatus) {
+  if (status === "completed") return "Completed";
+  if (status === "failed") return "Failed";
+  if (status === "declined") return "Declined";
+  return "Running";
+}
+
+function formatWorkedDuration(durationMs: number) {
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (!minutes) return `${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+}
+
+function activityBadgeClasses(status: ThreadMessageActivityStatus) {
+  if (status === "completed") return "border-emerald-400/35 text-emerald-200";
+  if (status === "failed") return "border-rose-400/35 text-rose-200";
+  if (status === "declined") return "border-amber-400/35 text-amber-200";
+  return "border-sky-400/35 text-sky-200";
+}
+
+interface ActivityGroupProps {
+  messageId: string;
+  activities: ThreadMessageActivity[];
+  isExpanded: boolean;
+  onToggleExpand: (messageId: string) => void;
+}
+
+function ActivityGroup({
+  messageId,
+  activities,
+  isExpanded,
+  onToggleExpand,
+}: ActivityGroupProps) {
+  const hiddenCount = Math.max(0, activities.length - ACTIVITY_COLLAPSE_LIMIT);
+  const visibleActivities =
+    isExpanded || hiddenCount === 0
+      ? activities
+      : activities.slice(0, ACTIVITY_COLLAPSE_LIMIT);
+
+  return (
+    <section className="mt-4 rounded-xl border border-white/10 bg-black/25 px-3 py-3">
+      <header className="mb-2 flex items-center justify-between">
+        <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+          Agent activity
+        </p>
+        {hiddenCount > 0 ? (
+          <button
+            className="rounded-full border border-white/10 px-2 py-0.5 text-[0.65rem] text-ink-200 hover:border-flare-300"
+            onClick={() => onToggleExpand(messageId)}
+          >
+            {isExpanded ? "Show less" : `Show ${hiddenCount} more`}
+          </button>
+        ) : null}
+      </header>
+      <div className="space-y-2">
+        {visibleActivities.map((activity) => (
+          <div
+            key={activity.id}
+            className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[0.78rem] text-ink-100">
+                <span className="mr-1 uppercase tracking-[0.14em] text-ink-500">
+                  Ran
+                </span>
+                <code className="rounded border border-white/10 bg-black/30 px-1 py-0.5 font-mono text-[0.78rem] text-ink-100">
+                  {activity.label}
+                </code>
+              </p>
+              {activity.status ? (
+                <span
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.12em] ${activityBadgeClasses(activity.status)}`}
+                >
+                  {formatActivityStatus(activity.status)}
+                </span>
+              ) : null}
+            </div>
+            {activity.detail ? (
+              <p className="mt-1 truncate text-[0.68rem] text-ink-400">
+                {activity.detail}
+              </p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function ThreadMessages({ messages }: ThreadMessagesProps) {
   const [copiedSegmentId, setCopiedSegmentId] = useState<string | null>(null);
+  const [expandedActivityMap, setExpandedActivityMap] = useState<
+    Record<string, boolean>
+  >({});
   const resetCopiedTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -111,6 +212,8 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
       {messages.map((message) => {
         const isUser = message.role === "user";
         const isAssistant = message.role === "assistant";
+        const isSystem = message.role === "system";
+        const hasActivities = Boolean(message.activities?.length);
         let blockIndex = 0;
         const markdownComponents: Components = {
           h1: ({ children, ...props }: ComponentProps<"h1">) => (
@@ -201,35 +304,76 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
           },
         };
 
+        const content = message.content.trim();
+        const messageCopyId = `${message.id}-message-copy`;
+        const isActivityExpanded = Boolean(expandedActivityMap[message.id]);
+
+        const toggleActivityExpansion = () => {
+          setExpandedActivityMap((current) => ({
+            ...current,
+            [message.id]: !current[message.id],
+          }));
+        };
+
         return (
-          <div
-            key={message.id}
-            className={isUser ? "flex justify-end" : "flex justify-start"}
-          >
+          <article key={message.id}>
             <div
-              className={`max-w-[85%] rounded-2xl border px-4 py-3 text-sm ${
+              className={`rounded-2xl border px-4 py-3 text-sm ${
                 isUser
-                  ? "border-flare-300/40 bg-flare-400/10 text-ink-100"
+                  ? "border-flare-300/35 bg-flare-400/10 text-ink-100"
                   : isAssistant
-                    ? "border-white/10 bg-black/30 text-ink-100"
-                    : "border-white/10 bg-black/20 text-ink-300"
+                    ? "border-white/10 bg-black/25 text-ink-100"
+                    : "border-white/10 bg-black/15 text-ink-300"
               }`}
             >
-              <p className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
-                {message.role}
-              </p>
-              <div className="space-y-3">
-                <ReactMarkdown
-                  remarkPlugins={markdownRemarkPlugins}
-                  rehypePlugins={markdownRehypePlugins}
-                  urlTransform={sanitizeMarkdownLink}
-                  components={markdownComponents}
-                >
-                  {message.content}
-                </ReactMarkdown>
-              </div>
+              <header className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                {isAssistant ? "assistant" : isSystem ? "system" : "you"}
+              </header>
+              {content ? (
+                <div className="space-y-3 text-[0.95rem] leading-7">
+                  <ReactMarkdown
+                    remarkPlugins={markdownRemarkPlugins}
+                    rehypePlugins={markdownRehypePlugins}
+                    urlTransform={sanitizeMarkdownLink}
+                    components={markdownComponents}
+                  >
+                    {content}
+                  </ReactMarkdown>
+                </div>
+              ) : null}
+              {isAssistant && content ? (
+                <div className="mt-3 flex justify-end">
+                  <button
+                    className="rounded-full border border-white/10 p-1.5 text-ink-300 hover:border-flare-300 hover:text-ink-50"
+                    aria-label="Copy assistant message"
+                    onClick={() => {
+                      void handleCopyCode(messageCopyId, content);
+                    }}
+                  >
+                    {copiedSegmentId === messageCopyId ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+              ) : null}
+              {hasActivities ? (
+                <ActivityGroup
+                  messageId={message.id}
+                  activities={message.activities ?? []}
+                  isExpanded={isActivityExpanded}
+                  onToggleExpand={toggleActivityExpansion}
+                />
+              ) : null}
+              {typeof message.workedDurationMs === "number" &&
+              message.workedDurationMs > 0 ? (
+                <p className="mt-3 text-right text-[0.68rem] text-ink-400">
+                  Worked for {formatWorkedDuration(message.workedDurationMs)}
+                </p>
+              ) : null}
             </div>
-          </div>
+          </article>
         );
       })}
     </div>

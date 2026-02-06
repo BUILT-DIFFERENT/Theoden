@@ -38,9 +38,9 @@ The “New thread” screen is intentionally minimal:
 
 ### 1.3 Thread view (real app)
 The thread view is a **chat-like transcript**, but *not* “bubble chat”:
-- [ ] Assistant output is rendered as markdown: headings, lists, inline code, links.
-- [ ] The app includes **execution logs** (e.g., repeated “Ran …” lines for commands) and a compact **“Worked for Xm Ys”** duration indicator.
-- [ ] There is a **copy icon** for assistant message content (visible near the bottom of the assistant message block in the actual recording).
+- [x] Assistant output is rendered as markdown: headings, lists, inline code, links.
+- [x] The app includes **execution logs** (e.g., repeated “Ran …” lines for commands) and a compact **“Worked for Xm Ys”** duration indicator.
+- [x] There is a **copy icon** for assistant message content (visible near the bottom of the assistant message block in the actual recording).
 
 ### 1.4 Automations (real app)
 Automations has:
@@ -189,28 +189,28 @@ The real app shows git-related UI in at least two ways:
 ### 2.6 Thread view content rendering (chat transcript)
 
 #### ✅ Real app
-- [ ] Markdown rendering with:
-  - [ ] Bulleted lists
-  - [ ] Inline code as pill chips (rounded background)
-  - [ ] Links in muted blue
-- [ ] Execution log lines prefixed by “Ran …” and grouped visually
-- [ ] “Worked for Xm Ys” indicator aligned on the right
-- [ ] Copy-to-clipboard icon for assistant content
+- [x] Markdown rendering with:
+  - [x] Bulleted lists
+  - [x] Inline code as pill chips (rounded background)
+  - [x] Links in muted blue
+- [x] Execution log lines prefixed by “Ran …” and grouped visually
+- [x] “Worked for Xm Ys” indicator aligned on the right
+- [x] Copy-to-clipboard icon for assistant content
 
 #### ❌ Clone
 - [ ] Not observable due to app-server error and no thread content shown.
 
 #### Required changes
-- [ ] Implement a message renderer that matches:
-  - [ ] Typography scale (real app uses larger body text, generous line height)
-  - [ ] Inline code pill style (dark pill with light text)
-  - [ ] Code blocks (monospace, subtle background, padding, scroll)
-  - [ ] Message spacing (no chat bubbles; full-width blocks)
-  - [ ] Copy icon placement and hover behavior
-- [ ] Add an “agent activity” subcomponent:
-  - [ ] “Ran …” lines rendered in a distinct style
-  - [ ] Collapsible grouping for long command logs (recommended)
-  - [ ] Duration indicator “Worked for …”
+- [x] Implement a message renderer that matches:
+  - [x] Typography scale (real app uses larger body text, generous line height)
+  - [x] Inline code pill style (dark pill with light text)
+  - [x] Code blocks (monospace, subtle background, padding, scroll)
+  - [x] Message spacing (no chat bubbles; full-width blocks)
+  - [x] Copy icon placement and hover behavior
+- [x] Add an “agent activity” subcomponent:
+  - [x] “Ran …” lines rendered in a distinct style
+  - [x] Collapsible grouping for long command logs (recommended)
+  - [x] Duration indicator “Worked for …”
 
 ---
 
@@ -345,7 +345,7 @@ The real app shows git-related UI in at least two ways:
 ### 4.1 Core
 - [ ] Workspace discovery + selection (matches real behavior and placement)
 - [ ] Thread creation, listing, selection, and persistence
-- [ ] Thread transcript rendering (markdown + logs + copy)
+- [x] Thread transcript rendering (markdown + logs + copy)
 - [ ] Git status panel + diff viewer
 
 ### 4.2 Automations
@@ -379,9 +379,9 @@ The real app shows git-related UI in at least two ways:
 4. [x] Implement New thread home “Let’s build” layout.
 
 ### Phase 2 — Core thread experience
-1. [ ] Message renderer that matches typography + markdown + inline code pills.
-2. [ ] Agent activity log component (“Ran …”, “Worked for …”).
-3. [ ] Copy icon + affordances.
+1. [x] Message renderer that matches typography + markdown + inline code pills.
+2. [x] Agent activity log component (“Ran …”, “Worked for …”).
+3. [x] Copy icon + affordances.
 
 ### Phase 3 — Automations
 1. [ ] Templates grid

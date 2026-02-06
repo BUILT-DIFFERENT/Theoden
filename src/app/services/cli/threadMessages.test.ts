@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { messagesFromTurns } from "@/app/services/cli/threadMessages";
 
 describe("messagesFromTurns", () => {
-  it("maps user/assistant/system messages from turn items", () => {
+  it("attaches agent activity and duration to assistant messages", () => {
     const turns = [
       {
         id: "turn-1",
@@ -20,6 +20,8 @@ describe("messagesFromTurns", () => {
             type: "commandExecution",
             command: ["pnpm", "lint"],
             status: "completed",
+            durationMs: 1200,
+            cwd: "/workspace/project",
           },
           {
             type: "fileChange",
@@ -48,21 +50,64 @@ describe("messagesFromTurns", () => {
         id: "turn-1-assistant-1",
         role: "assistant",
         content: "Patch reviewed.",
+        activities: [
+          {
+            id: "turn-1-activity-2",
+            kind: "command",
+            label: "pnpm lint",
+            detail: "cwd: /workspace/project",
+            status: "completed",
+            durationMs: 1200,
+          },
+          {
+            id: "turn-1-activity-3",
+            kind: "file_change",
+            label: "applied edits to 1 file (+1 -1)",
+            detail: "src/app.ts",
+            status: undefined,
+          },
+          {
+            id: "turn-1-activity-4",
+            kind: "web_search",
+            label: 'web search "latest tauri docs"',
+          },
+        ],
+        workedDurationMs: 1200,
       },
+    ]);
+  });
+
+  it("falls back to a system activity entry when no assistant message exists", () => {
+    const turns = [
       {
-        id: "turn-1-system-2",
-        role: "system",
-        content: "Command: pnpm lint (completed)",
+        id: "turn-2",
+        items: [
+          {
+            type: "commandExecution",
+            command: "pnpm app:test",
+            status: "failed",
+            durationMs: 5000,
+          },
+        ],
       },
+    ];
+
+    expect(messagesFromTurns(turns)).toEqual([
       {
-        id: "turn-1-system-3",
+        id: "turn-2-system-activity",
         role: "system",
-        content: "Edited 1 file (+1 -1)",
-      },
-      {
-        id: "turn-1-system-4",
-        role: "system",
-        content: "Web search: latest tauri docs",
+        content: "Agent activity",
+        activities: [
+          {
+            id: "turn-2-activity-0",
+            kind: "command",
+            label: "pnpm app:test",
+            detail: undefined,
+            status: "failed",
+            durationMs: 5000,
+          },
+        ],
+        workedDurationMs: 5000,
       },
     ]);
   });

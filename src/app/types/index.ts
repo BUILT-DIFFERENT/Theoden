@@ -62,6 +62,29 @@ export interface ThreadMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
+  activities?: ThreadMessageActivity[];
+  workedDurationMs?: number;
+}
+
+export type ThreadMessageActivityKind =
+  | "command"
+  | "file_change"
+  | "web_search"
+  | "tool";
+
+export type ThreadMessageActivityStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "declined";
+
+export interface ThreadMessageActivity {
+  id: string;
+  kind: ThreadMessageActivityKind;
+  label: string;
+  detail?: string;
+  status?: ThreadMessageActivityStatus;
+  durationMs?: number;
 }
 
 export interface DiffSummary {

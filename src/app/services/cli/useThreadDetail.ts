@@ -62,6 +62,23 @@ export function useThreadDetail(threadId: string | undefined) {
           role: "assistant",
           content:
             "Updated invoice export timestamp parsing and prepared changes for review.",
+          activities: [
+            {
+              id: "mock-activity-1",
+              kind: "command",
+              label: "pnpm lint",
+              status: "completed",
+              durationMs: 18000,
+            },
+            {
+              id: "mock-activity-2",
+              kind: "command",
+              label: "pnpm app:test",
+              status: "completed",
+              durationMs: 42000,
+            },
+          ],
+          workedDurationMs: 60000,
         },
       ];
     }
