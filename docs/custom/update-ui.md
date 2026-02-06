@@ -422,7 +422,7 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 ### P1 Gate
 - [x] Thread view exists and works (messages + follow-up composer)
 - [x] Git diff panel exists with staged/unstaged tabs + file list + hunks
-- [ ] Bottom bar environment + branch dropdowns are interactive
+- [x] Bottom bar environment + branch dropdowns are interactive
 
 ### P2 Gate
 - [x] Automations: create modal + listing
