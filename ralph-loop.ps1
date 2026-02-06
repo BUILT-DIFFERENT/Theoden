@@ -1,7 +1,7 @@
 # ralph.ps1
 # Requires: OpenAI Codex CLI (@openai/codex)
 
-$iterations = 10
+$iterations = 20
 $workspace  = (Get-Location).Path
 
 # Multiline prompt (we'll pipe it via stdin)
