@@ -1,18 +1,26 @@
 import { useEffect, useState } from "react";
 
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import {
+  automationRecurrenceOptions,
+  isAutomationRecurrence,
+  loadStoredAutomations,
+  storeAutomations,
+  type AutomationItem,
+} from "@/app/state/automations";
 import { workspaceNameFromPath } from "@/app/utils/workspace";
-
-const recurrenceOptions = ["Daily", "Weekly", "Monthly"] as const;
 
 export function AutomationsPage() {
   const { workspaces } = useWorkspaces();
+  const [automations, setAutomations] = useState<AutomationItem[]>(() =>
+    loadStoredAutomations(),
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [recurrence, setRecurrence] =
-    useState<(typeof recurrenceOptions)[number]>("Daily");
+    useState<(typeof automationRecurrenceOptions)[number]>("Daily");
   const [runTime, setRunTime] = useState("09:00");
   const [error, setError] = useState<string | null>(null);
   const nameInputId = "automation-name";
@@ -28,13 +36,19 @@ export function AutomationsPage() {
     setWorkspacePath(workspaces[0].path);
   }, [modalOpen, workspacePath, workspaces]);
 
+  useEffect(() => {
+    storeAutomations(automations);
+  }, [automations]);
+
   const handleClose = () => {
     setModalOpen(false);
     setError(null);
   };
 
   const handleCreate = () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedName) {
       setError("Name is required.");
       return;
     }
@@ -42,19 +56,49 @@ export function AutomationsPage() {
       setError("Select a workspace.");
       return;
     }
-    console.warn("Create automation", {
-      name,
+    if (!trimmedPrompt) {
+      setError("Prompt is required.");
+      return;
+    }
+    const createdAt = Date.now();
+    const schedule = `${recurrence} at ${runTime}`;
+    const nextRun = `${recurrence} at ${runTime}`;
+    const automation: AutomationItem = {
+      id: `automation-${createdAt}`,
+      name: trimmedName,
       workspacePath,
-      prompt,
+      prompt: trimmedPrompt,
+      recurrence,
+      runTime,
+      createdAt,
+      enabled: true,
+      schedule,
+      lastRun: "Never",
+      nextRun,
+    };
+    console.warn("Create automation", {
+      name: automation.name,
       recurrence,
       runTime,
     });
+    setAutomations((current) => [automation, ...current]);
     setName("");
     setPrompt("");
     setRecurrence("Daily");
     setRunTime("09:00");
     setWorkspacePath(workspaces[0]?.path ?? null);
+    setError(null);
     setModalOpen(false);
+  };
+
+  const toggleAutomation = (id: string) => {
+    setAutomations((current) =>
+      current.map((automation) =>
+        automation.id === id
+          ? { ...automation, enabled: !automation.enabled }
+          : automation,
+      ),
+    );
   };
 
   return (
@@ -87,8 +131,51 @@ export function AutomationsPage() {
         <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
           Automations
         </p>
-        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-ink-400">
-          No automations yet.
+        <div className="mt-4 space-y-3">
+          {automations.length ? (
+            automations.map((automation) => (
+              <div
+                key={automation.id}
+                className="rounded-xl border border-white/10 bg-black/20 p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm text-ink-100">{automation.name}</p>
+                    <p className="text-xs text-ink-500">
+                      {workspaceNameFromPath(automation.workspacePath)}
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-full border px-2 py-1 text-[0.65rem] ${
+                      automation.enabled
+                        ? "border-emerald-400/40 text-emerald-300"
+                        : "border-white/20 text-ink-400"
+                    }`}
+                  >
+                    {automation.enabled ? "Enabled" : "Paused"}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-ink-300">{automation.prompt}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-[0.7rem] text-ink-400">
+                  <span>Schedule: {automation.schedule}</span>
+                  <span>Last run: {automation.lastRun}</span>
+                  <span>Next run: {automation.nextRun}</span>
+                </div>
+                <div className="mt-3">
+                  <button
+                    className="rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300"
+                    onClick={() => toggleAutomation(automation.id)}
+                  >
+                    {automation.enabled ? "Pause" : "Enable"}
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-ink-400">
+              No automations yet.
+            </div>
+          )}
         </div>
       </section>
 
@@ -172,14 +259,14 @@ export function AutomationsPage() {
                     id={recurrenceInputId}
                     className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100"
                     value={recurrence}
-                    onChange={(event) =>
-                      setRecurrence(
-                        event.target
-                          .value as (typeof recurrenceOptions)[number],
-                      )
-                    }
+                    onChange={(event) => {
+                      const selectedValue = event.target.value;
+                      if (isAutomationRecurrence(selectedValue)) {
+                        setRecurrence(selectedValue);
+                      }
+                    }}
                   >
-                    {recurrenceOptions.map((option) => (
+                    {automationRecurrenceOptions.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
