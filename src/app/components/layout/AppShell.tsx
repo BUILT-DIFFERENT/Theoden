@@ -349,7 +349,14 @@ export function AppShell() {
       ? "Skills"
       : settingsMatch
         ? "Settings"
-        : "Codex";
+        : threadMatch
+          ? "Thread"
+          : "Codex";
+  const topBarVariant = threadMatch
+    ? "thread"
+    : newThreadMatch
+      ? "new-thread"
+      : "page";
   const showReviewPanel = reviewOpen;
 
   return (
@@ -362,6 +369,7 @@ export function AppShell() {
                 <AppSidebar />
                 <main className="flex min-h-screen flex-1 flex-col">
                   <ThreadTopBar
+                    variant={topBarVariant}
                     title={topBarTitle}
                     thread={threadMatch ? thread : undefined}
                     isNewThread={Boolean(newThreadMatch)}

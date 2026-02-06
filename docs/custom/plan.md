@@ -108,9 +108,9 @@ The real app shows git-related UI in at least two ways:
 
 #### Required changes
 - [x] Remove **Run/Open** from the primary top bar and align with the real app:
-  - [ ] In thread view: show **[Thread title] [Workspace] […]**
-  - [ ] In New thread: show minimal header (“New thread”) and keep the emphasis on the “Let’s build” canvas.
-  - [ ] Settings/Automations: show the page title only (plus small contextual actions if the real app has them).
+  - [x] In thread view: show **[Thread title] [Workspace] […]**
+  - [x] In New thread: show minimal header (“New thread”) and keep the emphasis on the “Let’s build” canvas.
+  - [x] Settings/Automations: show the page title only (plus small contextual actions if the real app has them).
 - [ ] Ensure the app icon/title in the OS chrome matches the real app (real shows Codex mark; clone shows orange dot).
 
 ---
@@ -375,7 +375,7 @@ The real app shows git-related UI in at least two ways:
 2. [x] Rebuild left sidebar to match real IA:
    - [x] top nav icons
    - [x] threads grouped by workspace
-3. [ ] Replace top bar with real app semantics (thread title/workspace/overflow).
+3. [x] Replace top bar with real app semantics (thread title/workspace/overflow).
 4. [x] Implement New thread home “Let’s build” layout.
 
 ### Phase 2 — Core thread experience

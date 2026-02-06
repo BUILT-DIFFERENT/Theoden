@@ -237,9 +237,6 @@ export function AutomationsPage() {
       <section className="surface-panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-              Automations
-            </p>
             <h2 className="font-display text-xl">Automate recurring runs</h2>
             <p className="mt-2 text-sm text-ink-300">
               Create schedules with normalized recurrence settings and run each
@@ -269,7 +266,7 @@ export function AutomationsPage() {
 
       <section className="surface-panel p-5">
         <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-          Automations
+          Scheduled threads
         </p>
         <div className="mt-4 space-y-3">
           {automations.length ? (

@@ -15,12 +15,14 @@ interface ThreadTopBarProps {
   thread?: ThreadDetail;
   isNewThread?: boolean;
   title?: string;
+  variant?: "thread" | "new-thread" | "page";
 }
 
 export function ThreadTopBar({
   thread,
   isNewThread,
   title,
+  variant,
 }: ThreadTopBarProps) {
   const { reviewOpen, setReviewOpen } = useThreadUi();
   const { selectedWorkspace } = useWorkspaceUi();
@@ -37,10 +39,20 @@ export function ThreadTopBar({
   const subtitle = resolvedWorkspacePath
     ? workspaceNameFromPath(resolvedWorkspacePath)
     : "Pick a workspace";
-  const headerTitle = isNewThread
-    ? "New thread"
-    : (thread?.title ?? title ?? "Codex");
-  const showThreadHeader = Boolean(threadId);
+  const resolvedVariant = variant
+    ? variant
+    : isNewThread
+      ? "new-thread"
+      : threadId
+        ? "thread"
+        : "page";
+  const headerTitle =
+    resolvedVariant === "new-thread"
+      ? "New thread"
+      : resolvedVariant === "thread"
+        ? (thread?.title ?? title ?? "Thread")
+        : (title ?? "Codex");
+  const showThreadHeader = resolvedVariant === "thread";
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
 

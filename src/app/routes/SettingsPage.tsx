@@ -1127,10 +1127,7 @@ export function SettingsPage() {
 
       <div className="space-y-4">
         <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
-          <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-            {activeSectionLabel}
-          </p>
-          <h1 className="font-display text-2xl">Settings</h1>
+          <h1 className="font-display text-2xl">{activeSectionLabel}</h1>
           <p className="mt-2 text-sm text-ink-300">
             {activeSectionDescription}
           </p>
