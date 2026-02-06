@@ -14,7 +14,7 @@ This document lists **everything I can confirm from the two screen recordings**:
 ### P0 — must fix before “full clone” is even testable
 1. [ ] **Remove/repair the “app-server bootstrap” dependency**: the clone UI is effectively non-functional due to a hard error panel (“APP‑SERVER UNAVAILABLE / App‑server bootstrap failed.”). The real app does **not** present this gate during normal use.
 2. [x] **Rebuild left navigation + thread list to match the real app** (information architecture, spacing, typography, grouping, row affordances).
-3. [ ] **Match top-bar semantics** (real app: thread title + workspace label + overflow menu; clone: “Run/Open” controls that do not exist in the real app UI shown).
+3. [x] **Match top-bar semantics** (real app: thread title + workspace label + overflow menu; clone: “Run/Open” controls that do not exist in the real app UI shown).
 4. [ ] **Implement the core screens the real app has**: New thread home, Thread view (assistant output + command log blocks), Automations templates + creation sheet, Settings (multi-section), Git/changes viewing.
 
 ---
@@ -107,7 +107,7 @@ The real app shows git-related UI in at least two ways:
 - [ ] Title bar area doesn’t match the real app’s thread header semantics.
 
 #### Required changes
-- [ ] Remove **Run/Open** from the primary top bar and align with the real app:
+- [x] Remove **Run/Open** from the primary top bar and align with the real app:
   - [ ] In thread view: show **[Thread title] [Workspace] […]**
   - [ ] In New thread: show minimal header (“New thread”) and keep the emphasis on the “Let’s build” canvas.
   - [ ] Settings/Automations: show the page title only (plus small contextual actions if the real app has them).

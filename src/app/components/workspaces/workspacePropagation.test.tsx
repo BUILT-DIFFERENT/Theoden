@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { useMemo, useState, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BottomBar } from "@/app/components/layout/BottomBar";
 import { AppSidebar } from "@/app/components/sidebar/AppSidebar";
@@ -18,6 +18,39 @@ import { AppUiProvider } from "@/app/state/appUi";
 import { EnvironmentUiProvider } from "@/app/state/environmentUi";
 import { ThreadUiProvider, type ThreadModal } from "@/app/state/threadUi";
 import { WorkspaceUiProvider } from "@/app/state/workspaceUi";
+
+let mockThreadId: string | null = null;
+
+function createLocalStorageMock(): Storage {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
+    },
+  };
+}
+
+beforeEach(() => {
+  Object.defineProperty(window, "localStorage", {
+    value: createLocalStorageMock(),
+    configurable: true,
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -36,7 +69,8 @@ vi.mock("@tanstack/react-router", () => ({
       {children}
     </button>
   ),
-  useMatchRoute: () => () => false,
+  useMatchRoute: () => () =>
+    mockThreadId ? { threadId: mockThreadId } : false,
   useNavigate: () => () => Promise.resolve(),
   useLocation: () => ({ pathname: "/" }),
 }));
@@ -234,6 +268,7 @@ function ThreadUiHarness({ children }: { children: ReactNode }) {
 }
 
 function renderWithProviders() {
+  mockThreadId = "thread-alpha";
   const queryClient = new QueryClient();
 
   function AuditMount() {
@@ -250,12 +285,7 @@ function renderWithProviders() {
               <div>
                 <AuditMount />
                 <AppSidebar />
-                <ThreadTopBar
-                  title="New thread"
-                  isNewThread
-                  isTerminalOpen={false}
-                  onToggleTerminal={() => {}}
-                />
+                <ThreadTopBar title="Thread" isNewThread={false} />
                 <ThreadComposer />
                 <BottomBar />
               </div>

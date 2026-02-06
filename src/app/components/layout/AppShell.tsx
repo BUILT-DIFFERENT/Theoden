@@ -365,8 +365,6 @@ export function AppShell() {
                     title={topBarTitle}
                     thread={threadMatch ? thread : undefined}
                     isNewThread={Boolean(newThreadMatch)}
-                    isTerminalOpen={isTerminalOpen}
-                    onToggleTerminal={toggleTerminal}
                   />
                   <div
                     className={
