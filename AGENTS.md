@@ -6,6 +6,7 @@ It reflects the current desktop app architecture and expected delivery quality.
 ## 1) Repository Overview
 
 - Desktop app: Tauri host + React frontend.
+- Target users/platforms: Windows and Linux desktop users.
 - App purpose: desktop UI for Codex workflows (threads, turns, diffs, approvals, automations, skills, settings).
 - Core bridge: `codex app-server` JSON-RPC methods.
 
@@ -23,17 +24,47 @@ Main folders:
 For parity-sensitive work, agents must treat these as primary reference sources before inventing new behavior:
 
 - Official desktop app reference: `third_party/CodexDesktop-Rebuild/`
-  - Use this to inspect bridge semantics, IPC channels, renderer/main message flow, streaming behavior, and chat/thread sync behavior.
-  - Use the debug instrumentation in that repo when validating parity with Tauri implementation.
+  - Inspect bridge semantics, IPC channels, renderer/main message flow, streaming behavior, and chat/thread sync behavior.
 - Official CLI reference: `codex-cli/` (and related protocol/runtime crates in `codex-rs/`)
-  - Use this to implement API interaction patterns, auth/session handling, task execution, config behavior, and cloud/off-cloud execution flows.
-  - Prefer reusing or matching existing CLI/protocol behavior over creating new one-off implementations in desktop code.
+  - Match API interaction patterns, auth/session handling, task execution, config behavior, and cloud/off-cloud flows.
+  - Prefer reusing existing CLI/protocol behavior over one-off desktop implementations.
+- For bridge wiring, chat sync, cloud/off-cloud tasks, approvals, and MCP flows:
+  - Compare Tauri behavior against `third_party/CodexDesktop-Rebuild/`.
+  - Confirm protocol/API behavior against `codex-cli/` + `codex-rs/`.
+  - Document intentional deviations in `docs/custom/` when parity is not exact.
 
-When implementing features such as bridge wiring, chat sync, cloud tasks, off-cloud tasks, approvals, or MCP flows:
+## 1.2) Official Desktop Debugging Workflow (Submodule)
 
-- Compare Tauri behavior against `third_party/CodexDesktop-Rebuild/`.
-- Confirm protocol and API behavior against `codex-cli/` + `codex-rs/`.
-- Document intentional deviations in `docs/custom/` if parity is not exact.
+Use the official desktop app debug harness in `third_party/CodexDesktop-Rebuild/` as the first debugging path for parity issues (bridge, cloud tasks, approvals, MCP auth/status, renderer interaction).
+
+Run from `third_party/CodexDesktop-Rebuild`:
+
+```bash
+pnpm run debug:fixtures:start
+pnpm run dev:debug
+pnpm run debug:ui -- list
+pnpm run debug:ui -- click "button:has-text('New Chat')"
+pnpm run debug:ui -- screenshot
+pnpm run debug:audit -- --log logs
+pnpm run debug:audit -- --log logs --json
+pnpm run debug:fixtures:stop
+```
+
+Reference files for this workflow:
+
+- `third_party/CodexDesktop-Rebuild/scripts/start-dev-debug.js` (run/session propagation, debug launch)
+- `third_party/CodexDesktop-Rebuild/scripts/debug-main-hook.js` (NDJSON telemetry hook)
+- `third_party/CodexDesktop-Rebuild/scripts/debug-redaction/index.js` (secret/token redaction)
+- `third_party/CodexDesktop-Rebuild/scripts/debug-renderer-playwright.js` (Playwright/CDP UI + screenshots)
+- `third_party/CodexDesktop-Rebuild/scripts/mcp-fixtures/*` (deterministic fixture matrix)
+- `third_party/CodexDesktop-Rebuild/scripts/debug-audit/index.js` (machine-readable parity audit)
+- `third_party/CodexDesktop-Rebuild/docs/signal-parity-map.md` (audited-signal mapping and parity tracking)
+
+Working rules:
+
+- Prefer this harness over adding one-off logging in Tauri when reproducing parity bugs.
+- Use audit output to verify coverage for thread/turn/approval/MCP-auth flows before declaring parity fixes complete.
+- Keep parity gaps and intentional deviations documented in `docs/custom/`.
 
 ## 2) App Route Model
 
@@ -81,6 +112,11 @@ pnpm app:build
 ```
 
 If tests fail, fix regressions instead of skipping.
+
+## 7.1) JavaScript Package Manager
+
+- Always use `pnpm` for dependency management and script execution in this repository.
+- Do not use `npm` commands (`npm install`, `npm run`, `npx`, etc.) unless a task explicitly requires validating npm-specific behavior.
 
 ## 8) Rust Workspace Rules (`codex-rs`)
 

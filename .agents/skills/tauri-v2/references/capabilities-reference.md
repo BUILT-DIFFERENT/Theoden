@@ -125,7 +125,7 @@ Location: `src-tauri/capabilities/`
             "identifier": "shell:allow-execute",
             "allow": [
                 { "name": "git", "args": true },
-                { "name": "npm", "args": ["install", "run"] }
+                { "name": "pnpm", "args": ["install", "run"] }
             ]
         }
     ]

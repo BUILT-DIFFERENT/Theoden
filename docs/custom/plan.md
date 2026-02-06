@@ -54,6 +54,10 @@ Automations has:
   - [x] A prominent **red warning callout** about sandbox settings and risk, with inline links (“rules”, etc.).
   - [x] Fields: **Name**, **Projects** (chip/tokens), **Prompt** (multiline).
   - [x] The sheet overlays the main page while leaving the left sidebar visible.
+- [x] Automation state is persisted in SQLite (observable in `~/.codex/sqlite/codex-dev.db` via `uvx datasette`), including:
+  - [x] `automations` table (`id`, `name`, `prompt`, `status`, `next_run_at`, `last_run_at`, `cwds`, `rrule`, timestamps).
+  - [x] `automation_runs` table (`thread_id`, `automation_id`, status/read fields, inbox summary/title, archival fields, timestamps).
+  - [x] `inbox_items` table (`id`, `title`, `description`, `thread_id`, `read_at`, `created_at`).
 
 ### 1.5 Settings (real app)
 Settings is a distinct section with its own internal navigation list:
@@ -258,6 +262,7 @@ The real app shows git-related UI in at least two ways:
   - [x] Template cards: padding, corner radius, hover elevation, icon tile
   - [x] Two-column responsive grid (in the recording window size)
 - [x] Ensure templates populate even without workspaces (or show a soft empty state explaining requirement).
+- [ ] Load schedule/status metadata from SQLite-backed automation records (`status`, `next_run_at`, `last_run_at`) instead of static/mock values.
 
 ---
 
@@ -285,6 +290,8 @@ The real app shows git-related UI in at least two ways:
   - [x] Chip/tokens with remove “x”
   - [x] Multiline prompt box
   - [x] Primary/secondary actions (not visible in frame; ensure there is a save/create CTA consistent with real app)
+- [ ] Persist created/updated automation rows into SQLite (`automations` table) with canonical fields (`name`, `prompt`, `status`, `cwds`, `rrule`, timestamps).
+- [ ] Ensure scheduler lifecycle updates `next_run_at`/`last_run_at` and reflects them in UI.
 
 ---
 
@@ -353,7 +360,8 @@ The real app shows git-related UI in at least two ways:
 - [x] Templates page
 - [x] Create automation sheet
 - [ ] Scheduling + background execution on worktrees
-- [ ] Inbox/archiving behavior for automation results
+- [ ] SQLite-backed automation persistence parity (`automations`, `automation_runs`, `inbox_items`)
+- [ ] Inbox/archiving behavior for automation results (persisted run + inbox state)
 
 ### 4.3 Settings
 - [ ] Settings nav sections
@@ -388,6 +396,7 @@ The real app shows git-related UI in at least two ways:
 1. [x] Templates grid
 2. [x] Create automation sheet
 3. [ ] Wire up to CLI automation primitives
+4. [ ] Implement SQLite persistence parity for automation state and run/inbox records
 
 ### Phase 4 — Settings + Git UI
 1. [x] Settings internal nav + pages (Environments first)

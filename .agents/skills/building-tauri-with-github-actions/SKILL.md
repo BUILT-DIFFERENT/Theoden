@@ -105,7 +105,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -118,7 +118,7 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
@@ -179,7 +179,7 @@ jobs:
 
 ### Node.js Dependency Caching
 
-Configure via the `cache` parameter in `actions/setup-node@v4`: `'npm'`, `'yarn'`, or `'pnpm'`.
+Configure via the `cache` parameter in `actions/setup-node@v4` with `'pnpm'`.
 
 ## Linux Dependencies
 
@@ -298,8 +298,8 @@ jobs:
             source $HOME/.cargo/env
             curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
             apt-get install -y nodejs
-            npm ci
-            npm run tauri build
+            pnpm install --frozen-lockfile
+            pnpm tauri build
 ```
 
 Note: ARM emulation builds take approximately one hour for fresh projects.
@@ -369,7 +369,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -382,10 +382,10 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build Tauri app
-        run: npm run tauri build -- ${{ matrix.args }}
+        run: pnpm tauri build -- ${{ matrix.args }}
 ```
 
 ## Troubleshooting

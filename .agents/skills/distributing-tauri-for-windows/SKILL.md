@@ -21,7 +21,7 @@ Tauri supports two Windows installer formats:
 ### Standard Build (Windows)
 
 ```bash
-npm run tauri build
+pnpm tauri build
 # or
 yarn tauri build
 # or
@@ -34,13 +34,13 @@ cargo tauri build
 
 ```bash
 # 64-bit (default)
-npm run tauri build -- --target x86_64-pc-windows-msvc
+pnpm tauri build -- --target x86_64-pc-windows-msvc
 
 # 32-bit
-npm run tauri build -- --target i686-pc-windows-msvc
+pnpm tauri build -- --target i686-pc-windows-msvc
 
 # ARM64 (requires additional VS build tools)
-npm run tauri build -- --target aarch64-pc-windows-msvc
+pnpm tauri build -- --target aarch64-pc-windows-msvc
 ```
 
 ### Cross-Platform NSIS Build (Linux/macOS)
@@ -76,7 +76,7 @@ cargo install --locked cargo-xwin
 
 **Build command:**
 ```bash
-npm run tauri build -- --runner cargo-xwin --target x86_64-pc-windows-msvc
+pnpm tauri build -- --runner cargo-xwin --target x86_64-pc-windows-msvc
 ```
 
 ## WebView2 Installation Modes
@@ -334,13 +334,13 @@ Set environment variable before building:
 **PowerShell:**
 ```powershell
 $env:TAURI_BUNDLER_WIX_FIPS_COMPLIANT = "true"
-npm run tauri build
+pnpm tauri build
 ```
 
 **Command Prompt:**
 ```cmd
 set TAURI_BUNDLER_WIX_FIPS_COMPLIANT=true
-npm run tauri build
+pnpm tauri build
 ```
 
 ## Microsoft Store Distribution
@@ -371,7 +371,7 @@ Create `tauri.microsoftstore.conf.json`:
 ### Generate Store Icons
 
 ```bash
-npm run tauri icon /path/to/app-icon.png
+pnpm tauri icon /path/to/app-icon.png
 ```
 
 This generates all required icon sizes including Microsoft Store assets.
@@ -379,7 +379,7 @@ This generates all required icon sizes including Microsoft Store assets.
 ### Build for Store
 
 ```bash
-npm run tauri build -- --config tauri.microsoftstore.conf.json
+pnpm tauri build -- --config tauri.microsoftstore.conf.json
 ```
 
 ### Submission Process

@@ -7,7 +7,7 @@ The TypeScript SDK wraps the bundled `codex` binary. It spawns the CLI and excha
 ## Installation
 
 ```bash
-npm install @openai/codex-sdk
+pnpm add @openai/codex-sdk
 ```
 
 Requires Node.js 18+.

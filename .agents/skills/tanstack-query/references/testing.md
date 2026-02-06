@@ -7,7 +7,7 @@
 ## Setup
 
 ```bash
-npm install -D @testing-library/react @testing-library/jest-dom vitest msw
+pnpm add -D @testing-library/react @testing-library/jest-dom vitest msw
 ```
 
 ### Test Utils

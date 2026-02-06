@@ -132,8 +132,8 @@ async fn good(name: String) -> String {
     "build": {
         "devUrl": "http://localhost:5173",
         "frontendDist": "../dist",
-        "beforeDevCommand": "npm run dev",
-        "beforeBuildCommand": "npm run build"
+        "beforeDevCommand": "pnpm dev",
+        "beforeBuildCommand": "pnpm build"
     },
     "app": {
         "windows": [{
@@ -361,7 +361,7 @@ rustup target add aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim
 
 Before using this skill, verify:
 
-- [ ] `npx tauri info` shows correct Tauri v2 versions
+- [ ] `pnpm tauri info` shows correct Tauri v2 versions
 - [ ] `src-tauri/capabilities/default.json` exists with at least `core:default`
 - [ ] All commands registered in `generate_handler![]`
 - [ ] `lib.rs` contains shared code (for mobile support)

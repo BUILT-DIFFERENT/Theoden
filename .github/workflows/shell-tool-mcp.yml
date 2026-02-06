@@ -415,7 +415,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist/npm
           staging="${{ steps.staging.outputs.dir }}"
-          pack_info=$(cd "$staging" && npm pack --ignore-scripts --json --pack-destination "${GITHUB_WORKSPACE}/dist/npm")
+          pack_info=$(cd "$staging" && pnpm pack --ignore-scripts --json --pack-destination "${GITHUB_WORKSPACE}/dist/npm")
           filename=$(PACK_INFO="$pack_info" node -e 'const data = JSON.parse(process.env.PACK_INFO); console.log(data[0].filename);')
           mv "dist/npm/${filename}" "dist/npm/codex-shell-tool-mcp-npm-${PACKAGE_VERSION}.tgz"
 
@@ -443,10 +443,6 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: "@openai"
 
-      # Trusted publishing requires npm CLI version 11.5.1 or later.
-      - name: Update npm
-        run: npm install -g npm@latest
-
       - name: Download npm tarball
         uses: actions/download-artifact@v7
         with:
@@ -464,4 +460,4 @@ jobs:
           if [[ -n "${NPM_TAG}" ]]; then
             tag_args+=(--tag "${NPM_TAG}")
           fi
-          npm publish "dist/npm/codex-shell-tool-mcp-npm-${VERSION}.tgz" "${tag_args[@]}"
+          pnpm publish "dist/npm/codex-shell-tool-mcp-npm-${VERSION}.tgz" "${tag_args[@]}"

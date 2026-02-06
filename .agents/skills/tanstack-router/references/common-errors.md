@@ -6,7 +6,7 @@
 
 **Solution:**
 ```bash
-npm install @tanstack/router-devtools
+pnpm add @tanstack/router-devtools
 ```
 
 ## Error 2: Routes Not Auto-Generated

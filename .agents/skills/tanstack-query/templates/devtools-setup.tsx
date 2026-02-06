@@ -174,7 +174,7 @@ function DebugRefetchingIssue() {
  * Production DevTools (optional, separate package)
  *
  * For debugging production issues remotely
- * npm install @tanstack/react-query-devtools-production
+ * pnpm add @tanstack/react-query-devtools-production
  */
 import { ReactQueryDevtools as ReactQueryDevtoolsProd } from '@tanstack/react-query-devtools-production'
 

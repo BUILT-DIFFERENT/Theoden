@@ -1,10 +1,9 @@
 # Custom References
 
-Use this folder for project-specific instructions, experiment notes, and feature reference material.
+This folder contains project-specific implementation, parity, and debugging references for this Tauri desktop app.
 
-Suggested usage:
-- `feature-notes/` for rough ideas and future work.
-- `instructions/` for one-off build or review guidance.
-- `decisions/` for lightweight ADR-style notes.
+Current docs:
 
-Keep filenames short and descriptive so they show up well in searches.
+- `docs/custom/plan.md`: gap analysis and implementation parity checklist.
+- `docs/custom/codex-app.md`: consolidated product/UX specification.
+- `docs/custom/official-desktop-debugging.md`: official desktop app submodule debug harness workflow (Playwright/CDP, NDJSON telemetry, fixtures, audit, parity map).

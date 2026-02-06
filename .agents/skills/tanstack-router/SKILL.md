@@ -19,10 +19,10 @@ Type-safe, file-based routing for React SPAs with route-level data loading and T
 **Version**: @tanstack/react-router@1.146.2
 
 ```bash
-npm install @tanstack/react-router @tanstack/router-devtools
-npm install -D @tanstack/router-plugin
+pnpm add @tanstack/react-router @tanstack/router-devtools
+pnpm add -D @tanstack/router-plugin
 # Optional: Zod validation adapter
-npm install @tanstack/zod-adapter zod
+pnpm add @tanstack/zod-adapter zod
 ```
 
 **Vite Config** (TanStackRouterVite MUST come before react()):
@@ -97,7 +97,7 @@ export const Route = createFileRoute('/posts/$postId')({
 
 Programmatic route configuration when file-based conventions don't fit your needs:
 
-**Install**: `npm install @tanstack/virtual-file-routes`
+**Install**: `pnpm add @tanstack/virtual-file-routes`
 
 **Vite Config**:
 ```typescript
@@ -271,7 +271,7 @@ This skill prevents **20** documented issues:
 
 ### Issue #1: Devtools Dependency Resolution
 - **Error**: Build fails with `@tanstack/router-devtools-core` not found
-- **Fix**: `npm install @tanstack/router-devtools`
+- **Fix**: `pnpm add @tanstack/router-devtools`
 
 **Issue #2: Vite Plugin Order** (CRITICAL)
 - **Error**: Routes not auto-generated, `routeTree.gen.ts` missing

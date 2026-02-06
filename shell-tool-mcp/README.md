@@ -26,14 +26,14 @@ Because `@openai/codex-shell-tool-mcp` intercepts `execve(2)` calls directly, it
 First, verify that you can download and run the MCP executable:
 
 ```bash
-npx -y @openai/codex-shell-tool-mcp --version
+pnpm dlx @openai/codex-shell-tool-mcp --version
 ```
 
 To test out the MCP with a one-off invocation of Codex CLI, it is important to _disable_ the default shell tool in addition to enabling the MCP so Codex has exactly one shell-like tool available to it:
 
 ```bash
 codex --disable shell_tool \
-  --config 'mcp_servers.bash={command = "npx", args = ["-y", "@openai/codex-shell-tool-mcp"]}'
+  --config 'mcp_servers.bash={command = "pnpm", args = ["dlx", "@openai/codex-shell-tool-mcp"]}'
 ```
 
 To configure this permanently so you can use the MCP while running `codex` without additional command-line flags, add the following to your `~/.codex/config.toml`:
@@ -43,8 +43,8 @@ To configure this permanently so you can use the MCP while running `codex` witho
 shell_tool = false
 
 [mcp_servers.shell-tool]
-command = "npx"
-args = ["-y", "@openai/codex-shell-tool-mcp"]
+command = "pnpm"
+args = ["dlx", "@openai/codex-shell-tool-mcp"]
 ```
 
 Note when the `@openai/codex-shell-tool-mcp` launcher runs, it selects the appropriate native binary to run based on the host OS/architecture. For the Bash wrapper, it inspects `/etc/os-release` on Linux or the Darwin major version on macOS to try to find the best match it has available. See [`bashSelection.ts`](https://github.com/openai/codex/blob/main/shell-tool-mcp/src/bashSelection.ts) for details.
@@ -96,7 +96,7 @@ The Codex harness (used by the CLI and the VS Code extension) sends such request
 
 ## Package Contents
 
-This package wraps the `codex-exec-mcp-server` binary and its helpers so that the shell MCP can be invoked via `npx -y @openai/codex-shell-tool-mcp`. It bundles:
+This package wraps the `codex-exec-mcp-server` binary and its helpers so that the shell MCP can be invoked via `pnpm dlx @openai/codex-shell-tool-mcp`. It bundles:
 
 - `codex-exec-mcp-server` and `codex-execve-wrapper` built for macOS (arm64, x64) and Linux (musl arm64, musl x64).
 - A patched Bash that honors `BASH_EXEC_WRAPPER`, built for multiple glibc baselines (Ubuntu 24.04/22.04/20.04, Debian 12/11, CentOS-like 9) and macOS (15/14/13).

@@ -206,8 +206,8 @@ useInfiniteQuery({
 ## Quick Setup
 
 ```bash
-npm install @tanstack/react-query@latest
-npm install -D @tanstack/react-query-devtools@latest
+pnpm add @tanstack/react-query@latest
+pnpm add -D @tanstack/react-query-devtools@latest
 ```
 
 ### Step 2: Provider + Config

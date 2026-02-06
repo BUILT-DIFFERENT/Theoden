@@ -26,7 +26,7 @@ useQuery({
 
 **Migration**: Use codemod or manual update
 ```bash
-npx @tanstack/react-query-codemod v5/remove-overloads
+pnpm dlx @tanstack/react-query-codemod v5/remove-overloads
 ```
 
 ### 2. Query Callbacks Removed ⚠️
@@ -156,18 +156,18 @@ const { error } = useQuery<DataType, string>({
 ### Step 1: Update Packages
 
 ```bash
-npm install @tanstack/react-query@latest
-npm install -D @tanstack/react-query-devtools@latest
+pnpm add @tanstack/react-query@latest
+pnpm add -D @tanstack/react-query-devtools@latest
 ```
 
 ### Step 2: Run Codemods
 
 ```bash
 # Remove function overloads
-npx @tanstack/react-query-codemod v5/remove-overloads
+pnpm dlx @tanstack/react-query-codemod v5/remove-overloads
 
 # Replace removed/renamed methods
-npx @tanstack/react-query-codemod v5/rename-properties
+pnpm dlx @tanstack/react-query-codemod v5/rename-properties
 ```
 
 ### Step 3: Manual Fixes
@@ -223,9 +223,9 @@ import type { UseQueryResult } from '@tanstack/react-query'
 
 ```bash
 # All v5 codemods
-npx @tanstack/react-query-codemod v5/remove-overloads
-npx @tanstack/react-query-codemod v5/rename-properties
-npx @tanstack/react-query-codemod v5/replace-imports
+pnpm dlx @tanstack/react-query-codemod v5/remove-overloads
+pnpm dlx @tanstack/react-query-codemod v5/rename-properties
+pnpm dlx @tanstack/react-query-codemod v5/replace-imports
 ```
 
 **Note**: Codemods may not catch everything - manual review required!

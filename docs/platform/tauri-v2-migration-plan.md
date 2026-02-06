@@ -34,8 +34,8 @@ Update `src-tauri/tauri.conf.json` from v1 → v2 shape.
 ```json
 {
   "build": {
-    "beforeBuildCommand": "npm run build",
-    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "pnpm build",
+    "beforeDevCommand": "pnpm dev",
     "devPath": "http://localhost:1420",
     "distDir": "../dist"
   },
@@ -68,8 +68,8 @@ Update `src-tauri/tauri.conf.json` from v1 → v2 shape.
   "identifier": "com.example.codexcommandcenter",
   "mainBinaryName": "codex-command-center",
   "build": {
-    "beforeBuildCommand": "npm run build",
-    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "pnpm build",
+    "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
