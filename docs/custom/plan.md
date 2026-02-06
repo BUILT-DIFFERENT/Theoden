@@ -360,6 +360,7 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 - [x] Git status displayed in top bar
 - [x] Clicking git indicator toggles diff panel
 - [x] Tabs for staged/unstaged with correct counts
+- [x] Global `Revert all` / `Stage all` actions are wired to real git operations.
 
 ---
 
@@ -437,10 +438,10 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 - [x] Add message auto-scroll behavior for new assistant output unless user manually scrolls up.
 - [x] Implement composer `@` file attach interaction (picker/drawer + visible attachments).
 - [x] Implement composer `/` command interaction (palette or inline suggestions).
-- [ ] Make diff file list selectable so clicking a file focuses that file's hunks.
-- [ ] Wire per-hunk controls (stage/unstage/undo) to real state/actions instead of static buttons.
-- [ ] Show request-change input only after clicking a diff line and dispatch a comment annotation event on submit.
-- [ ] Remove or repurpose legacy `ControlRoomPage` / `ThreadsPage` artifacts that no longer match target IA.
+- [x] Make diff file list selectable so clicking a file focuses that file's hunks.
+- [x] Wire per-hunk controls (stage/unstage/undo) to real state/actions instead of static buttons.
+- [x] Show request-change input only after clicking a diff line and dispatch a comment annotation event on submit.
+- [x] Remove or repurpose legacy `ControlRoomPage` / `ThreadsPage` artifacts that no longer match target IA.
 
 ---
 

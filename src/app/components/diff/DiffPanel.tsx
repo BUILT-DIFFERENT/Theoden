@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatchRoute } from "@tanstack/react-router";
 import {
   ChevronDown,
@@ -8,10 +8,17 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
+import {
+  revertAllPaths,
+  revertPath,
+  stageAllPaths,
+  stagePath,
+  unstagePath,
+} from "@/app/services/git/changes";
 import { getGitWorkspaceStatus } from "@/app/services/git/status";
 import { mockThreadDetail } from "@/app/state/mockData";
 import { useThreadUi } from "@/app/state/threadUi";
@@ -83,6 +90,7 @@ interface DiffPanelProps {
 
 export function DiffPanel({ thread }: DiffPanelProps) {
   const { setActiveModal, setReviewOpen } = useThreadUi();
+  const queryClient = useQueryClient();
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
@@ -106,6 +114,27 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     [detail.diffSummary, diffStats.additions, diffStats.deletions],
   );
   const [activeTab, setActiveTab] = useState<"unstaged" | "staged">("unstaged");
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedLine, setSelectedLine] = useState<{
+    path: string;
+    lineNumber: number;
+    content: string;
+  } | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [hunkActionFeedback, setHunkActionFeedback] = useState<string | null>(
+    null,
+  );
+  const [hunkActionError, setHunkActionError] = useState<string | null>(null);
+  const [annotations, setAnnotations] = useState<
+    Array<{
+      id: string;
+      path: string;
+      lineNumber: number;
+      content: string;
+      comment: string;
+      createdAt: number;
+    }>
+  >([]);
   const gitStatus = useQuery({
     queryKey: ["git", "status", workspacePath],
     queryFn: () => getGitWorkspaceStatus(workspacePath),
@@ -176,9 +205,183 @@ export function DiffPanel({ thread }: DiffPanelProps) {
   );
   const activeSections =
     activeTab === "staged" ? stagedSections : unstagedSections;
+  const selectedSection = useMemo(() => {
+    if (!activeSections.length) {
+      return null;
+    }
+    if (!selectedPath) {
+      return activeSections[0] ?? null;
+    }
+    return (
+      activeSections.find((section) => section.path === selectedPath) ??
+      activeSections[0] ??
+      null
+    );
+  }, [activeSections, selectedPath]);
 
   const stagedCount = stagedSections.length;
   const unstagedCount = unstagedSections.length;
+  const canRunGitActions = isTauri() && Boolean(workspacePath);
+  const hunkActionMutation = useMutation({
+    mutationFn: async (action: {
+      kind: "stage" | "unstage" | "revert" | "stage_all" | "revert_all";
+      path?: string;
+      includeStaged?: boolean;
+    }) => {
+      if (!workspacePath) {
+        throw new Error("No workspace available for diff actions.");
+      }
+      if (action.kind === "stage_all") {
+        await stageAllPaths(workspacePath);
+        return;
+      }
+      if (action.kind === "revert_all") {
+        await revertAllPaths(workspacePath, action.includeStaged ?? false);
+        return;
+      }
+      if (!action.path) {
+        throw new Error("No file path available for this diff action.");
+      }
+      if (action.kind === "stage") {
+        await stagePath(workspacePath, action.path);
+        return;
+      }
+      if (action.kind === "unstage") {
+        await unstagePath(workspacePath, action.path);
+        return;
+      }
+      await revertPath(
+        workspacePath,
+        action.path,
+        action.includeStaged ?? false,
+      );
+    },
+    onSuccess: async (_, action) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["git", "status", workspacePath],
+      });
+      setHunkActionError(null);
+      if (action.kind === "stage_all") {
+        setHunkActionFeedback("Staged all changes.");
+        return;
+      }
+      if (action.kind === "revert_all") {
+        setHunkActionFeedback(
+          action.includeStaged
+            ? "Reverted all staged and unstaged changes."
+            : "Reverted all unstaged changes.",
+        );
+        return;
+      }
+      if (action.kind === "stage" && action.path) {
+        setHunkActionFeedback(`Staged ${action.path}`);
+        return;
+      }
+      if (action.kind === "unstage" && action.path) {
+        setHunkActionFeedback(`Unstaged ${action.path}`);
+        return;
+      }
+      setHunkActionFeedback(`Reverted ${action.path ?? "file"}`);
+    },
+    onError: (error) => {
+      setHunkActionFeedback(null);
+      setHunkActionError(
+        error instanceof Error ? error.message : "Hunk action failed.",
+      );
+    },
+  });
+
+  useEffect(() => {
+    if (!activeSections.length) {
+      setSelectedPath(null);
+      setSelectedLine(null);
+      return;
+    }
+    if (
+      selectedPath &&
+      activeSections.some((section) => section.path === selectedPath)
+    ) {
+      return;
+    }
+    setSelectedPath(activeSections[0]?.path ?? null);
+  }, [activeSections, selectedPath]);
+
+  useEffect(() => {
+    if (!selectedLine) {
+      return;
+    }
+    if (selectedSection?.path === selectedLine.path) {
+      return;
+    }
+    setSelectedLine(null);
+  }, [selectedLine, selectedSection?.path]);
+
+  useEffect(() => {
+    if (!hunkActionFeedback) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setHunkActionFeedback(null);
+    }, 2000);
+    return () => window.clearTimeout(timeoutId);
+  }, [hunkActionFeedback]);
+
+  const runHunkAction = async (action: "stage" | "unstage" | "revert") => {
+    if (!selectedSection) {
+      return;
+    }
+    if (!canRunGitActions) {
+      setHunkActionFeedback(null);
+      setHunkActionError("Hunk actions are available in the desktop app.");
+      return;
+    }
+    setHunkActionError(null);
+    try {
+      await hunkActionMutation.mutateAsync({
+        kind: action,
+        path: selectedSection.path,
+        includeStaged: action === "revert" && activeTab === "staged",
+      });
+    } catch {
+      // Error state is already handled by the mutation onError callback.
+    }
+  };
+
+  const runGlobalAction = async (action: "stage_all" | "revert_all") => {
+    if (!canRunGitActions) {
+      setHunkActionFeedback(null);
+      setHunkActionError("Git actions are available in the desktop app.");
+      return;
+    }
+    setHunkActionError(null);
+    try {
+      await hunkActionMutation.mutateAsync({
+        kind: action,
+        includeStaged: action === "revert_all" && activeTab === "staged",
+      });
+    } catch {
+      // Error state is already handled by the mutation onError callback.
+    }
+  };
+
+  const submitAnnotation = () => {
+    const comment = commentDraft.trim();
+    if (!selectedLine || !comment) {
+      return;
+    }
+    const annotation = {
+      id: `annotation-${Date.now()}`,
+      path: selectedLine.path,
+      lineNumber: selectedLine.lineNumber,
+      content: selectedLine.content,
+      comment,
+      createdAt: Date.now(),
+    };
+    setAnnotations((current) => [...current, annotation]);
+    console.info("Diff annotation submitted", annotation);
+    setCommentDraft("");
+    setSelectedLine(null);
+  };
 
   return (
     <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl border border-white/10 bg-ink-900/70 shadow-card">
@@ -229,44 +432,110 @@ export function DiffPanel({ thread }: DiffPanelProps) {
 
       <div className="max-h-[65vh] overflow-auto px-4 py-4">
         <div className="space-y-4">
-          {activeSections.map((section) => (
+          {activeSections.length ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 p-2">
+              <p className="px-2 pb-1 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                Files
+              </p>
+              <div className="max-h-36 space-y-1 overflow-auto">
+                {activeSections.map((section) => {
+                  const isSelected = selectedSection?.path === section.path;
+                  return (
+                    <button
+                      key={section.path}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition ${
+                        isSelected
+                          ? "border border-flare-300 bg-flare-400/10 text-ink-50"
+                          : "border border-transparent text-ink-200 hover:border-white/10 hover:bg-white/5"
+                      }`}
+                      onClick={() => setSelectedPath(section.path)}
+                    >
+                      <span className="truncate">{section.path}</span>
+                      <span className="text-[0.65rem] text-ink-500">
+                        +{section.additions} -{section.deletions}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          {selectedSection ? (
             <div
-              key={section.path}
+              key={selectedSection.path}
               className="rounded-xl border border-white/10 bg-black/20"
             >
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-xs">
-                <span className="text-ink-100">{section.path}</span>
+                <span className="text-ink-100">{selectedSection.path}</span>
                 <span className="text-ink-400">
-                  +{section.additions} -{section.deletions}
+                  +{selectedSection.additions} -{selectedSection.deletions}
                 </span>
               </div>
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[0.65rem] text-ink-500">
                 <span>99 unmodified lines</span>
                 <div className="flex items-center gap-2">
-                  <button className="rounded-full border border-white/10 p-1 hover:border-flare-300">
+                  <button
+                    className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => {
+                      void runHunkAction("revert");
+                    }}
+                    disabled={hunkActionMutation.isPending || !selectedSection}
+                    title={
+                      activeTab === "staged"
+                        ? "Revert staged + working tree changes for this file"
+                        : "Revert working tree changes for this file"
+                    }
+                  >
                     <RotateCcw className="h-3 w-3" />
                   </button>
-                  <button className="rounded-full border border-white/10 p-1 hover:border-flare-300">
+                  <button
+                    className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => {
+                      void runHunkAction(
+                        activeTab === "staged" ? "unstage" : "stage",
+                      );
+                    }}
+                    disabled={hunkActionMutation.isPending || !selectedSection}
+                    title={
+                      activeTab === "staged"
+                        ? "Unstage this file"
+                        : "Stage this file"
+                    }
+                  >
                     <Plus className="h-3 w-3" />
                   </button>
                 </div>
               </div>
-              {section.lines.length ? (
+              {selectedSection.lines.length ? (
                 <div className="divide-y divide-white/5 font-mono text-[0.65rem]">
-                  {section.lines.map((line, index) => {
+                  {selectedSection.lines.map((line, index) => {
                     const isAdd =
                       line.startsWith("+") && !line.startsWith("+++");
                     const isRemove =
                       line.startsWith("-") && !line.startsWith("---");
-                    const colorClass = isAdd
-                      ? "text-emerald-300 bg-emerald-500/5 border-emerald-500/40"
-                      : isRemove
-                        ? "text-rose-300 bg-rose-500/5 border-rose-500/40"
-                        : "text-ink-300 border-transparent";
+                    const isSelectedLine =
+                      selectedLine?.path === selectedSection.path &&
+                      selectedLine.lineNumber === index + 1;
+                    const colorClass = isSelectedLine
+                      ? "text-ink-100 bg-flare-500/10 border-flare-400"
+                      : isAdd
+                        ? "text-emerald-300 bg-emerald-500/5 border-emerald-500/40"
+                        : isRemove
+                          ? "text-rose-300 bg-rose-500/5 border-rose-500/40"
+                          : "text-ink-300 border-transparent";
                     return (
-                      <div
-                        key={`${section.path}-${index}`}
-                        className={`grid grid-cols-[36px_1fr] items-start gap-2 border-l-2 px-3 py-1 ${colorClass}`}
+                      <button
+                        key={`${selectedSection.path}-${index}`}
+                        type="button"
+                        className={`grid w-full grid-cols-[36px_1fr] items-start gap-2 border-l-2 px-3 py-1 text-left ${colorClass}`}
+                        onClick={() => {
+                          setSelectedLine({
+                            path: selectedSection.path,
+                            lineNumber: index + 1,
+                            content: line,
+                          });
+                          setCommentDraft("");
+                        }}
                       >
                         <span className="text-[0.6rem] text-ink-500">
                           {index + 1}
@@ -274,7 +543,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                         <span className="whitespace-pre-wrap">
                           {line || " "}
                         </span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -284,7 +553,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                 </div>
               )}
             </div>
-          ))}
+          ) : null}
           {!activeSections.length ? (
             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-4 text-xs text-ink-500">
               {activeTab === "staged"
@@ -298,21 +567,56 @@ export function DiffPanel({ thread }: DiffPanelProps) {
       <div className="border-t border-white/10 px-4 py-3">
         <div className="rounded-xl border border-white/10 bg-black/20 p-3">
           <p className="text-xs text-ink-400">Request change</p>
-          <textarea
-            className="mt-2 h-20 w-full resize-none rounded-lg border border-white/10 bg-black/30 p-2 text-xs text-ink-100 focus:outline-none"
-            placeholder="Request change"
-          />
-          <div className="mt-3 flex justify-end gap-2 text-xs">
-            <button className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
-              Cancel
-            </button>
-            <button className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20">
-              Comment
-            </button>
-          </div>
+          {selectedLine ? (
+            <>
+              <p className="mt-2 text-[0.65rem] text-ink-500">
+                {selectedLine.path}:{selectedLine.lineNumber}
+              </p>
+              <textarea
+                className="mt-2 h-20 w-full resize-none rounded-lg border border-white/10 bg-black/30 p-2 text-xs text-ink-100 focus:outline-none"
+                placeholder="Request change"
+                value={commentDraft}
+                onChange={(event) => setCommentDraft(event.target.value)}
+              />
+              <div className="mt-3 flex justify-end gap-2 text-xs">
+                <button
+                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+                  onClick={() => {
+                    setSelectedLine(null);
+                    setCommentDraft("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={submitAnnotation}
+                  disabled={!commentDraft.trim()}
+                >
+                  Comment
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-ink-500">
+              Click a diff line to request a targeted change.
+            </p>
+          )}
+          {annotations.length ? (
+            <p className="mt-2 text-[0.65rem] text-ink-500">
+              {annotations.length} change request
+              {annotations.length === 1 ? "" : "s"} logged this session.
+            </p>
+          ) : null}
         </div>
         <div className="mt-3 flex items-center justify-between text-xs">
-          <button className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
+          <button
+            className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => {
+              void runGlobalAction("revert_all");
+            }}
+            disabled={hunkActionMutation.isPending || !canRunGitActions}
+          >
             Revert all
           </button>
           <div className="flex items-center gap-2">
@@ -322,11 +626,25 @@ export function DiffPanel({ thread }: DiffPanelProps) {
             >
               Commit
             </button>
-            <button className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20">
+            <button
+              className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                void runGlobalAction("stage_all");
+              }}
+              disabled={hunkActionMutation.isPending || !canRunGitActions}
+            >
               Stage all
             </button>
           </div>
         </div>
+        {hunkActionFeedback ? (
+          <p className="mt-2 text-[0.65rem] text-emerald-300">
+            {hunkActionFeedback}
+          </p>
+        ) : null}
+        {hunkActionError ? (
+          <p className="mt-2 text-[0.65rem] text-rose-300">{hunkActionError}</p>
+        ) : null}
       </div>
     </div>
   );
