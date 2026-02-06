@@ -3,6 +3,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import React from "react";
 import ReactDOM from "react-dom/client";
 
+import { ThemeSync } from "@/app/components/layout/ThemeSync";
 import { router } from "@/app/router";
 import { AppUiProvider } from "@/app/state/appUi";
 import "@/styles/index.css";
@@ -27,6 +28,7 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <AppUiProvider>
+        <ThemeSync />
         <RouterProvider router={router} />
       </AppUiProvider>
     </QueryClientProvider>

@@ -1,10 +1,13 @@
 import {
   ChevronDown,
   Cloud,
+  Code2,
   FileCode2,
   ListChecks,
+  Search,
   ShieldAlert,
 } from "lucide-react";
+import { useState } from "react";
 
 import { WorkspacePickerDropdown } from "@/app/components/workspaces/WorkspacePickerDropdown";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
@@ -33,9 +36,28 @@ const starterPrompts = [
   },
 ];
 
+const extendedPrompts = [
+  {
+    id: "release",
+    label: "Draft release notes from recent commits",
+    Icon: ListChecks,
+  },
+  {
+    id: "refactor",
+    label: "Refactor this module for readability",
+    Icon: Code2,
+  },
+  {
+    id: "audit",
+    label: "Scan for security and dependency risks",
+    Icon: Search,
+  },
+] as const;
+
 export function ThreadEmptyState({ onSelectPrompt }: ThreadEmptyStateProps) {
   const { workspaces } = useWorkspaces();
   const { selectedWorkspace } = useWorkspaceUi();
+  const [showExtendedPrompts, setShowExtendedPrompts] = useState(false);
   const resolvedWorkspace =
     selectedWorkspace ?? workspaces[0]?.path ?? "Add workspace";
   const label = resolvedWorkspace
@@ -77,8 +99,27 @@ export function ThreadEmptyState({ onSelectPrompt }: ThreadEmptyStateProps) {
           </button>
         ))}
       </div>
-      <button className="mt-6 text-xs uppercase tracking-[0.3em] text-ink-400 transition hover:text-ink-200">
-        Explore more
+      {showExtendedPrompts ? (
+        <div className="mt-4 grid w-full gap-3 text-left text-sm md:grid-cols-3">
+          {extendedPrompts.map((prompt) => (
+            <button
+              key={prompt.id}
+              className="group flex h-24 flex-col justify-between rounded-2xl border border-white/10 bg-black/20 p-4 text-ink-200 transition hover:border-flare-300 hover:bg-black/30 hover:text-ink-50"
+              onClick={() => onSelectPrompt(prompt.label)}
+            >
+              <div className="flex justify-end">
+                <prompt.Icon className="h-4 w-4 text-ink-400 transition group-hover:text-ink-200" />
+              </div>
+              <span className="leading-relaxed">{prompt.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <button
+        className="mt-6 text-xs uppercase tracking-[0.3em] text-ink-400 transition hover:text-ink-200"
+        onClick={() => setShowExtendedPrompts((open) => !open)}
+      >
+        {showExtendedPrompts ? "Show less" : "Explore more"}
       </button>
     </div>
   );

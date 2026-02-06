@@ -1,5 +1,6 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import {
+  Check,
   ChevronDown,
   ChevronRight,
   Filter,
@@ -7,7 +8,7 @@ import {
   Plus,
   Settings,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useThreadList } from "@/app/services/cli/useThreads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
@@ -36,6 +37,12 @@ export function AppSidebar() {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<
     Record<string, boolean>
   >({});
+  const [threadSort, setThreadSort] = useState<"updated" | "title">("updated");
+  const [threadVisibility, setThreadVisibility] = useState<"all" | "active">(
+    "all",
+  );
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
 
   const recents = useMemo(() => threads.slice(0, 6), [threads]);
   const providerTags = useMemo(
@@ -100,6 +107,35 @@ export function AppSidebar() {
     });
     return entries;
   }, [workspaceEntries, workspaceThreadsMap]);
+  const visibleWorkspaceTree = useMemo(() => {
+    return workspaceTree
+      .map((workspace) => {
+        const filteredThreads = workspace.threads.filter((thread) => {
+          if (threadVisibility === "all") {
+            return true;
+          }
+          return (
+            thread.status === "running" ||
+            thread.status === "needs_review" ||
+            thread.id === selectedThreadId
+          );
+        });
+        const sortedThreads =
+          threadSort === "title"
+            ? filteredThreads
+                .slice()
+                .sort((a, b) => a.title.localeCompare(b.title))
+            : filteredThreads;
+        return {
+          ...workspace,
+          threads: sortedThreads,
+        };
+      })
+      .filter(
+        (workspace) =>
+          workspace.threads.length > 0 || threadVisibility === "all",
+      );
+  }, [selectedThreadId, threadSort, threadVisibility, workspaceTree]);
 
   useEffect(() => {
     if (!selectedWorkspace) {
@@ -113,6 +149,20 @@ export function AppSidebar() {
       return { ...current, [key]: true };
     });
   }, [selectedWorkspace]);
+
+  useEffect(() => {
+    if (!filterMenuOpen) {
+      return;
+    }
+    const handleClick = (event: MouseEvent) => {
+      if (filterMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setFilterMenuOpen(false);
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [filterMenuOpen]);
 
   const toggleWorkspaceExpanded = (workspacePath: string) => {
     const key = normalizeWorkspacePath(workspacePath).toLowerCase();
@@ -225,13 +275,77 @@ export function AppSidebar() {
             >
               <Plus className="h-3 w-3" />
             </button>
-            <button className="rounded-full border border-white/10 p-1 hover:border-flare-300">
-              <Filter className="h-3 w-3" />
-            </button>
+            <div className="relative" ref={filterMenuRef}>
+              <button
+                className="rounded-full border border-white/10 p-1 hover:border-flare-300"
+                onClick={() => setFilterMenuOpen((open) => !open)}
+                aria-label="Thread sort and filter"
+              >
+                <Filter className="h-3 w-3" />
+              </button>
+              {filterMenuOpen ? (
+                <div className="absolute right-0 top-8 z-30 w-52 rounded-2xl border border-white/10 bg-ink-900/95 p-2 text-[0.7rem] shadow-card">
+                  <p className="px-2 pb-1 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                    Sort by
+                  </p>
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    onClick={() => {
+                      setThreadSort("updated");
+                      setFilterMenuOpen(false);
+                    }}
+                  >
+                    Updated
+                    {threadSort === "updated" ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-300" />
+                    ) : null}
+                  </button>
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    onClick={() => {
+                      setThreadSort("title");
+                      setFilterMenuOpen(false);
+                    }}
+                  >
+                    Title
+                    {threadSort === "title" ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-300" />
+                    ) : null}
+                  </button>
+                  <p className="px-2 pb-1 pt-2 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                    Show
+                  </p>
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    onClick={() => {
+                      setThreadVisibility("all");
+                      setFilterMenuOpen(false);
+                    }}
+                  >
+                    All threads
+                    {threadVisibility === "all" ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-300" />
+                    ) : null}
+                  </button>
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    onClick={() => {
+                      setThreadVisibility("active");
+                      setFilterMenuOpen(false);
+                    }}
+                  >
+                    Running or review
+                    {threadVisibility === "active" ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-300" />
+                    ) : null}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="mt-3 space-y-1 text-xs">
-          {workspaceTree.map((workspace) => {
+          {visibleWorkspaceTree.map((workspace) => {
             const isSelected =
               selectedWorkspace &&
               workspace.path.toLowerCase() === selectedWorkspace.toLowerCase();
@@ -316,7 +430,7 @@ export function AppSidebar() {
               </div>
             );
           })}
-          {!workspaceTree.length ? (
+          {!visibleWorkspaceTree.length ? (
             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-ink-500">
               No workspaces detected.
             </div>

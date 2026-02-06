@@ -1,6 +1,7 @@
 import type { AutomationSummary } from "@/app/types";
 
-const AUTOMATIONS_STORAGE_KEY = "theoden.automations";
+const AUTOMATIONS_STORAGE_KEY = "codex.automations";
+const LEGACY_AUTOMATIONS_STORAGE_KEY = "theoden.automations";
 
 export const automationRecurrenceOptions = [
   "Daily",
@@ -54,7 +55,9 @@ export function loadStoredAutomations(): AutomationItem[] {
     return [];
   }
   try {
-    const raw = window.localStorage.getItem(AUTOMATIONS_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(AUTOMATIONS_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_AUTOMATIONS_STORAGE_KEY);
     if (!raw) {
       return [];
     }
@@ -62,9 +65,16 @@ export function loadStoredAutomations(): AutomationItem[] {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter((item): item is AutomationItem =>
+    const automations = parsed.filter((item): item is AutomationItem =>
       isAutomationItem(item),
     );
+    if (!window.localStorage.getItem(AUTOMATIONS_STORAGE_KEY)) {
+      window.localStorage.setItem(
+        AUTOMATIONS_STORAGE_KEY,
+        JSON.stringify(automations),
+      );
+    }
+    return automations;
   } catch (error) {
     console.warn("Failed to load stored automations", error);
     return [];

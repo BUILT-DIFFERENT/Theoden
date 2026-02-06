@@ -38,7 +38,13 @@ export function AppShell() {
 
   useEffect(() => {
     if (!isTauri()) return;
-    if (window.__THEODEN_APP_SERVER_STARTED__) return;
+    if (
+      window.__CODEX_APP_SERVER_STARTED__ ||
+      window.__THEODEN_APP_SERVER_STARTED__
+    ) {
+      return;
+    }
+    window.__CODEX_APP_SERVER_STARTED__ = true;
     window.__THEODEN_APP_SERVER_STARTED__ = true;
 
     const bootstrap = async () => {
@@ -49,8 +55,8 @@ export function AppShell() {
           method: "initialize",
           params: {
             clientInfo: {
-              name: "theoden_desktop",
-              title: "Theoden Desktop",
+              name: "codex_desktop",
+              title: "Codex",
               version: "0.1.0",
             },
           },

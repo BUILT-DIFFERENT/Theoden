@@ -9,11 +9,12 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { openInEditor } from "@/app/services/desktop/open";
 import {
   revertAllPaths,
   revertPath,
@@ -23,7 +24,9 @@ import {
 } from "@/app/services/git/changes";
 import { getGitWorkspaceDiff } from "@/app/services/git/diff";
 import { getGitWorkspaceStatus } from "@/app/services/git/status";
+import { mockEditors } from "@/app/state/settingsData";
 import { useThreadUi } from "@/app/state/threadUi";
+import { useRuntimeSettings } from "@/app/state/useRuntimeSettings";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { DiffSummary, ThreadDetail } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
@@ -150,6 +153,7 @@ interface DiffPanelProps {
 export function DiffPanel({ thread }: DiffPanelProps) {
   const { setActiveModal, setReviewOpen } = useThreadUi();
   const { selectedWorkspace } = useWorkspaceUi();
+  const runtimeSettings = useRuntimeSettings();
   const { workspaces } = useWorkspaces();
   const queryClient = useQueryClient();
   const matchRoute = useMatchRoute();
@@ -191,6 +195,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     null,
   );
   const [hunkActionError, setHunkActionError] = useState<string | null>(null);
+  const [panelMenuOpen, setPanelMenuOpen] = useState(false);
   const [expandedContextBlocks, setExpandedContextBlocks] = useState<
     Record<string, boolean>
   >({});
@@ -205,6 +210,13 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     }>
   >([]);
   const canRunGitActions = isTauri() && Boolean(resolvedWorkspacePath);
+  const panelMenuRef = useRef<HTMLDivElement | null>(null);
+  const preferredEditor =
+    mockEditors.find(
+      (editor) => editor.id === runtimeSettings.openDestination,
+    ) ??
+    mockEditors.find((editor) => editor.detected) ??
+    mockEditors[0];
   const gitStatus = useQuery({
     queryKey: ["git", "status", resolvedWorkspacePath],
     queryFn: () => getGitWorkspaceStatus(resolvedWorkspacePath ?? ""),
@@ -468,6 +480,20 @@ export function DiffPanel({ thread }: DiffPanelProps) {
   }, [selectedSection?.path]);
 
   useEffect(() => {
+    if (!panelMenuOpen) {
+      return;
+    }
+    const handleClick = (event: MouseEvent) => {
+      if (panelMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setPanelMenuOpen(false);
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [panelMenuOpen]);
+
+  useEffect(() => {
     if (!hunkActionFeedback) {
       return;
     }
@@ -542,6 +568,81 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     setSelectedLine(null);
   };
 
+  const handleOpenSelectedFile = async () => {
+    const selectedFile =
+      selectedSectionWithLiveDiff?.path ?? selectedSection?.path;
+    if (!selectedFile || !resolvedWorkspacePath) {
+      setHunkActionError("Select a file to open.");
+      return;
+    }
+    if (!isTauri()) {
+      setHunkActionError("Open file is available in the desktop app.");
+      return;
+    }
+    const editorCommand = preferredEditor?.command ?? "code";
+    const workspaceRoot = resolvedWorkspacePath.replace(/[\\/]+$/, "");
+    const normalizedFile = selectedFile.replace(/^[\\/]+/, "");
+    const absoluteFilePath = `${workspaceRoot}/${normalizedFile}`;
+    try {
+      await openInEditor(absoluteFilePath, editorCommand);
+      setHunkActionError(null);
+      setHunkActionFeedback(`Opened ${selectedFile}.`);
+    } catch (error) {
+      setHunkActionFeedback(null);
+      setHunkActionError(
+        error instanceof Error ? error.message : "Failed to open file.",
+      );
+    }
+  };
+
+  const handlePanelMenuAction = async (
+    action: "expand-context" | "collapse-context" | "copy-path",
+  ) => {
+    if (action === "expand-context") {
+      if (!selectedSectionWithLiveDiff) {
+        return;
+      }
+      const next: Record<string, boolean> = {};
+      selectedSectionChunks.forEach((chunk) => {
+        if (chunk.kind !== "context") {
+          return;
+        }
+        next[`${selectedSectionWithLiveDiff.path}:${chunk.startLineNumber}`] =
+          true;
+      });
+      setExpandedContextBlocks((current) => ({
+        ...current,
+        ...next,
+      }));
+      setPanelMenuOpen(false);
+      return;
+    }
+    if (action === "collapse-context") {
+      setExpandedContextBlocks({});
+      setPanelMenuOpen(false);
+      return;
+    }
+    const selectedFile =
+      selectedSectionWithLiveDiff?.path ?? selectedSection?.path;
+    if (!selectedFile) {
+      setHunkActionError("Select a file before copying a path.");
+      setPanelMenuOpen(false);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(selectedFile);
+      setHunkActionFeedback("Copied file path.");
+      setHunkActionError(null);
+    } catch (error) {
+      setHunkActionFeedback(null);
+      setHunkActionError(
+        error instanceof Error ? error.message : "Unable to copy file path.",
+      );
+    } finally {
+      setPanelMenuOpen(false);
+    }
+  };
+
   const renderDiffLine = (
     path: string,
     entry: DiffLineEntry,
@@ -584,7 +685,18 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl border border-white/10 bg-ink-900/70 shadow-card">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div>
-          <button className="flex items-center gap-1 text-sm text-ink-100">
+          <button
+            className="flex items-center gap-1 text-sm text-ink-100"
+            onClick={() => {
+              if (unstagedCount && activeTab === "staged") {
+                setActiveTab("unstaged");
+                return;
+              }
+              if (stagedCount && activeTab === "unstaged") {
+                setActiveTab("staged");
+              }
+            }}
+          >
             Uncommitted changes
             <ChevronDown className="h-3.5 w-3.5" />
           </button>
@@ -612,12 +724,52 @@ export function DiffPanel({ thread }: DiffPanelProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 text-ink-400">
-          <button className="rounded-full border border-white/10 p-1 hover:border-flare-300">
+          <button
+            className="rounded-full border border-white/10 p-1 hover:border-flare-300"
+            onClick={() => {
+              void handleOpenSelectedFile();
+            }}
+            title="Open selected file"
+          >
             <FolderOpen className="h-3.5 w-3.5" />
           </button>
-          <button className="rounded-full border border-white/10 p-1 hover:border-flare-300">
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
+          <div className="relative" ref={panelMenuRef}>
+            <button
+              className="rounded-full border border-white/10 p-1 hover:border-flare-300"
+              onClick={() => setPanelMenuOpen((open) => !open)}
+              title="More diff actions"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+            {panelMenuOpen ? (
+              <div className="absolute right-0 top-8 z-20 w-44 rounded-xl border border-white/10 bg-ink-900/95 p-1 text-[0.7rem] shadow-card">
+                <button
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-ink-200 hover:bg-white/5"
+                  onClick={() => {
+                    void handlePanelMenuAction("expand-context");
+                  }}
+                >
+                  Expand context
+                </button>
+                <button
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-ink-200 hover:bg-white/5"
+                  onClick={() => {
+                    void handlePanelMenuAction("collapse-context");
+                  }}
+                >
+                  Collapse context
+                </button>
+                <button
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-ink-200 hover:bg-white/5"
+                  onClick={() => {
+                    void handlePanelMenuAction("copy-path");
+                  }}
+                >
+                  Copy file path
+                </button>
+              </div>
+            ) : null}
+          </div>
           <button
             className="rounded-full border border-white/10 p-1 hover:border-flare-300"
             onClick={() => setReviewOpen(false)}

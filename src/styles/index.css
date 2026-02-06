@@ -30,19 +30,7 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light dark;
-}
-
-html,
-body,
-#root {
-  min-height: 100%;
-  overscroll-behavior: none;
-}
-
-body {
-  font-family: "Instrument Sans", sans-serif;
-  background:
+  --app-bg:
     radial-gradient(
       circle at 12% 12%,
       rgba(255, 155, 74, 0.12),
@@ -59,6 +47,41 @@ body {
       transparent 55%
     ),
     #0d1117;
+  --app-fg: #f6f8fb;
+}
+
+:root[data-theme="light"] {
+  --app-bg:
+    radial-gradient(
+      circle at 16% 16%,
+      rgba(255, 155, 74, 0.14),
+      transparent 44%
+    ),
+    radial-gradient(
+      circle at 82% 24%,
+      rgba(84, 153, 255, 0.16),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 36% 82%,
+      rgba(246, 122, 31, 0.14),
+      transparent 50%
+    ),
+    #f4f7fb;
+  --app-fg: #121723;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: "Instrument Sans", sans-serif;
+  background: var(--app-bg);
+  color: var(--app-fg);
   min-height: 100vh;
 }
 

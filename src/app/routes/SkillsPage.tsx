@@ -6,7 +6,8 @@ import { useAppUi } from "@/app/state/appUi";
 import { mockInstalledSkills, mockRemoteSkills } from "@/app/state/skillsData";
 import type { RemoteSkillSummary, SkillSummary } from "@/app/types";
 
-const SKILLS_STORAGE_KEY = "theoden.skills.installed";
+const SKILLS_STORAGE_KEY = "codex.skills.installed";
+const LEGACY_SKILLS_STORAGE_KEY = "theoden.skills.installed";
 
 function loadStoredInstalledSkillIds() {
   const fallback = new Set(mockInstalledSkills.map((skill) => skill.id));
@@ -14,7 +15,9 @@ function loadStoredInstalledSkillIds() {
     return fallback;
   }
   try {
-    const raw = window.localStorage.getItem(SKILLS_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(SKILLS_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_SKILLS_STORAGE_KEY);
     if (!raw) {
       return fallback;
     }
@@ -22,10 +25,17 @@ function loadStoredInstalledSkillIds() {
     if (!Array.isArray(parsed)) {
       return fallback;
     }
-    return new Set([
+    const installedSkillIds = new Set([
       ...fallback,
       ...parsed.filter((value): value is string => typeof value === "string"),
     ]);
+    if (!window.localStorage.getItem(SKILLS_STORAGE_KEY)) {
+      window.localStorage.setItem(
+        SKILLS_STORAGE_KEY,
+        JSON.stringify(Array.from(installedSkillIds.values()).sort()),
+      );
+    }
+    return installedSkillIds;
   } catch {
     return fallback;
   }

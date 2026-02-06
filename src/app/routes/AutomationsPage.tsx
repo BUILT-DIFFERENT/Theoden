@@ -114,7 +114,16 @@ export function AutomationsPage() {
               Schedule recurring runs, spawn new threads, and reuse prompt
               templates.
             </p>
-            <button className="mt-2 text-xs uppercase tracking-[0.3em] text-ink-400 transition hover:text-ink-200">
+            <button
+              className="mt-2 text-xs uppercase tracking-[0.3em] text-ink-400 transition hover:text-ink-200"
+              onClick={() =>
+                window.open(
+                  "https://developers.openai.com/codex/config-reference",
+                  "_blank",
+                  "noopener,noreferrer",
+                )
+              }
+            >
               Learn more
             </button>
           </div>

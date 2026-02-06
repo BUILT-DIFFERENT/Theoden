@@ -1,6 +1,15 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { execCommand } from "@/app/services/cli/commands";
+import {
+  loadMergedConfig,
+  mcpServersFromConfig,
+  validateConfig,
+  type MappedMcpServer,
+} from "@/app/services/cli/config";
+import { listThreads, unarchiveThread } from "@/app/services/cli/threads";
+import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import {
   loadStoredSettings,
   storeSettings,
@@ -13,8 +22,10 @@ import {
   settingsSections,
   type SettingsSectionId,
 } from "@/app/state/settingsData";
+import { useWorkspaceUi } from "@/app/state/workspaceUi";
+import { isTauri } from "@/app/utils/tauri";
 
-const mockMcpServers = [
+const fallbackMcpServers: MappedMcpServer[] = [
   {
     id: "filesystem",
     name: "Filesystem",
@@ -33,7 +44,7 @@ const mockMcpServers = [
     endpoint: "https://mcp.jira.local",
     status: "disabled",
   },
-] as const;
+];
 
 const fallbackEditorId =
   mockEditors.find((editor) => editor.detected)?.id ?? mockEditors[0]?.id;
@@ -45,6 +56,8 @@ const formInputClass =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none";
 
 export function SettingsPage() {
+  const { selectedWorkspace } = useWorkspaceUi();
+  const { workspaces } = useWorkspaces();
   const { section } = useParams({ from: "/settings/$section" });
   const activeSection = settingsSections.find((item) => item.id === section);
   const activeSectionId = activeSection?.id ?? defaultSettingsSection;
@@ -57,6 +70,7 @@ export function SettingsPage() {
     () => loadStoredSettings(defaultOpenDestination),
     [defaultOpenDestination],
   );
+  const resolvedWorkspace = selectedWorkspace ?? workspaces[0]?.path ?? null;
 
   const [theme, setTheme] = useState<"system" | "light" | "dark">(
     initialSettings.theme,
@@ -140,6 +154,15 @@ export function SettingsPage() {
     initialSettings.autoArchiveCompleted,
   );
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [mcpServers, setMcpServers] =
+    useState<MappedMcpServer[]>(fallbackMcpServers);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [archivedThreads, setArchivedThreads] = useState<
+    Array<{ id: string; preview: string; updatedAt: number }>
+  >([]);
+  const [archivedThreadsLoading, setArchivedThreadsLoading] = useState(false);
 
   useEffect(() => {
     if (!saveMessage) {
@@ -150,6 +173,35 @@ export function SettingsPage() {
     }, 2500);
     return () => window.clearTimeout(timeoutId);
   }, [saveMessage]);
+
+  useEffect(() => {
+    if (!actionMessage) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setActionMessage(null);
+    }, 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [actionMessage]);
+
+  const runAction = useCallback(
+    async (
+      action: () => Promise<string> | string,
+      fallbackErrorMessage: string,
+    ) => {
+      setActionError(null);
+      try {
+        const message = await action();
+        setActionMessage(message);
+      } catch (error) {
+        setActionMessage(null);
+        setActionError(
+          error instanceof Error ? error.message : fallbackErrorMessage,
+        );
+      }
+    },
+    [],
+  );
 
   const buildSnapshot = (): StoredSettingsSnapshot => ({
     theme,
@@ -187,6 +239,152 @@ export function SettingsPage() {
       "Settings";
     setSaveMessage(`${label} settings saved.`);
   };
+
+  const inferredConfigPath = useMemo(() => {
+    if (typeof navigator === "undefined") {
+      return "~/.codex/config.toml";
+    }
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes("windows")) {
+      return "%USERPROFILE%\\.codex\\config.toml";
+    }
+    return "~/.codex/config.toml";
+  }, []);
+
+  const refreshMcpServers = useCallback(async () => {
+    setMcpLoading(true);
+    try {
+      const config = await loadMergedConfig(resolvedWorkspace);
+      const parsedServers = mcpServersFromConfig(config);
+      setMcpServers(parsedServers.length ? parsedServers : fallbackMcpServers);
+      return parsedServers.length
+        ? `Reloaded ${parsedServers.length} MCP server(s).`
+        : "No MCP servers found in config. Showing defaults.";
+    } finally {
+      setMcpLoading(false);
+    }
+  }, [resolvedWorkspace]);
+
+  const handleOpenConfigFile = () =>
+    runAction(async () => {
+      await navigator.clipboard.writeText(inferredConfigPath);
+      return `Copied config path: ${inferredConfigPath}`;
+    }, "Failed to copy config path.");
+
+  const handleValidateConfig = () =>
+    runAction(async () => {
+      const result = await validateConfig(resolvedWorkspace);
+      if (!result.valid) {
+        throw new Error(result.errors.join("; ") || "Config is invalid.");
+      }
+      return `Config loaded successfully (${result.keys} top-level keys).`;
+    }, "Config validation failed.");
+
+  const handleAddMcpServer = () =>
+    runAction(() => {
+      const id = window.prompt("MCP server ID (example: github)");
+      if (!id?.trim()) {
+        throw new Error("MCP server ID is required.");
+      }
+      const endpoint =
+        window.prompt(
+          "MCP endpoint or command",
+          `mcp://${id.trim().toLowerCase()}`,
+        ) ?? "";
+      if (!endpoint.trim()) {
+        throw new Error("MCP endpoint is required.");
+      }
+      const server: MappedMcpServer = {
+        id: id.trim(),
+        name: id.trim(),
+        endpoint: endpoint.trim(),
+        status: "connected",
+      };
+      setMcpServers((current) => {
+        const deduped = current.filter((entry) => entry.id !== server.id);
+        return [server, ...deduped];
+      });
+      return `Added MCP server ${server.id} (session-only).`;
+    }, "Failed to add MCP server.");
+
+  const handleReloadMcpServers = () =>
+    runAction(
+      () => refreshMcpServers(),
+      "Failed to reload MCP server connections.",
+    );
+
+  const handleRunPruneNow = () =>
+    runAction(async () => {
+      if (!resolvedWorkspace) {
+        throw new Error("Select a workspace before pruning worktrees.");
+      }
+      if (!isTauri()) {
+        throw new Error("Worktree prune is available in the desktop app.");
+      }
+      const result = await execCommand({
+        command: ["git", "worktree", "prune", "--verbose"],
+        cwd: resolvedWorkspace,
+      });
+      if (result.exitCode !== 0) {
+        throw new Error(
+          result.stderr.trim() || result.stdout.trim() || "Prune failed.",
+        );
+      }
+      const output = result.stdout.trim();
+      return output || "Worktree prune finished successfully.";
+    }, "Failed to prune worktrees.");
+
+  const handleLoadArchivedThreads = () =>
+    runAction(async () => {
+      setArchivedThreadsLoading(true);
+      try {
+        const response = await listThreads({
+          archived: true,
+          limit: 100,
+        });
+        setArchivedThreads(
+          response.data.map((thread) => ({
+            id: thread.id,
+            preview: thread.preview || "Untitled thread",
+            updatedAt: thread.updatedAt,
+          })),
+        );
+        return response.data.length
+          ? `Loaded ${response.data.length} archived thread(s).`
+          : "No archived threads found.";
+      } finally {
+        setArchivedThreadsLoading(false);
+      }
+    }, "Failed to load archived threads.");
+
+  const handleRestoreAllArchived = () =>
+    runAction(async () => {
+      setArchivedThreadsLoading(true);
+      try {
+        const response = await listThreads({
+          archived: true,
+          limit: 100,
+        });
+        if (!response.data.length) {
+          setArchivedThreads([]);
+          return "No archived threads to restore.";
+        }
+        await Promise.all(
+          response.data.map((thread) => unarchiveThread(thread.id)),
+        );
+        setArchivedThreads([]);
+        return `Restored ${response.data.length} archived thread(s).`;
+      } finally {
+        setArchivedThreadsLoading(false);
+      }
+    }, "Failed to restore archived threads.");
+
+  useEffect(() => {
+    if (activeSectionId !== "mcp-servers") {
+      return;
+    }
+    void refreshMcpServers();
+  }, [activeSectionId, refreshMcpServers]);
 
   const renderFormForSection = (targetSection: SettingsSectionId) => {
     switch (targetSection) {
@@ -296,8 +494,22 @@ export function SettingsPage() {
               config.toml preview will live here.
             </div>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
-              <button className={actionButtonClass}>Open config file</button>
-              <button className={actionButtonClass}>Validate TOML</button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void handleOpenConfigFile();
+                }}
+              >
+                Open config file
+              </button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void handleValidateConfig();
+                }}
+              >
+                Validate TOML
+              </button>
             </div>
             <div className="mt-4 space-y-2 text-xs text-ink-300">
               <label className="flex items-center gap-2">
@@ -434,7 +646,7 @@ export function SettingsPage() {
             </p>
             <h2 className="font-display text-xl">Tool endpoints</h2>
             <div className="mt-4 space-y-2">
-              {mockMcpServers.map((server) => (
+              {mcpServers.map((server) => (
                 <div
                   key={server.id}
                   className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
@@ -462,8 +674,23 @@ export function SettingsPage() {
               />
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button className={actionButtonClass}>+ Add MCP server</button>
-              <button className={actionButtonClass}>Reload connections</button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void handleAddMcpServer();
+                }}
+              >
+                + Add MCP server
+              </button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void handleReloadMcpServers();
+                }}
+                disabled={mcpLoading}
+              >
+                {mcpLoading ? "Reloading…" : "Reload connections"}
+              </button>
               <button
                 className={actionButtonClass}
                 onClick={() => handleSave("mcp-servers")}
@@ -741,7 +968,14 @@ export function SettingsPage() {
               Auto-prune merged worktrees
             </label>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button className={actionButtonClass}>Run prune now</button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void handleRunPruneNow();
+                }}
+              >
+                Run prune now
+              </button>
               <button
                 className={actionButtonClass}
                 onClick={() => handleSave("worktrees")}
@@ -785,10 +1019,24 @@ export function SettingsPage() {
               Auto-archive completed threads
             </label>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button className={actionButtonClass}>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void handleLoadArchivedThreads();
+                }}
+                disabled={archivedThreadsLoading}
+              >
                 Open archived threads
               </button>
-              <button className={actionButtonClass}>Restore all</button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void handleRestoreAllArchived();
+                }}
+                disabled={archivedThreadsLoading}
+              >
+                Restore all
+              </button>
               <button
                 className={actionButtonClass}
                 onClick={() => handleSave("archived-threads")}
@@ -796,6 +1044,26 @@ export function SettingsPage() {
                 Save archive settings
               </button>
             </div>
+            {archivedThreads.length ? (
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                  Loaded archived threads
+                </p>
+                <div className="mt-2 space-y-2 text-xs text-ink-300">
+                  {archivedThreads.slice(0, 8).map((thread) => (
+                    <div
+                      key={thread.id}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate">{thread.preview}</span>
+                      <span className="shrink-0 text-ink-500">
+                        {new Date(thread.updatedAt * 1000).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
         );
     }
@@ -839,6 +1107,12 @@ export function SettingsPage() {
           </p>
           {saveMessage ? (
             <p className="mt-2 text-xs text-emerald-300">{saveMessage}</p>
+          ) : null}
+          {actionMessage ? (
+            <p className="mt-2 text-xs text-emerald-300">{actionMessage}</p>
+          ) : null}
+          {actionError ? (
+            <p className="mt-2 text-xs text-rose-300">{actionError}</p>
           ) : null}
         </section>
         {renderFormForSection(activeSectionId)}

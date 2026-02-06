@@ -22,6 +22,7 @@ import { checkoutBranch } from "@/app/services/git/worktrees";
 import { type QualityPreset, useAppUi } from "@/app/state/appUi";
 import { useEnvironmentUi } from "@/app/state/environmentUi";
 import { useThreadUi } from "@/app/state/threadUi";
+import { useRuntimeSettings } from "@/app/state/useRuntimeSettings";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
 import { workspaceNameFromPath } from "@/app/utils/workspace";
@@ -106,6 +107,7 @@ export function ThreadComposer({
   const runProgress = useRunProgress(threadId);
   const { setActiveModal } = useThreadUi();
   const { environmentMode, setEnvironmentMode } = useEnvironmentUi();
+  const runtimeSettings = useRuntimeSettings();
   const queryClient = useQueryClient();
   const {
     activeModel,
@@ -126,6 +128,7 @@ export function ThreadComposer({
   const [inlineMenu, setInlineMenu] = useState<InlineMenuState | null>(null);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
+  const [isContextLocked, setIsContextLocked] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,6 +221,10 @@ export function ThreadComposer({
   });
 
   const handleModeChange = (option: typeof environmentMode) => {
+    if (isContextLocked) {
+      setError("Unlock the composer controls to change environment.");
+      return;
+    }
     setEnvironmentMode(option);
     if (option === "worktree") {
       setActiveModal("worktree");
@@ -300,7 +307,15 @@ export function ThreadComposer({
       }
       const cwd = resolvedWorkspacePath ?? undefined;
       let targetThreadId: string | undefined = threadId;
-      if (!targetThreadId) {
+      const shouldStartNewThread =
+        !targetThreadId ||
+        runtimeSettings.followUpBehavior === "new-thread" ||
+        (runtimeSettings.followUpBehavior === "ask" &&
+          window.confirm(
+            "Start a new thread for this prompt? Click Cancel to append in the current thread.",
+          ));
+
+      if (shouldStartNewThread) {
         const newThread = await startThread({ cwd });
         targetThreadId = newThread?.id;
         if (targetThreadId) {
@@ -313,8 +328,8 @@ export function ThreadComposer({
       if (!targetThreadId) {
         throw new Error("Unable to start a new thread.");
       }
-      if (threadId) {
-        await resumeThread({ threadId });
+      if (!shouldStartNewThread) {
+        await resumeThread({ threadId: targetThreadId });
       }
       const trimmedPrompt = composerDraft.trim();
       const attachmentContext = selectedAttachments.length
@@ -353,6 +368,10 @@ export function ThreadComposer({
   }, [branchMenuOpen]);
 
   const handleBranchSelect = async (branch: string) => {
+    if (isContextLocked) {
+      setBranchError("Unlock the composer controls to change branch.");
+      return;
+    }
     setBranchError(null);
     try {
       await checkoutMutation.mutateAsync(branch);
@@ -368,6 +387,7 @@ export function ThreadComposer({
 
   const progressPercent = runProgress.percent || (isSubmitting ? 5 : 0);
   const showProgress = isRunning || isSubmitting;
+  const isCompactComposer = runtimeSettings.compactComposer;
   const workspaceLabel = resolvedWorkspacePath
     ? workspaceNameFromPath(resolvedWorkspacePath)
     : "Add workspace";
@@ -393,7 +413,9 @@ export function ThreadComposer({
         ) : null}
         <textarea
           ref={composerRef}
-          className="h-28 w-full resize-none bg-transparent p-2 text-base text-ink-100 placeholder:text-ink-500 focus:outline-none"
+          className={`w-full resize-none bg-transparent p-2 text-base text-ink-100 placeholder:text-ink-500 focus:outline-none ${
+            isCompactComposer ? "h-20" : "h-28"
+          }`}
           placeholder={
             placeholder ?? "Ask Codex anything, @ to add files, / for commands"
           }
@@ -478,7 +500,11 @@ export function ThreadComposer({
             ))}
           </div>
         ) : null}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 text-xs ${
+            isCompactComposer ? "mt-2" : "mt-3"
+          }`}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <button
               className={`rounded-full border p-2 transition ${
@@ -529,11 +555,28 @@ export function ThreadComposer({
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <button className="rounded-full border border-white/10 p-2 text-ink-300 hover:border-flare-300">
+            <button
+              className={`rounded-full border p-2 transition ${
+                isContextLocked
+                  ? "border-flare-300 bg-flare-400/10 text-ink-50"
+                  : "border-white/10 text-ink-300 hover:border-flare-300"
+              }`}
+              onClick={() => {
+                setIsContextLocked((locked) => !locked);
+                setError(null);
+              }}
+              title={
+                isContextLocked
+                  ? "Unlock composer controls"
+                  : "Lock composer controls"
+              }
+            >
               <Lock className="h-3.5 w-3.5" />
             </button>
             <button
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-flare-300 bg-flare-400/20 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-black/20 disabled:text-ink-400"
+              className={`flex items-center justify-center rounded-full border border-flare-300 bg-flare-400/20 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-black/20 disabled:text-ink-400 ${
+                isCompactComposer ? "h-9 w-9" : "h-10 w-10"
+              }`}
               onClick={() => (isBusy ? handleStop() : void handleSubmit())}
               disabled={!canSubmit && !isBusy}
             >
@@ -604,6 +647,7 @@ export function ThreadComposer({
                   : "border-white/10 text-ink-300"
               }`}
               onClick={() => handleModeChange(option)}
+              disabled={isContextLocked}
             >
               {option}
             </button>
@@ -612,7 +656,14 @@ export function ThreadComposer({
         <div className="flex flex-wrap items-center gap-2">
           <button
             className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-            onClick={() => setWorkspacePickerOpen(true)}
+            onClick={() => {
+              if (isContextLocked) {
+                setError("Unlock the composer controls to change workspace.");
+                return;
+              }
+              setWorkspacePickerOpen(true);
+            }}
+            disabled={isContextLocked}
           >
             <Settings className="h-3.5 w-3.5" />
             {workspaceLabel}
@@ -622,6 +673,7 @@ export function ThreadComposer({
             <button
               className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
               onClick={() => setBranchMenuOpen((open) => !open)}
+              disabled={isContextLocked}
             >
               <GitBranch className="h-3.5 w-3.5" />
               From {branchLabel}

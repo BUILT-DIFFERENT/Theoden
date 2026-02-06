@@ -26,6 +26,7 @@ import { useAppUi } from "@/app/state/appUi";
 import { mockEditors } from "@/app/state/settingsData";
 import { useThreadMetadata } from "@/app/state/threadMetadata";
 import { useThreadUi } from "@/app/state/threadUi";
+import { useRuntimeSettings } from "@/app/state/useRuntimeSettings";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { ThreadDetail } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
@@ -54,6 +55,7 @@ export function ThreadTopBar({
   const { reviewOpen, setActiveModal, setReviewOpen } = useThreadUi();
   const { selectedWorkspace } = useWorkspaceUi();
   const { composerDraft, setComposerDraft } = useAppUi();
+  const runtimeSettings = useRuntimeSettings();
   const { workspaces } = useWorkspaces();
   const navigate = useNavigate();
   const matchRoute = useMatchRoute();
@@ -111,6 +113,7 @@ export function ThreadTopBar({
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [openMenuOpen, setOpenMenuOpen] = useState(false);
   const [gitMenuOpen, setGitMenuOpen] = useState(false);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [runModalOpen, setRunModalOpen] = useState(false);
   const [runPrompt, setRunPrompt] = useState("");
   const [runError, setRunError] = useState<string | null>(null);
@@ -124,8 +127,13 @@ export function ThreadTopBar({
   const runMenuRef = useRef<HTMLDivElement | null>(null);
   const openMenuRef = useRef<HTMLDivElement | null>(null);
   const gitMenuRef = useRef<HTMLDivElement | null>(null);
+  const headerMenuRef = useRef<HTMLDivElement | null>(null);
   const preferredEditor =
-    mockEditors.find((editor) => editor.detected) ?? mockEditors[0];
+    mockEditors.find(
+      (editor) => editor.id === runtimeSettings.openDestination,
+    ) ??
+    mockEditors.find((editor) => editor.detected) ??
+    mockEditors[0];
   const preferredEditorName = preferredEditor?.name ?? "Editor";
   const preferredEditorCommand = preferredEditor?.command ?? "code";
 
@@ -159,6 +167,16 @@ export function ThreadTopBar({
     return () => window.removeEventListener("mousedown", handleClick);
   }, [gitMenuOpen]);
 
+  useEffect(() => {
+    if (!headerMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (headerMenuRef.current?.contains(event.target as Node)) return;
+      setHeaderMenuOpen(false);
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [headerMenuOpen]);
+
   const handleCheckoutLocal = async () => {
     const branch = metadata.branch ?? detail?.branch;
     const workspacePath = threadWorkspacePath ?? resolvedWorkspacePath;
@@ -179,7 +197,15 @@ export function ThreadTopBar({
       throw new Error("Select a workspace before running.");
     }
     let targetThreadId = threadId;
-    if (!targetThreadId) {
+    const shouldStartNewThread =
+      !targetThreadId ||
+      runtimeSettings.followUpBehavior === "new-thread" ||
+      (runtimeSettings.followUpBehavior === "ask" &&
+        window.confirm(
+          "Start a new thread for this run? Click Cancel to append in the current thread.",
+        ));
+
+    if (shouldStartNewThread) {
       const newThread = await startThread({ cwd: resolvedWorkspacePath });
       targetThreadId = newThread?.id;
       if (targetThreadId) {
@@ -366,9 +392,49 @@ export function ThreadTopBar({
         <div className="flex items-center gap-2">
           <h1 className="font-display text-lg text-ink-50">{headerTitle}</h1>
           <span className="text-xs text-ink-400">{subtitle}</span>
-          <button className="rounded-full border border-white/10 p-1 text-ink-400 hover:border-flare-300">
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+          <div className="relative" ref={headerMenuRef}>
+            <button
+              className="rounded-full border border-white/10 p-1 text-ink-400 hover:border-flare-300"
+              onClick={() => setHeaderMenuOpen((open) => !open)}
+              aria-label="Thread options"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {headerMenuOpen ? (
+              <div className="absolute left-0 top-8 z-20 w-52 rounded-2xl border border-white/10 bg-ink-900/95 p-2 text-[0.7rem] text-ink-200 shadow-card">
+                <button
+                  className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    void handleCopyContext();
+                  }}
+                >
+                  {threadId ? "Copy thread link" : "Copy workspace path"}
+                </button>
+                <button
+                  className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    void navigate({
+                      to: "/settings/$section",
+                      params: { section: "general" },
+                    });
+                  }}
+                >
+                  Open settings
+                </button>
+                <button
+                  className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    setReviewOpen(!reviewOpen);
+                  }}
+                >
+                  {reviewOpen ? "Hide review panel" : "Show review panel"}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">

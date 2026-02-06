@@ -1,4 +1,6 @@
-const SETTINGS_STORAGE_KEY = "theoden.settings";
+const SETTINGS_STORAGE_KEY = "codex.settings";
+const LEGACY_SETTINGS_STORAGE_KEY = "theoden.settings";
+const SETTINGS_UPDATED_EVENT_NAME = "codex:settings-updated";
 
 export interface StoredSettingsSnapshot {
   theme: "system" | "light" | "dark";
@@ -109,7 +111,9 @@ export function loadStoredSettings(
   }
 
   try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(SETTINGS_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
     if (!raw) {
       return fallback;
     }
@@ -120,7 +124,7 @@ export function loadStoredSettings(
       return fallback;
     }
 
-    return {
+    const settings = {
       theme: readEnum(
         record,
         "theme",
@@ -249,6 +253,13 @@ export function loadStoredSettings(
         fallback.autoArchiveCompleted,
       ),
     };
+    if (!window.localStorage.getItem(SETTINGS_STORAGE_KEY)) {
+      window.localStorage.setItem(
+        SETTINGS_STORAGE_KEY,
+        JSON.stringify(settings),
+      );
+    }
+    return settings;
   } catch (error) {
     console.warn("Failed to load stored settings", error);
     return fallback;
@@ -261,7 +272,42 @@ export function storeSettings(settings: StoredSettingsSnapshot) {
   }
   try {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    window.dispatchEvent(
+      new CustomEvent<StoredSettingsSnapshot>(SETTINGS_UPDATED_EVENT_NAME, {
+        detail: settings,
+      }),
+    );
   } catch (error) {
     console.warn("Failed to store settings", error);
   }
+}
+
+export function subscribeSettingsUpdates(
+  listener: (settings: StoredSettingsSnapshot | null) => void,
+) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+  const handleSettingsUpdate = (event: Event) => {
+    const customEvent = event as CustomEvent<StoredSettingsSnapshot>;
+    listener(customEvent.detail ?? null);
+  };
+  const handleStorage = (event: StorageEvent) => {
+    if (
+      event.key !== SETTINGS_STORAGE_KEY &&
+      event.key !== LEGACY_SETTINGS_STORAGE_KEY
+    ) {
+      return;
+    }
+    listener(null);
+  };
+  window.addEventListener(SETTINGS_UPDATED_EVENT_NAME, handleSettingsUpdate);
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    window.removeEventListener(
+      SETTINGS_UPDATED_EVENT_NAME,
+      handleSettingsUpdate,
+    );
+    window.removeEventListener("storage", handleStorage);
+  };
 }

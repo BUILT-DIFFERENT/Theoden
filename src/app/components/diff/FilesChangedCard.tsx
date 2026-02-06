@@ -4,9 +4,10 @@ import type { DiffSummary } from "@/app/types";
 
 interface FilesChangedCardProps {
   summary: DiffSummary;
+  onUndo?: () => void;
 }
 
-export function FilesChangedCard({ summary }: FilesChangedCardProps) {
+export function FilesChangedCard({ summary, onUndo }: FilesChangedCardProps) {
   return (
     <div className="rounded-2xl border border-white/10 bg-ink-900/60 p-4 shadow-card">
       <div className="flex items-center justify-between">
@@ -19,7 +20,18 @@ export function FilesChangedCard({ summary }: FilesChangedCardProps) {
             {summary.deletions}
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300">
+        <button
+          className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300"
+          onClick={() => {
+            if (onUndo) {
+              onUndo();
+              return;
+            }
+            window.dispatchEvent(
+              new CustomEvent("codex:undo-changes-requested"),
+            );
+          }}
+        >
           <RotateCcw className="h-3.5 w-3.5" />
           Undo
         </button>
