@@ -7,7 +7,7 @@ $workspace  = (Get-Location).Path
 # Multiline prompt (we'll pipe it via stdin)
 $prompt = @"
 Read \docs\custom\update-ui.md. Check progress.md. Pick the next incomplete task from plan.md.
-Implement it. Update progress.md when done.
+Implement it. Prefer retreivel-led reasoning with skills for task completion. Update progress.md when done.
 If all tasks are complete, reply ONLY with: ALL DONE
 "@
 
