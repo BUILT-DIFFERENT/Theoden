@@ -9,6 +9,7 @@ import { mockProjects, mockThreads } from "@/app/state/mockData";
 import type { Project, ThreadSummary } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
 import { formatRelativeTimeFromSeconds } from "@/app/utils/time";
+import { normalizeWorkspacePath } from "@/app/utils/workspace";
 
 function projectKeyFromCwd(cwd: string) {
   return cwd.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
@@ -74,6 +75,7 @@ export interface ThreadListOptions {
   archived?: boolean;
   modelProviders?: string[];
   sourceKinds?: string[];
+  workspacePath?: string | null;
 }
 
 function normalizeSearch(value?: string) {
@@ -85,6 +87,10 @@ export function useThreadList(options: ThreadListOptions = {}) {
   const normalizedProviders = normalizeArray(options.modelProviders);
   const normalizedSources = normalizeArray(options.sourceKinds);
   const archived = options.archived ?? false;
+  const normalizedWorkspace = useMemo(() => {
+    if (!options.workspacePath) return null;
+    return normalizeWorkspacePath(options.workspacePath).toLowerCase();
+  }, [options.workspacePath]);
   const query = useInfiniteQuery<ThreadListResponse>({
     queryKey: [
       "threads",
@@ -112,40 +118,49 @@ export function useThreadList(options: ThreadListOptions = {}) {
     const pages = query.data?.pages ?? [];
     return pages.flatMap((page) => page.data).map(mapThreadToSummary);
   }, [isDesktop, mockThreads, query.data]);
+  const workspaceThreads = useMemo(() => {
+    if (!normalizedWorkspace) return allThreads;
+    return allThreads.filter((thread) => {
+      const normalizedCwd = normalizeWorkspacePath(
+        thread.subtitle,
+      ).toLowerCase();
+      return normalizedCwd === normalizedWorkspace;
+    });
+  }, [allThreads, normalizedWorkspace]);
   const search = normalizeSearch(options.search);
   const threads = useMemo(() => {
-    if (!search) return allThreads;
-    return allThreads.filter((thread) => {
+    if (!search) return workspaceThreads;
+    return workspaceThreads.filter((thread) => {
       const haystack =
         `${thread.title} ${thread.subtitle} ${thread.projectId}`.toLowerCase();
       return haystack.includes(search);
     });
-  }, [allThreads, search]);
+  }, [search, workspaceThreads]);
   const providers = useMemo(
     () =>
       Array.from(
         new Set(
-          allThreads
+          workspaceThreads
             .map((thread) => thread.modelProvider)
             .filter((provider): provider is string => Boolean(provider)),
         ),
       ).sort(),
-    [allThreads],
+    [workspaceThreads],
   );
   const sources = useMemo(
     () =>
       Array.from(
         new Set(
-          allThreads
+          workspaceThreads
             .map((thread) => thread.source)
             .filter((source): source is string => Boolean(source)),
         ),
       ).sort(),
-    [allThreads],
+    [workspaceThreads],
   );
   const projects = useMemo(
-    () => (isDesktop ? mapThreadsToProjects(threads) : mockProjects),
-    [isDesktop, mockProjects, threads],
+    () => (isDesktop ? mapThreadsToProjects(workspaceThreads) : mockProjects),
+    [isDesktop, mockProjects, workspaceThreads],
   );
   return {
     threads,

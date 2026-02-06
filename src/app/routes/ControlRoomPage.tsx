@@ -4,12 +4,17 @@ import { useState } from "react";
 import { useActiveRuns } from "@/app/services/cli/useActiveRuns";
 import { useCloudTasks } from "@/app/services/cli/useCloudTasks";
 import { useThreadList } from "@/app/services/cli/useThreads";
+import { useWorkspaceUi } from "@/app/state/workspaceUi";
 
 export function ControlRoomPage() {
   const [search, setSearch] = useState("");
-  const { threads, allThreads, hasMore, loadMore, isFetchingMore } =
-    useThreadList({ search, limit: 25 });
-  const activeRuns = useActiveRuns(allThreads);
+  const { selectedWorkspace } = useWorkspaceUi();
+  const { threads, hasMore, loadMore, isFetchingMore } = useThreadList({
+    search,
+    limit: 25,
+    workspacePath: selectedWorkspace,
+  });
+  const activeRuns = useActiveRuns(threads);
   const {
     tasks,
     isLoading: tasksLoading,

@@ -331,17 +331,17 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 
 ### Workspace selection (P0)
 - [ ] Workspace dropdown opens from:
-  - [ ] Home header (“Let’s build {workspace}”)
+  - [x] Home header (“Let’s build {workspace}”)
   - [ ] Bottom bar gear dropdown
-  - [ ] Sidebar workspace list selection
+  - [x] Sidebar workspace list selection
 - [ ] Changing workspace updates:
-  - [ ] sidebar threads list
-  - [ ] home header label
+  - [x] sidebar threads list
+  - [x] home header label
   - [ ] bottom bar label
   - [ ] git status + branch indicator
 - [ ] Workspace list supports:
   - [ ] checkmark on active
-  - [ ] “Add new workspace” action (can be stubbed)
+  - [x] “Add new workspace” action (can be stubbed)
 
 ### Buttons do something (P0)
 - [ ] `Run` dispatches `runActiveThread()` or `runWorkspaceTask()`

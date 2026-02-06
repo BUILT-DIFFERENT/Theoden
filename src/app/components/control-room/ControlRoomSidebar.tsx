@@ -10,12 +10,13 @@ export function ControlRoomSidebar() {
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/threads/$threadId" });
   const selectedThreadId = threadMatch ? threadMatch.threadId : undefined;
-  const { projects, threads, providers, sources } = useThreadList({
-    limit: 25,
-  });
-  const { workspaces } = useWorkspaces();
   const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
     useWorkspaceUi();
+  const { projects, threads, providers, sources } = useThreadList({
+    limit: 25,
+    workspacePath: selectedWorkspace,
+  });
+  const { workspaces } = useWorkspaces();
 
   const recents = useMemo(() => threads.slice(0, 6), [threads]);
   const providerTags = useMemo(

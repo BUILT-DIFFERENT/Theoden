@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { unarchiveThread } from "@/app/services/cli/threads";
 import { useThreadList } from "@/app/services/cli/useThreads";
+import { useWorkspaceUi } from "@/app/state/workspaceUi";
 
 export function ThreadsPage() {
   const [search, setSearch] = useState("");
   const [archivedOnly, setArchivedOnly] = useState(false);
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
   const [sourceFilters, setSourceFilters] = useState<string[]>([]);
+  const { selectedWorkspace } = useWorkspaceUi();
   const {
     threads,
     providers,
@@ -24,6 +26,7 @@ export function ThreadsPage() {
     modelProviders: providerFilters,
     sourceKinds: sourceFilters,
     limit: 40,
+    workspacePath: selectedWorkspace,
   });
   const queryClient = useQueryClient();
   const unarchive = useMutation({
