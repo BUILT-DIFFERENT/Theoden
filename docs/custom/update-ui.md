@@ -347,7 +347,7 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 - [x] `Run` dispatches `runActiveThread()` or `runWorkspaceTask()`
 - [x] `Open` opens a menu and dispatches open actions
 - [ ] Sidebar nav changes routes
-- [ ] Skills/Automations CTAs open modals / routes
+- [x] Skills/Automations CTAs open modals / routes
 
 ### Thread lifecycle (P1)
 - [ ] New thread creation in active workspace
