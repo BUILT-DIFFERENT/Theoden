@@ -15,7 +15,7 @@ const rootRoute = new RootRoute({
 
 const controlRoomRoute = new Route({
   getParentRoute: () => rootRoute,
-  path: "/",
+  path: "/control-room",
   component: ControlRoomPage,
 });
 
@@ -27,7 +27,7 @@ const threadRoute = new Route({
 
 const newThreadRoute = new Route({
   getParentRoute: () => rootRoute,
-  path: "/threads/new",
+  path: "/",
   component: NewThreadPage,
 });
 

@@ -49,7 +49,7 @@ export function ControlRoomSidebar() {
 
       <nav className="space-y-1 text-sm">
         <Link
-          to="/threads/new"
+          to="/"
           className="flex items-center justify-between rounded-xl px-3 py-2 text-ink-200 transition hover:bg-white/5 hover:text-ink-50"
         >
           <span>New thread</span>

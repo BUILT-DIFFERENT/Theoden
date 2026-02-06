@@ -20,7 +20,7 @@ import { isTauri } from "@/app/utils/tauri";
 export function AppShell() {
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/threads/$threadId" });
-  const newThreadMatch = matchRoute({ to: "/threads/new" });
+  const newThreadMatch = matchRoute({ to: "/" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const { thread } = useThreadDetail(threadId);
   const showThreadHeader = Boolean(threadMatch || newThreadMatch);

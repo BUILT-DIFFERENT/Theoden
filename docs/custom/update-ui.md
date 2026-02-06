@@ -346,7 +346,7 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 ### Buttons do something (P0)
 - [x] `Run` dispatches `runActiveThread()` or `runWorkspaceTask()`
 - [x] `Open` opens a menu and dispatches open actions
-- [ ] Sidebar nav changes routes
+- [x] Sidebar nav changes routes
 - [x] Skills/Automations CTAs open modals / routes
 
 ### Thread lifecycle (P1)
