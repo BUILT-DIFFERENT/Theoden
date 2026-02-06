@@ -291,7 +291,7 @@ impl Codex {
         let enabled_skills = loaded_skills.enabled_skills();
         let user_instructions = get_user_instructions(&config, Some(&enabled_skills)).await;
 
-        let exec_policy = ExecPolicyManager::load(&config.features, &config.config_layer_stack)
+        let exec_policy = ExecPolicyManager::load(&config.config_layer_stack)
             .await
             .map_err(|err| CodexErr::Fatal(format!("failed to load rules: {err}")))?;
 
@@ -1115,6 +1115,12 @@ impl Session {
             sandbox_cwd: session_configuration.cwd.clone(),
             use_linux_sandbox_bwrap: config.features.enabled(Feature::UseLinuxSandboxBwrap),
         };
+        let mut required_mcp_servers: Vec<String> = mcp_servers
+            .iter()
+            .filter(|(_, server)| server.enabled && server.required)
+            .map(|(name, _)| name.clone())
+            .collect();
+        required_mcp_servers.sort();
         let cancel_token = sess.mcp_startup_cancellation_token().await;
 
         sess.services
@@ -1130,6 +1136,25 @@ impl Session {
                 sandbox_state,
             )
             .await;
+        if !required_mcp_servers.is_empty() {
+            let failures = sess
+                .services
+                .mcp_connection_manager
+                .read()
+                .await
+                .required_startup_failures(&required_mcp_servers)
+                .await;
+            if !failures.is_empty() {
+                let details = failures
+                    .iter()
+                    .map(|failure| format!("{}: {}", failure.server, failure.error))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(anyhow::anyhow!(
+                    "required MCP servers failed to initialize: {details}"
+                ));
+            }
+        }
 
         // record_initial_history can emit events. We record only after the SessionConfiguredEvent is emitted.
         sess.record_initial_history(initial_history).await;
@@ -1681,7 +1706,6 @@ impl Session {
         &self,
         amendment: &ExecPolicyAmendment,
     ) -> Result<(), ExecPolicyUpdateError> {
-        let features = self.features.clone();
         let codex_home = self
             .state
             .lock()
@@ -1689,11 +1713,6 @@ impl Session {
             .session_configuration
             .codex_home()
             .clone();
-
-        if !features.enabled(Feature::ExecPolicy) {
-            error!("attempted to append execpolicy rule while execpolicy feature is disabled");
-            return Err(ExecPolicyUpdateError::FeatureDisabled);
-        }
 
         self.services
             .exec_policy
