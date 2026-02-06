@@ -152,7 +152,7 @@ export function ThreadsPage() {
                       </div>
                       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
                         <Link
-                          to="/threads/$threadId"
+                          to="/t/$threadId"
                           params={{ threadId: thread.id }}
                           className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
                         >

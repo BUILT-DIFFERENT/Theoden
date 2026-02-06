@@ -33,7 +33,7 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
   const { workspaces } = useWorkspaces();
   const navigate = useNavigate();
   const matchRoute = useMatchRoute();
-  const threadMatch = matchRoute({ to: "/threads/$threadId" });
+  const threadMatch = matchRoute({ to: "/t/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const { metadata } = useThreadMetadata(threadId);
   const detail = thread ?? mockThreadDetail;
@@ -139,7 +139,7 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
         targetThreadId = newThread?.id;
         if (targetThreadId) {
           await navigate({
-            to: "/threads/$threadId",
+            to: "/t/$threadId",
             params: { threadId: targetThreadId },
           });
         }

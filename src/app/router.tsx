@@ -1,27 +1,21 @@
-import { RootRoute, Route, Router } from "@tanstack/react-router";
+import { Navigate, RootRoute, Route, Router } from "@tanstack/react-router";
 
 import { AppShell } from "@/app/components/layout/AppShell";
 import { AutomationsPage } from "@/app/routes/AutomationsPage";
-import { ControlRoomPage } from "@/app/routes/ControlRoomPage";
 import { NewThreadPage } from "@/app/routes/NewThreadPage";
 import { SettingsPage } from "@/app/routes/SettingsPage";
 import { SkillsPage } from "@/app/routes/SkillsPage";
 import { ThreadPage } from "@/app/routes/ThreadPage";
 import { ThreadsPage } from "@/app/routes/ThreadsPage";
+import { defaultSettingsSection } from "@/app/state/settingsData";
 
 const rootRoute = new RootRoute({
   component: AppShell,
 });
 
-const controlRoomRoute = new Route({
-  getParentRoute: () => rootRoute,
-  path: "/control-room",
-  component: ControlRoomPage,
-});
-
 const threadRoute = new Route({
   getParentRoute: () => rootRoute,
-  path: "/threads/$threadId",
+  path: "/t/$threadId",
   component: ThreadPage,
 });
 
@@ -46,6 +40,18 @@ const automationsRoute = new Route({
 const settingsRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/settings",
+  component: () => (
+    <Navigate
+      to="/settings/$section"
+      params={{ section: defaultSettingsSection }}
+      replace
+    />
+  ),
+});
+
+const settingsSectionRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/settings/$section",
   component: SettingsPage,
 });
 
@@ -56,12 +62,12 @@ const skillsRoute = new Route({
 });
 
 const routeTree = rootRoute.addChildren([
-  controlRoomRoute,
   threadListRoute,
   newThreadRoute,
   threadRoute,
   automationsRoute,
   settingsRoute,
+  settingsSectionRoute,
   skillsRoute,
 ]);
 

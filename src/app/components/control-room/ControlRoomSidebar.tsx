@@ -8,7 +8,7 @@ import { useWorkspaceUi } from "@/app/state/workspaceUi";
 
 export function ControlRoomSidebar() {
   const matchRoute = useMatchRoute();
-  const threadMatch = matchRoute({ to: "/threads/$threadId" });
+  const threadMatch = matchRoute({ to: "/t/$threadId" });
   const selectedThreadId = threadMatch ? threadMatch.threadId : undefined;
   const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
     useWorkspaceUi();
@@ -89,7 +89,7 @@ export function ControlRoomSidebar() {
               return (
                 <Link
                   key={thread.id}
-                  to="/threads/$threadId"
+                  to="/t/$threadId"
                   params={{ threadId: thread.id }}
                   className={`flex items-center justify-between rounded-xl px-3 py-2 transition ${
                     isSelected
@@ -198,7 +198,8 @@ export function ControlRoomSidebar() {
 
       <div className="mt-auto pt-6 text-xs text-ink-400">
         <Link
-          to="/settings"
+          to="/settings/$section"
+          params={{ section: "general" }}
           className="flex items-center gap-2 rounded-xl px-3 py-2 transition hover:bg-white/5 hover:text-ink-50"
         >
           <Settings className="h-3.5 w-3.5" />

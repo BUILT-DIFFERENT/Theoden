@@ -84,7 +84,7 @@ interface DiffPanelProps {
 export function DiffPanel({ thread }: DiffPanelProps) {
   const { setActiveModal, setReviewOpen } = useThreadUi();
   const matchRoute = useMatchRoute();
-  const threadMatch = matchRoute({ to: "/threads/$threadId" });
+  const threadMatch = matchRoute({ to: "/t/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const detail = thread ?? mockThreadDetail;
   const workspacePath = detail.subtitle;

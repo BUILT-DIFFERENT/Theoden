@@ -13,7 +13,7 @@ import { useThreadUi } from "@/app/state/threadUi";
 import type { ThreadMessage } from "@/app/types";
 
 export function ThreadPage() {
-  const { threadId } = useParams({ from: "/threads/$threadId" });
+  const { threadId } = useParams({ from: "/t/$threadId" });
   const { thread, messages } = useThreadDetail(threadId);
   const { setReviewOpen } = useThreadUi();
   const [optimisticMessages, setOptimisticMessages] = useState<ThreadMessage[]>(

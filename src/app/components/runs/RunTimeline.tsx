@@ -35,7 +35,7 @@ function highlightDiffTokens(text: string) {
 }
 
 export function RunTimeline() {
-  const { threadId } = useParams({ from: "/threads/$threadId" });
+  const { threadId } = useParams({ from: "/t/$threadId" });
   const liveEvents = useAppServerEvents(threadId);
   const { thread } = useThreadDetail(threadId);
   const storedEvents = thread?.events ?? mockThreadDetail.events;

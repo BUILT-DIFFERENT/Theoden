@@ -45,7 +45,7 @@ export function ThreadComposer({
   onSubmitted,
 }: ThreadComposerProps) {
   const matchRoute = useMatchRoute();
-  const threadMatch = matchRoute({ to: "/threads/$threadId" });
+  const threadMatch = matchRoute({ to: "/t/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const navigate = useNavigate();
   const { thread: threadDetail } = useThreadDetail(threadId);
@@ -119,7 +119,7 @@ export function ThreadComposer({
         targetThreadId = newThread?.id;
         if (targetThreadId) {
           await navigate({
-            to: "/threads/$threadId",
+            to: "/t/$threadId",
             params: { threadId: targetThreadId },
           });
         }
