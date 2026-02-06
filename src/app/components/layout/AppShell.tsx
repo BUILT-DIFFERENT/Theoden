@@ -1,4 +1,4 @@
-import { Link, Outlet, useMatchRoute } from "@tanstack/react-router";
+import { Outlet, useMatchRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { ControlRoomSidebar } from "@/app/components/control-room/ControlRoomSidebar";
@@ -80,44 +80,7 @@ export function AppShell() {
                   thread={thread}
                   isNewThread={Boolean(newThreadMatch)}
                 />
-              ) : (
-                <header className="flex items-center justify-between border-b border-white/5 px-6 py-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-ink-300">
-                      Command Center
-                    </p>
-                    <h1 className="font-display text-2xl">
-                      Threads, runs, and outcomes
-                    </h1>
-                  </div>
-                  <nav className="flex items-center gap-3 text-sm text-ink-200">
-                    <Link
-                      to="/"
-                      className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
-                    >
-                      Control Room
-                    </Link>
-                    <Link
-                      to="/threads"
-                      className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
-                    >
-                      Threads
-                    </Link>
-                    <Link
-                      to="/skills"
-                      className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
-                    >
-                      Skills
-                    </Link>
-                    <Link
-                      to="/settings"
-                      className="rounded-full border border-white/10 px-3 py-1.5 hover:border-flare-300"
-                    >
-                      Settings
-                    </Link>
-                  </nav>
-                </header>
-              )}
+              ) : null}
               <div
                 className={
                   showReviewPanel

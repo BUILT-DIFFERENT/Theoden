@@ -330,16 +330,16 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 ## 5. Required Interaction Wiring (Acceptance Criteria)
 
 ### Workspace selection (P0)
-- [ ] Workspace dropdown opens from:
+- [x] Workspace dropdown opens from:
   - [x] Home header (“Let’s build {workspace}”)
   - [x] Bottom bar gear dropdown
   - [x] Sidebar workspace list selection
-- [ ] Changing workspace updates:
+- [x] Changing workspace updates:
   - [x] sidebar threads list
   - [x] home header label
   - [x] bottom bar label
   - [x] git status + branch indicator
-- [ ] Workspace list supports:
+- [x] Workspace list supports:
   - [x] checkmark on active
   - [x] “Add new workspace” action (can be stubbed)
 
@@ -414,19 +414,19 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 ## 8. QA / Parity Checklist (Ship Gate)
 
 ### P0 Gate
-- [ ] Workspace picker fully functional (state + UI propagation)
-- [ ] All primary buttons dispatch actions and produce visible state change
-- [ ] Sidebar nav routes correctly
-- [ ] Home layout matches reference hierarchy (centered stack + 3-across cards + composer)
+- [x] Workspace picker fully functional (state + UI propagation)
+- [x] All primary buttons dispatch actions and produce visible state change
+- [x] Sidebar nav routes correctly
+- [x] Home layout matches reference hierarchy (centered stack + 3-across cards + composer)
 
 ### P1 Gate
-- [ ] Thread view exists and works (messages + follow-up composer)
-- [ ] Git diff panel exists with staged/unstaged tabs + file list + hunks
+- [x] Thread view exists and works (messages + follow-up composer)
+- [x] Git diff panel exists with staged/unstaged tabs + file list + hunks
 - [ ] Bottom bar environment + branch dropdowns are interactive
 
 ### P2 Gate
-- [ ] Automations: create modal + listing
-- [ ] Skills: search + installed/recommended + detail modal
+- [x] Automations: create modal + listing
+- [x] Skills: search + installed/recommended + detail modal
 - [ ] Settings: left-nav + core settings forms
 
 ---

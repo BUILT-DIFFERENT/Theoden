@@ -1,4 +1,10 @@
-import { ChevronDown, Cloud, Sparkles } from "lucide-react";
+import {
+  ChevronDown,
+  Cloud,
+  FileCode2,
+  ListChecks,
+  ShieldAlert,
+} from "lucide-react";
 
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
@@ -9,9 +15,21 @@ interface ThreadEmptyStateProps {
 }
 
 const starterPrompts = [
-  "Create a classic snake game",
-  "Find and fix a bugs in my code",
-  "Summarize this app in a $pdf",
+  {
+    id: "game",
+    label: "Create a classic snake game",
+    Icon: FileCode2,
+  },
+  {
+    id: "bugfix",
+    label: "Find and fix bugs in my code",
+    Icon: ShieldAlert,
+  },
+  {
+    id: "summary",
+    label: "Summarize this app in a PDF",
+    Icon: ListChecks,
+  },
 ];
 
 export function ThreadEmptyState({ onSelectPrompt }: ThreadEmptyStateProps) {
@@ -24,7 +42,7 @@ export function ThreadEmptyState({ onSelectPrompt }: ThreadEmptyStateProps) {
     ? workspaceNameFromPath(resolvedWorkspace)
     : "Add workspace";
   return (
-    <div className="py-10 text-center">
+    <div className="mx-auto flex w-full max-w-4xl flex-col items-center py-10 text-center">
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/10 text-ink-200">
         <Cloud className="h-6 w-6" />
       </div>
@@ -43,15 +61,17 @@ export function ThreadEmptyState({ onSelectPrompt }: ThreadEmptyStateProps) {
         {label}
         <ChevronDown className="h-3.5 w-3.5" />
       </button>
-      <div className="mt-8 flex flex-wrap justify-center gap-3 text-sm">
+      <div className="mt-8 grid w-full gap-3 text-left text-sm md:grid-cols-3">
         {starterPrompts.map((prompt) => (
           <button
-            key={prompt}
-            className="group inline-flex items-center gap-2 rounded-full px-4 py-2 text-ink-200 transition hover:bg-white/5 hover:text-ink-50"
-            onClick={() => onSelectPrompt(prompt)}
+            key={prompt.id}
+            className="group flex h-28 flex-col justify-between rounded-2xl border border-white/10 bg-black/20 p-4 text-ink-200 transition hover:border-flare-300 hover:bg-black/30 hover:text-ink-50"
+            onClick={() => onSelectPrompt(prompt.label)}
           >
-            <Sparkles className="h-4 w-4 text-ink-400 transition group-hover:text-ink-200" />
-            <span>{prompt}</span>
+            <div className="flex justify-end">
+              <prompt.Icon className="h-4 w-4 text-ink-400 transition group-hover:text-ink-200" />
+            </div>
+            <span className="leading-relaxed">{prompt.label}</span>
           </button>
         ))}
       </div>
