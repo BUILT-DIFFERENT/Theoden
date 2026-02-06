@@ -1,74 +1,69 @@
-# Theoden Command Center (Desktop)
+# Codex Desktop (Tauri + React)
 
-This repo includes a Windows-first desktop app scaffold (Tauri + React) that acts as a UI wrapper around the Codex CLI. It is intentionally threads-first and run-timeline-first, with the CLI (`codex app-server` and `codex cloud exec`) as the source of truth.
+This repository contains a desktop app shell for Codex.
+The UI runs in Tauri/React and talks to `codex app-server` for thread, turn, config, skills, and command APIs.
 
-Key docs:
+## What Is In This Repo
 
-- `docs/product/PHILOSOPHY.md`
-- `docs/product/WORKFLOW_UI.md`
-- `docs/product/ARCHITECTURE.md`
-- `docs/platform/APP_SERVER.md`
-- `docs/product/UI_SPEC.md`
-- `docs/product/ROADMAP.md`
+- `src/`: React app (routes, components, state, services)
+- `src-tauri/`: Tauri host (window/menu setup, app-server bridge commands)
+- `codex-rs/`: Rust workspace for Codex core/app-server/protocol crates
+- `docs/custom/`: implementation and parity plan docs
 
----
+## Current App Routes
 
-<p align="center"><code>npm i -g @openai/codex</code><br />or <code>brew install --cask codex</code></p>
-<p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.
-<p align="center">
-  <img src="https://github.com/openai/codex/blob/main/.github/codex-cli-splash.png" alt="Codex CLI splash" width="80%" />
-</p>
-</br>
-If you want Codex in your code editor (VS Code, Cursor, Windsurf), <a href="https://developers.openai.com/codex/ide">install in your IDE.</a>
-</br>If you are looking for the <em>cloud-based agent</em> from OpenAI, <strong>Codex Web</strong>, go to <a href="https://chatgpt.com/codex">chatgpt.com/codex</a>.</p>
+- `/`: new thread onboarding + composer
+- `/t/$threadId`: active thread, messages, run timeline, approvals, review panel
+- `/automations`: automation rules and runs
+- `/skills`: local/remote skill management
+- `/settings/$section`: runtime/config/settings surfaces
 
----
+## Prerequisites
+
+- Node.js `>=22`
+- pnpm `>=10.28`
+- Rust toolchain + Cargo (for Tauri host and `codex-rs` work)
+- Platform-native Tauri prerequisites
+- `codex` CLI available on `PATH` (desktop shell starts `codex app-server`)
 
 ## Quickstart
 
-### Installing and running Codex CLI
-
-Install globally with your preferred package manager:
-
-```shell
-# Install using npm
-npm install -g @openai/codex
+```bash
+pnpm install
+pnpm app:dev
 ```
 
-```shell
-# Install using Homebrew
-brew install --cask codex
+Run as desktop app:
+
+```bash
+pnpm app:tauri dev
 ```
 
-Then simply run `codex` to get started.
+Build frontend bundle:
 
-<details>
-<summary>You can also go to the <a href="https://github.com/openai/codex/releases/latest">latest GitHub Release</a> and download the appropriate binary for your platform.</summary>
+```bash
+pnpm app:build
+```
 
-Each GitHub Release contains many executables, but in practice, you likely want one of these:
+## Common Commands
 
-- macOS
-  - Apple Silicon/arm64: `codex-aarch64-apple-darwin.tar.gz`
-  - x86_64 (older Mac hardware): `codex-x86_64-apple-darwin.tar.gz`
-- Linux
-  - x86_64: `codex-x86_64-unknown-linux-musl.tar.gz`
-  - arm64: `codex-aarch64-unknown-linux-musl.tar.gz`
+- `pnpm format:app` / `pnpm format:app:fix`
+- `pnpm lint` / `pnpm lint:fix`
+- `pnpm app:test`
+- `pnpm app:build`
 
-Each archive contains a single entry with the platform baked into the name (e.g., `codex-x86_64-unknown-linux-musl`), so you likely want to rename it to `codex` after extracting it.
+## Architecture Summary
 
-</details>
+- Frontend service calls use app-server JSON-RPC methods (for example `thread/*`, `turn/*`, `config/*`, `skills/*`, `command/exec`).
+- `src-tauri/src/main.rs` owns process lifecycle for `codex app-server` and forwards notifications/requests into the webview.
+- Workspace-aware UI state is centralized in React providers under `src/app/state`.
+- Git operations and diff/review actions are wired through `src/app/services/git`.
 
-### Using Codex with your ChatGPT plan
+## Documentation
 
-Run `codex` and select **Sign in with ChatGPT**. We recommend signing into your ChatGPT account to use Codex as part of your Plus, Pro, Team, Edu, or Enterprise plan. [Learn more about what's included in your ChatGPT plan](https://help.openai.com/en/articles/11369540-codex-in-chatgpt).
+- Parity and execution plan: `docs/custom/plan.md`
+- Manual checklist: `docs/custom/parity-checklist.md`
 
-You can also use Codex with an API key, but this requires [additional setup](https://developers.openai.com/codex/auth#sign-in-with-an-api-key).
+## License
 
-## Docs
-
-- [**Codex Documentation**](https://developers.openai.com/codex)
-- [**Contributing**](./docs/legal/contributing.md)
-- [**Installing & building**](./docs/cli/install.md)
-- [**Open source fund**](./docs/legal/open-source-fund.md)
-
-This repository is licensed under the [Apache-2.0 License](LICENSE).
+See `LICENSE` for license terms.

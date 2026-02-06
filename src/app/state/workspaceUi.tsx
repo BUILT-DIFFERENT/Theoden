@@ -19,6 +19,8 @@ import { normalizeWorkspacePath } from "@/app/utils/workspace";
 export interface WorkspaceUiState {
   selectedWorkspace: string | null;
   setSelectedWorkspace: (path: string | null) => void;
+  unavailableWorkspace: string | null;
+  dismissUnavailableWorkspace: () => void;
   workspacePickerOpen: boolean;
   setWorkspacePickerOpen: (open: boolean) => void;
 }
@@ -38,14 +40,17 @@ export function WorkspaceUiProvider({ children }: { children: ReactNode }) {
   const [selectedWorkspace, setSelectedWorkspaceState] = useState<
     string | null
   >(() => loadSelectedWorkspace());
+  const [unavailableWorkspace, setUnavailableWorkspace] = useState<
+    string | null
+  >(null);
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
 
   useEffect(() => {
-    if (selectedWorkspace || !workspaces.length) {
+    if (selectedWorkspace || !workspaces.length || unavailableWorkspace) {
       return;
     }
     setSelectedWorkspaceState(workspaces[0].path);
-  }, [selectedWorkspace, workspaces]);
+  }, [selectedWorkspace, unavailableWorkspace, workspaces]);
 
   useEffect(() => {
     if (!selectedWorkspace) {
@@ -58,17 +63,46 @@ export function WorkspaceUiProvider({ children }: { children: ReactNode }) {
         normalizeWorkspacePath(workspace.path).toLowerCase() ===
         selectedWorkspaceKey,
     );
-    if (!matchingWorkspace || matchingWorkspace.path === selectedWorkspace) {
+    if (!matchingWorkspace) {
+      setUnavailableWorkspace(selectedWorkspace);
+      if (workspaces.length) {
+        setSelectedWorkspaceState(workspaces[0].path);
+      } else {
+        setSelectedWorkspaceState(null);
+      }
+      setWorkspacePickerOpen(true);
       return;
     }
-    setSelectedWorkspaceState(matchingWorkspace.path);
-  }, [selectedWorkspace, workspaces]);
+    if (matchingWorkspace.path !== selectedWorkspace) {
+      setSelectedWorkspaceState(matchingWorkspace.path);
+    }
+    if (unavailableWorkspace === selectedWorkspace) {
+      setUnavailableWorkspace(null);
+    }
+  }, [selectedWorkspace, unavailableWorkspace, workspaces]);
+
+  useEffect(() => {
+    if (!unavailableWorkspace) {
+      return;
+    }
+    const unavailableKey = normalizeWorkspacePath(unavailableWorkspace)
+      .toLowerCase()
+      .trim();
+    const hasRecoveredWorkspace = workspaces.some(
+      (workspace) =>
+        normalizeWorkspacePath(workspace.path).toLowerCase() === unavailableKey,
+    );
+    if (hasRecoveredWorkspace) {
+      setUnavailableWorkspace(null);
+    }
+  }, [unavailableWorkspace, workspaces]);
 
   useEffect(() => {
     storeSelectedWorkspace(selectedWorkspace);
   }, [selectedWorkspace]);
 
   const setSelectedWorkspace = useCallback((path: string | null) => {
+    setUnavailableWorkspace(null);
     if (!path) {
       setSelectedWorkspaceState(null);
       return;
@@ -76,14 +110,26 @@ export function WorkspaceUiProvider({ children }: { children: ReactNode }) {
     setSelectedWorkspaceState(normalizeWorkspacePath(path));
   }, []);
 
+  const dismissUnavailableWorkspace = useCallback(() => {
+    setUnavailableWorkspace(null);
+  }, []);
+
   const value = useMemo(
     () => ({
       selectedWorkspace,
       setSelectedWorkspace,
+      unavailableWorkspace,
+      dismissUnavailableWorkspace,
       workspacePickerOpen,
       setWorkspacePickerOpen,
     }),
-    [selectedWorkspace, setSelectedWorkspace, workspacePickerOpen],
+    [
+      dismissUnavailableWorkspace,
+      selectedWorkspace,
+      setSelectedWorkspace,
+      unavailableWorkspace,
+      workspacePickerOpen,
+    ],
   );
 
   return (

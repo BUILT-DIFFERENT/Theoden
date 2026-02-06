@@ -1,71 +1,91 @@
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  installRemoteSkillExperimental,
+  listRemoteSkillsExperimental,
+  listSkills,
+  writeSkillEnabled,
+  type RemoteSkillCatalogEntry,
+  type SkillCatalogSkill,
+} from "@/app/services/cli/skills";
+import { startThread, startTurn } from "@/app/services/cli/turns";
+import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useAppUi } from "@/app/state/appUi";
 import { mockInstalledSkills, mockRemoteSkills } from "@/app/state/skillsData";
-import type { RemoteSkillSummary, SkillSummary } from "@/app/types";
+import { useRuntimeSettings } from "@/app/state/useRuntimeSettings";
+import { useWorkspaceUi } from "@/app/state/workspaceUi";
+import type { SkillSource } from "@/app/types";
+import { isTauri } from "@/app/utils/tauri";
 
-const SKILLS_STORAGE_KEY = "codex.skills.installed";
-const LEGACY_SKILLS_STORAGE_KEY = "theoden.skills.installed";
-
-function loadStoredInstalledSkillIds() {
-  const fallback = new Set(mockInstalledSkills.map((skill) => skill.id));
-  if (typeof window === "undefined") {
-    return fallback;
-  }
-  try {
-    const raw =
-      window.localStorage.getItem(SKILLS_STORAGE_KEY) ??
-      window.localStorage.getItem(LEGACY_SKILLS_STORAGE_KEY);
-    if (!raw) {
-      return fallback;
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return fallback;
-    }
-    const installedSkillIds = new Set([
-      ...fallback,
-      ...parsed.filter((value): value is string => typeof value === "string"),
-    ]);
-    if (!window.localStorage.getItem(SKILLS_STORAGE_KEY)) {
-      window.localStorage.setItem(
-        SKILLS_STORAGE_KEY,
-        JSON.stringify(Array.from(installedSkillIds.values()).sort()),
-      );
-    }
-    return installedSkillIds;
-  } catch {
-    return fallback;
-  }
+interface InstalledSkillCard {
+  kind: "local";
+  id: string;
+  name: string;
+  description: string;
+  documentation: string;
+  version: string;
+  source: SkillSource;
+  permissions: string[];
+  path: string;
+  enabled: boolean;
+  defaultPrompt: string | null;
+  scope: "user" | "repo" | "system" | "admin";
 }
 
-function storeInstalledSkillIds(ids: Set<string>) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    const serializableIds = Array.from(ids.values()).sort();
-    window.localStorage.setItem(
-      SKILLS_STORAGE_KEY,
-      JSON.stringify(serializableIds),
-    );
-  } catch {
-    // Best-effort only.
-  }
+interface RemoteSkillCard {
+  kind: "remote";
+  id: string;
+  name: string;
+  description: string;
+  documentation: string;
+  version: string;
+  source: SkillSource;
+  publisher: string;
+  tags: string[];
+  installable: boolean;
 }
 
-function remoteSkillToInstalled(skill: RemoteSkillSummary): SkillSummary {
+type SkillDetail = InstalledSkillCard | RemoteSkillCard;
+
+function sourceFromScope(scope: InstalledSkillCard["scope"]): SkillSource {
+  if (scope === "system" || scope === "admin") {
+    return "Team";
+  }
+  return "Community";
+}
+
+function mapInstalledSkill(skill: SkillCatalogSkill): InstalledSkillCard {
   return {
+    kind: "local",
     id: skill.id,
     name: skill.name,
     description: skill.description,
     documentation: skill.documentation,
-    installed: true,
-    version: skill.version,
-    source: skill.source,
-    permissions: skill.tags.length ? skill.tags : ["workspace"],
+    version: "local",
+    source: sourceFromScope(skill.scope),
+    permissions: skill.permissions,
+    path: skill.path,
+    enabled: skill.enabled,
+    defaultPrompt: skill.defaultPrompt,
+    scope: skill.scope,
+  };
+}
+
+function mapRemoteSkill(skill: RemoteSkillCatalogEntry): RemoteSkillCard {
+  return {
+    kind: "remote",
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    documentation: skill.description,
+    version: "preview",
+    source: "Community",
+    publisher: "Codex Catalog",
+    tags: ["remote"],
+    installable: true,
   };
 }
 
@@ -99,26 +119,67 @@ function renderDocumentationBlocks(documentation: string) {
     });
 }
 
+function dedupeInstalledSkills(skills: InstalledSkillCard[]) {
+  const byPath = new Map<string, InstalledSkillCard>();
+  skills.forEach((skill) => {
+    const existing = byPath.get(skill.path);
+    if (!existing) {
+      byPath.set(skill.path, skill);
+      return;
+    }
+    byPath.set(skill.path, {
+      ...existing,
+      enabled: existing.enabled || skill.enabled,
+      permissions: Array.from(
+        new Set([...existing.permissions, ...skill.permissions]),
+      ).sort(),
+    });
+  });
+  return Array.from(byPath.values());
+}
+
 export function SkillsPage() {
   const navigate = useNavigate();
   const { setComposerDraft } = useAppUi();
+  const runtimeSettings = useRuntimeSettings();
+  const { workspaces } = useWorkspaces();
+  const { selectedWorkspace } = useWorkspaceUi();
   const [search, setSearch] = useState("");
   const [newSkillOpen, setNewSkillOpen] = useState(false);
-  const [installedSkillIds, setInstalledSkillIds] = useState<Set<string>>(() =>
-    loadStoredInstalledSkillIds(),
-  );
-  const [customSkills, setCustomSkills] = useState<SkillSummary[]>([]);
-  const [detailSkill, setDetailSkill] = useState<
-    SkillSummary | RemoteSkillSummary | null
-  >(null);
+  const [detailSkill, setDetailSkill] = useState<SkillDetail | null>(null);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [detailMessage, setDetailMessage] = useState<string | null>(null);
-  const [skillName, setSkillName] = useState("");
-  const [skillDescription, setSkillDescription] = useState("");
+  const [skillPath, setSkillPath] = useState("");
   const [skillError, setSkillError] = useState<string | null>(null);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
-  const skillNameInputId = "new-skill-name";
-  const skillDescriptionInputId = "new-skill-description";
+  const [submittingSkillAction, setSubmittingSkillAction] = useState(false);
+  const skillPathInputId = "new-skill-path";
+  const isDesktop = isTauri();
+  const resolvedWorkspace = selectedWorkspace ?? workspaces[0]?.path ?? null;
+  const remoteSkillsFeatureEnabled =
+    isDesktop &&
+    runtimeSettings.allowCommunitySkills &&
+    (runtimeSettings.showExperimentalConfig ||
+      import.meta.env.VITE_ENABLE_REMOTE_SKILLS === "1");
+
+  const localSkillsQuery = useQuery({
+    queryKey: ["skills", "list", resolvedWorkspace],
+    queryFn: () =>
+      listSkills({
+        cwds: resolvedWorkspace ? [resolvedWorkspace] : undefined,
+        forceReload: false,
+      }),
+    enabled: isDesktop,
+    refetchOnWindowFocus: isDesktop && runtimeSettings.autoRefreshSkills,
+  });
+
+  const remoteSkillsQuery = useQuery({
+    queryKey: ["skills", "remote", "read"],
+    queryFn: listRemoteSkillsExperimental,
+    enabled: remoteSkillsFeatureEnabled,
+    staleTime: 1000 * 60,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
     if (!refreshMessage) {
@@ -130,136 +191,260 @@ export function SkillsPage() {
     return () => window.clearTimeout(timeoutId);
   }, [refreshMessage]);
 
-  useEffect(() => {
-    storeInstalledSkillIds(installedSkillIds);
-  }, [installedSkillIds]);
+  const localSkills = useMemo(() => {
+    if (!isDesktop) {
+      return mockInstalledSkills.map(
+        (skill) =>
+          ({
+            kind: "local",
+            id: skill.id,
+            name: skill.name,
+            description: skill.description,
+            documentation: skill.documentation,
+            version: skill.version,
+            source: skill.source,
+            permissions: skill.permissions,
+            path: skill.id,
+            enabled: true,
+            defaultPrompt: null,
+            scope: "repo",
+          }) satisfies InstalledSkillCard,
+      );
+    }
+    const mapped = (localSkillsQuery.data ?? []).flatMap((entry) =>
+      entry.skills.map((skill) => mapInstalledSkill(skill)),
+    );
+    return dedupeInstalledSkills(mapped);
+  }, [isDesktop, localSkillsQuery.data]);
+
+  const installedSkillPathsById = useMemo(() => {
+    const map = new Map<string, string[]>();
+    localSkills.forEach((skill) => {
+      if (!skill.enabled) {
+        return;
+      }
+      const current = map.get(skill.id);
+      if (current) {
+        current.push(skill.path);
+      } else {
+        map.set(skill.id, [skill.path]);
+      }
+    });
+    return map;
+  }, [localSkills]);
 
   const normalizedSearch = search.trim().toLowerCase();
   const installedSkills = useMemo(() => {
-    const defaultInstalledSkills = mockInstalledSkills.filter((skill) =>
-      installedSkillIds.has(skill.id),
-    );
-    const installedRemoteSkills = mockRemoteSkills
-      .filter((skill) => installedSkillIds.has(skill.id))
-      .filter(
-        (skill) =>
-          !defaultInstalledSkills.some(
-            (installedSkill) => installedSkill.id === skill.id,
-          ),
-      )
-      .map(remoteSkillToInstalled);
-    const activeInstalledSkills = [
-      ...defaultInstalledSkills,
-      ...customSkills.filter((skill) => installedSkillIds.has(skill.id)),
-      ...installedRemoteSkills,
-    ];
-    if (!normalizedSearch) return activeInstalledSkills;
-    return activeInstalledSkills.filter((skill) => {
-      const haystack = `${skill.name} ${skill.description}`.toLowerCase();
+    const enabledSkills = localSkills.filter((skill) => skill.enabled);
+    if (!normalizedSearch) {
+      return enabledSkills;
+    }
+    return enabledSkills.filter((skill) => {
+      const haystack =
+        `${skill.name} ${skill.description} ${skill.path}`.toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [customSkills, installedSkillIds, normalizedSearch]);
+  }, [localSkills, normalizedSearch]);
+
   const remoteSkills = useMemo(() => {
-    if (!normalizedSearch) return mockRemoteSkills;
-    return mockRemoteSkills.filter((skill) => {
+    if (!runtimeSettings.allowCommunitySkills) {
+      return [] as RemoteSkillCard[];
+    }
+    const sourceSkills = isDesktop
+      ? (remoteSkillsQuery.data ?? []).map((skill) => mapRemoteSkill(skill))
+      : mockRemoteSkills.map(
+          (skill) =>
+            ({
+              kind: "remote",
+              id: skill.id,
+              name: skill.name,
+              description: skill.description,
+              documentation: skill.documentation,
+              version: skill.version,
+              source: skill.source,
+              publisher: skill.publisher,
+              tags: skill.tags,
+              installable: skill.installable,
+            }) satisfies RemoteSkillCard,
+        );
+    if (!normalizedSearch) {
+      return sourceSkills;
+    }
+    return sourceSkills.filter((skill) => {
       const haystack =
         `${skill.name} ${skill.description} ${skill.publisher}`.toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [normalizedSearch]);
+  }, [
+    isDesktop,
+    normalizedSearch,
+    remoteSkillsQuery.data,
+    runtimeSettings.allowCommunitySkills,
+  ]);
 
-  const handleCreateSkill = () => {
-    const trimmedName = skillName.trim();
-    const trimmedDescription = skillDescription.trim();
-    if (!trimmedName) {
-      setSkillError("Name is required.");
-      return;
+  const localCatalogErrors = useMemo(() => {
+    if (!isDesktop) {
+      return [] as string[];
     }
-    if (!trimmedDescription) {
-      setSkillError("Description is required.");
-      return;
-    }
-    const createdSkill: SkillSummary = {
-      id: `custom-skill-${Date.now()}`,
-      name: trimmedName,
-      description: trimmedDescription,
-      documentation: `${trimmedDescription}\n\nCreated locally from the Skills page.`,
-      installed: true,
-      version: "0.1.0",
-      source: "Community",
-      permissions: ["workspace"],
-    };
-    setCustomSkills((current) => [createdSkill, ...current]);
-    setInstalledSkillIds((current) => {
-      const next = new Set(current);
-      next.add(createdSkill.id);
-      return next;
-    });
-    setSkillName("");
-    setSkillDescription("");
-    setSkillError(null);
-    setNewSkillOpen(false);
-  };
+    return (localSkillsQuery.data ?? []).flatMap((entry) =>
+      entry.errors.map((error) => `${error.path}: ${error.message}`),
+    );
+  }, [isDesktop, localSkillsQuery.data]);
 
   const handleCloseNewSkill = () => {
     setNewSkillOpen(false);
     setSkillError(null);
   };
 
-  const handleRefresh = () => {
-    setRefreshMessage("Skill catalog refreshed.");
+  const refreshCatalog = async () => {
+    if (!isDesktop) {
+      setRefreshMessage("Skill catalog refreshed.");
+      return;
+    }
+    try {
+      await listSkills({
+        cwds: resolvedWorkspace ? [resolvedWorkspace] : undefined,
+        forceReload: true,
+      });
+      await localSkillsQuery.refetch();
+      if (remoteSkillsFeatureEnabled) {
+        await remoteSkillsQuery.refetch();
+      }
+      setRefreshMessage("Skill catalog refreshed.");
+    } catch (error) {
+      setRefreshMessage(
+        error instanceof Error ? error.message : "Failed to refresh skills.",
+      );
+    }
   };
 
-  const handleDetailOpen = (skill: SkillSummary | RemoteSkillSummary) => {
+  const handleCreateSkill = async () => {
+    const trimmedPath = skillPath.trim();
+    if (!trimmedPath) {
+      setSkillError("Skill path is required.");
+      return;
+    }
+    setSubmittingSkillAction(true);
+    setSkillError(null);
+    try {
+      await writeSkillEnabled(trimmedPath, true);
+      await refreshCatalog();
+      setSkillPath("");
+      setNewSkillOpen(false);
+    } catch (error) {
+      setSkillError(
+        error instanceof Error ? error.message : "Failed to add skill.",
+      );
+    } finally {
+      setSubmittingSkillAction(false);
+    }
+  };
+
+  const handleDetailOpen = (skill: SkillDetail) => {
     setDetailSkill(skill);
     setDetailMenuOpen(false);
     setDetailMessage(null);
   };
+
   const detailInstalled = detailSkill
-    ? installedSkillIds.has(detailSkill.id)
+    ? detailSkill.kind === "local"
+      ? detailSkill.enabled
+      : installedSkillPathsById.has(detailSkill.id)
     : false;
 
-  const handleInstallSkill = (skill: RemoteSkillSummary) => {
-    if (!skill.installable) {
-      setDetailMessage(`${skill.name} is not installable.`);
+  const handleInstallRemoteSkill = async (skill: RemoteSkillCard) => {
+    if (!remoteSkillsFeatureEnabled) {
+      setDetailMessage("Remote install is disabled.");
       return;
     }
-    setInstalledSkillIds((current) => {
-      if (current.has(skill.id)) {
-        return current;
-      }
-      const next = new Set(current);
-      next.add(skill.id);
-      return next;
-    });
-    setDetailMessage(`Installed ${skill.name}.`);
+    setSubmittingSkillAction(true);
+    try {
+      const installed = await installRemoteSkillExperimental(skill.id);
+      await writeSkillEnabled(installed.path, true);
+      await refreshCatalog();
+      setDetailMessage(`Installed ${skill.name}.`);
+    } catch (error) {
+      setDetailMessage(
+        error instanceof Error
+          ? error.message
+          : `Install failed for ${skill.name}.`,
+      );
+    } finally {
+      setSubmittingSkillAction(false);
+    }
   };
 
   const handleTrySkill = async () => {
     if (!detailSkill) return;
-    const skillPrompt = `Use @${detailSkill.name} (${detailSkill.id}) to help with this task.`;
-    setComposerDraft(skillPrompt);
-    await navigate({ to: "/" });
-    setDetailMessage(`Prepared ${detailSkill.name} in the composer.`);
-  };
+    const fallbackPrompt = `Use $${detailSkill.id} to help with this task.`;
+    const runPrompt =
+      detailSkill.kind === "local" && detailSkill.defaultPrompt
+        ? `$${detailSkill.id} ${detailSkill.defaultPrompt}`
+        : fallbackPrompt;
 
-  const handleOpenSkill = () => {
-    if (!detailSkill) return;
-    if (!detailInstalled) {
-      setDetailMessage("Install this skill before opening it.");
+    if (!isDesktop || !resolvedWorkspace) {
+      setComposerDraft(runPrompt);
+      await navigate({ to: "/" });
+      setDetailMessage(`Prepared ${detailSkill.name} in the composer.`);
       return;
     }
-    setDetailMessage(`${detailSkill.name} is ready in this workspace.`);
+
+    setSubmittingSkillAction(true);
+    try {
+      const thread = await startThread({ cwd: resolvedWorkspace });
+      if (!thread?.id) {
+        throw new Error("Unable to create a thread for this skill.");
+      }
+      const inputItems =
+        detailSkill.kind === "local"
+          ? [
+              { type: "text" as const, text: runPrompt },
+              {
+                type: "skill" as const,
+                name: detailSkill.id,
+                path: detailSkill.path,
+              },
+            ]
+          : [{ type: "text" as const, text: runPrompt }];
+      await startTurn({
+        threadId: thread.id,
+        input: runPrompt,
+        cwd: resolvedWorkspace,
+        inputItems,
+      });
+      await navigate({ to: "/t/$threadId", params: { threadId: thread.id } });
+      setDetailMessage(`Started ${detailSkill.name}.`);
+    } catch (error) {
+      setDetailMessage(
+        error instanceof Error ? error.message : "Failed to start skill run.",
+      );
+    } finally {
+      setSubmittingSkillAction(false);
+    }
   };
 
-  const handleUninstallSkill = () => {
-    if (!detailSkill || !detailInstalled) return;
-    setInstalledSkillIds((current) => {
-      const next = new Set(current);
-      next.delete(detailSkill.id);
-      return next;
-    });
-    setDetailMessage(`Uninstalled ${detailSkill.name}.`);
+  const handleOpenSkill = async () => {
+    if (!detailSkill) return;
+    const prompt = `Use $${detailSkill.id} in this thread.`;
+    setComposerDraft(prompt);
+    await navigate({ to: "/" });
+    setDetailMessage(`${detailSkill.name} ready in composer.`);
+  };
+
+  const handleUninstallSkill = async () => {
+    if (!detailSkill || detailSkill.kind !== "local") return;
+    setSubmittingSkillAction(true);
+    try {
+      await writeSkillEnabled(detailSkill.path, false);
+      await refreshCatalog();
+      setDetailMessage(`Uninstalled ${detailSkill.name}.`);
+    } catch (error) {
+      setDetailMessage(
+        error instanceof Error ? error.message : "Failed to uninstall skill.",
+      );
+    } finally {
+      setSubmittingSkillAction(false);
+    }
   };
 
   const handleCopySkillId = async () => {
@@ -285,7 +470,7 @@ export function SkillsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+      <section className="surface-panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
@@ -298,28 +483,34 @@ export function SkillsPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search skills"
-              className="w-56 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none"
+              className="input-base w-56"
             />
-            <button
-              className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-              onClick={() => setNewSkillOpen(true)}
-            >
+            <button className="btn-flat" onClick={() => setNewSkillOpen(true)}>
               + New skill
             </button>
             <button
-              className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-              onClick={handleRefresh}
+              className="btn-flat"
+              onClick={() => {
+                void refreshCatalog();
+              }}
             >
               Refresh
             </button>
           </div>
         </div>
         {refreshMessage ? (
-          <p className="mt-3 text-xs text-emerald-300">{refreshMessage}</p>
+          <p className="mt-3 text-xs text-ink-300">{refreshMessage}</p>
+        ) : null}
+        {localCatalogErrors.length ? (
+          <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-500/5 p-3 text-xs text-amber-200">
+            {localCatalogErrors.slice(0, 3).map((error) => (
+              <p key={error}>{error}</p>
+            ))}
+          </div>
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+      <section className="surface-panel p-5">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
@@ -327,13 +518,13 @@ export function SkillsPage() {
             </p>
             <h2 className="font-display text-xl">Skills in your workspace</h2>
           </div>
+          {localSkillsQuery.isPending ? (
+            <span className="text-xs text-ink-500">Loading…</span>
+          ) : null}
         </div>
         <div className="mt-4 space-y-3">
           {installedSkills.map((skill) => (
-            <div
-              key={skill.id}
-              className="rounded-xl border border-white/10 bg-black/20 p-4"
-            >
+            <div key={skill.path} className="surface-card p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-ink-100">{skill.name}</p>
                 <span className="rounded-full border border-white/10 px-2 py-1 text-xs text-ink-300">
@@ -341,19 +532,20 @@ export function SkillsPage() {
                 </span>
               </div>
               <p className="mt-1 text-xs text-ink-400">{skill.description}</p>
+              <p className="mt-1 text-[0.65rem] text-ink-500">{skill.path}</p>
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-ink-300">
-                {skill.permissions.map((perm) => (
+                {skill.permissions.map((permission) => (
                   <span
-                    key={perm}
+                    key={permission}
                     className="rounded-full border border-white/10 px-2 py-0.5"
                   >
-                    {perm}
+                    {permission}
                   </span>
                 ))}
               </div>
               <div className="mt-3 flex items-center gap-2 text-xs">
                 <button
-                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+                  className="btn-flat"
                   onClick={() => handleDetailOpen(skill)}
                 >
                   View details
@@ -362,14 +554,14 @@ export function SkillsPage() {
             </div>
           ))}
           {!installedSkills.length ? (
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-ink-400">
+            <div className="surface-card p-4 text-xs text-ink-400">
               No skills match your search.
             </div>
           ) : null}
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+      <section className="surface-panel p-5">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
@@ -381,12 +573,20 @@ export function SkillsPage() {
             {remoteSkills.length} available
           </span>
         </div>
+        {!runtimeSettings.allowCommunitySkills ? (
+          <p className="mt-3 text-xs text-ink-500">
+            Community catalog is disabled in settings.
+          </p>
+        ) : null}
+        {runtimeSettings.allowCommunitySkills && !remoteSkillsFeatureEnabled ? (
+          <p className="mt-3 text-xs text-ink-500">
+            Enable experimental config (or set `VITE_ENABLE_REMOTE_SKILLS=1`) to
+            use live remote skills APIs.
+          </p>
+        ) : null}
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {remoteSkills.map((skill) => (
-            <div
-              key={skill.id}
-              className="rounded-xl border border-white/10 bg-black/20 p-4"
-            >
+            <div key={skill.id} className="surface-card p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-ink-100">{skill.name}</p>
                 <span className="text-xs text-ink-400">{skill.publisher}</span>
@@ -404,25 +604,32 @@ export function SkillsPage() {
               </div>
               <div className="mt-3 flex items-center gap-2 text-xs">
                 <button
-                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+                  className="btn-flat"
                   onClick={() => handleDetailOpen(skill)}
                 >
                   View details
                 </button>
                 <button
-                  className="rounded-full border border-flare-300 bg-flare-400/20 px-3 py-1 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => handleInstallSkill(skill)}
+                  className="btn-primary disabled:opacity-50"
+                  onClick={() => {
+                    void handleInstallRemoteSkill(skill);
+                  }}
                   disabled={
-                    !skill.installable || installedSkillIds.has(skill.id)
+                    submittingSkillAction ||
+                    !skill.installable ||
+                    installedSkillPathsById.has(skill.id) ||
+                    !remoteSkillsFeatureEnabled
                   }
                 >
-                  {installedSkillIds.has(skill.id) ? "Installed" : "Download"}
+                  {installedSkillPathsById.has(skill.id)
+                    ? "Installed"
+                    : "Download"}
                 </button>
               </div>
             </div>
           ))}
           {!remoteSkills.length ? (
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-ink-400">
+            <div className="surface-card p-4 text-xs text-ink-400">
               No recommended skills match your search.
             </div>
           ) : null}
@@ -431,13 +638,12 @@ export function SkillsPage() {
 
       {newSkillOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-ink-900/95 p-5 shadow-card">
+          <div className="surface-panel w-full max-w-lg p-5">
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-lg text-ink-50">New skill</h3>
-              <button
-                className="rounded-full border border-white/10 px-3 py-1 text-xs text-ink-300 hover:border-flare-300"
-                onClick={handleCloseNewSkill}
-              >
+              <h3 className="font-display text-lg text-ink-50">
+                Add skill path
+              </h3>
+              <button className="btn-flat" onClick={handleCloseNewSkill}>
                 Close
               </button>
             </div>
@@ -445,48 +651,37 @@ export function SkillsPage() {
               <div className="space-y-2">
                 <label
                   className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                  htmlFor={skillNameInputId}
+                  htmlFor={skillPathInputId}
                 >
-                  Name
+                  Skill path
                 </label>
                 <input
-                  id={skillNameInputId}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100"
-                  placeholder="Repo triage"
-                  value={skillName}
-                  onChange={(event) => setSkillName(event.target.value)}
+                  id={skillPathInputId}
+                  className="input-base"
+                  placeholder="C:/Users/.../.codex/skills/skill-name/SKILL.md"
+                  value={skillPath}
+                  onChange={(event) => setSkillPath(event.target.value)}
                 />
-              </div>
-              <div className="space-y-2">
-                <label
-                  className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                  htmlFor={skillDescriptionInputId}
-                >
-                  Description
-                </label>
-                <textarea
-                  id={skillDescriptionInputId}
-                  className="h-24 w-full resize-none rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-ink-100"
-                  placeholder="Describe what this skill does."
-                  value={skillDescription}
-                  onChange={(event) => setSkillDescription(event.target.value)}
-                />
+                <p className="text-[0.65rem] text-ink-500">
+                  This writes to app-server skill config via
+                  `skills/config/write`.
+                </p>
               </div>
               {skillError ? (
                 <p className="text-xs text-rose-300">{skillError}</p>
               ) : null}
               <div className="flex justify-end gap-2 text-xs">
-                <button
-                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-                  onClick={handleCloseNewSkill}
-                >
+                <button className="btn-flat" onClick={handleCloseNewSkill}>
                   Cancel
                 </button>
                 <button
-                  className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20"
-                  onClick={handleCreateSkill}
+                  className="btn-primary disabled:opacity-60"
+                  onClick={() => {
+                    void handleCreateSkill();
+                  }}
+                  disabled={submittingSkillAction}
                 >
-                  Create
+                  {submittingSkillAction ? "Saving…" : "Add skill"}
                 </button>
               </div>
             </div>
@@ -496,15 +691,12 @@ export function SkillsPage() {
 
       {detailSkill ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-ink-900/95 p-5 shadow-card">
+          <div className="surface-panel w-full max-w-lg p-5">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-lg text-ink-50">
                 {detailSkill.name}
               </h3>
-              <button
-                className="rounded-full border border-white/10 px-3 py-1 text-xs text-ink-300 hover:border-flare-300"
-                onClick={() => setDetailSkill(null)}
-              >
+              <button className="btn-flat" onClick={() => setDetailSkill(null)}>
                 Close
               </button>
             </div>
@@ -516,11 +708,15 @@ export function SkillsPage() {
                 <span className="rounded-full border border-white/10 px-2 py-0.5">
                   {detailSkill.source}
                 </span>
-                {"publisher" in detailSkill ? (
+                {detailSkill.kind === "remote" ? (
                   <span className="rounded-full border border-white/10 px-2 py-0.5">
                     {detailSkill.publisher}
                   </span>
-                ) : null}
+                ) : (
+                  <span className="rounded-full border border-white/10 px-2 py-0.5">
+                    {detailSkill.scope}
+                  </span>
+                )}
               </div>
               <p>{detailSkill.description}</p>
               <div className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -531,24 +727,24 @@ export function SkillsPage() {
                   {renderDocumentationBlocks(detailSkill.documentation)}
                 </div>
               </div>
-              {"publisher" in detailSkill ? (
-                <p className="text-xs text-ink-400">
-                  Publisher: {detailSkill.publisher}
-                </p>
+              {detailSkill.kind === "local" ? (
+                <div className="space-y-1 text-xs text-ink-400">
+                  <p>Path: {detailSkill.path}</p>
+                </div>
               ) : null}
-              {"permissions" in detailSkill ? (
+              {detailSkill.kind === "local" ? (
                 <div className="flex flex-wrap gap-2 text-xs">
-                  {detailSkill.permissions.map((perm) => (
+                  {detailSkill.permissions.map((permission) => (
                     <span
-                      key={perm}
+                      key={permission}
                       className="rounded-full border border-white/10 px-2 py-0.5"
                     >
-                      {perm}
+                      {permission}
                     </span>
                   ))}
                 </div>
               ) : null}
-              {"tags" in detailSkill ? (
+              {detailSkill.kind === "remote" ? (
                 <div className="flex flex-wrap gap-2 text-xs">
                   {detailSkill.tags.map((tag) => (
                     <span
@@ -565,46 +761,57 @@ export function SkillsPage() {
               ) : null}
               <div className="flex justify-end gap-2 text-xs">
                 <button
-                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+                  className="btn-flat disabled:opacity-60"
                   onClick={() => {
                     void handleTrySkill();
                   }}
+                  disabled={submittingSkillAction}
                 >
                   Try
                 </button>
-                {"installable" in detailSkill && !detailInstalled ? (
+                {detailSkill.kind === "remote" && !detailInstalled ? (
                   <button
-                    className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20"
-                    onClick={() => handleInstallSkill(detailSkill)}
+                    className="btn-primary disabled:opacity-60"
+                    onClick={() => {
+                      void handleInstallRemoteSkill(detailSkill);
+                    }}
+                    disabled={
+                      submittingSkillAction || !remoteSkillsFeatureEnabled
+                    }
                   >
                     Install
                   </button>
                 ) : null}
                 <button
-                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={handleOpenSkill}
+                  className="btn-flat"
+                  onClick={() => {
+                    void handleOpenSkill();
+                  }}
                   disabled={!detailInstalled}
                 >
                   Open
                 </button>
-                {detailInstalled ? (
+                {detailInstalled && detailSkill.kind === "local" ? (
                   <button
-                    className="rounded-full border border-rose-400/40 px-3 py-1 text-rose-200 hover:bg-rose-500/10"
-                    onClick={handleUninstallSkill}
+                    className="rounded-full border border-rose-400/40 px-3 py-1 text-rose-200 hover:bg-rose-500/10 disabled:opacity-60"
+                    onClick={() => {
+                      void handleUninstallSkill();
+                    }}
+                    disabled={submittingSkillAction}
                   >
                     Uninstall
                   </button>
                 ) : null}
                 <div className="relative">
                   <button
-                    className="rounded-full border border-white/10 p-1.5 hover:border-flare-300"
+                    className="btn-flat px-2"
                     onClick={() => setDetailMenuOpen((open) => !open)}
                     aria-label="More skill actions"
                   >
                     <MoreHorizontal className="h-3.5 w-3.5" />
                   </button>
                   {detailMenuOpen ? (
-                    <div className="absolute right-0 mt-2 w-40 rounded-xl border border-white/10 bg-ink-900/95 p-1 shadow-card">
+                    <div className="surface-card absolute right-0 mt-2 w-40 p-1">
                       <button
                         className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
                         onClick={() => handleOverflowAction("copy-id")}
@@ -621,7 +828,7 @@ export function SkillsPage() {
                   ) : null}
                 </div>
                 <button
-                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+                  className="btn-flat"
                   onClick={() => {
                     setDetailSkill(null);
                     setDetailMenuOpen(false);

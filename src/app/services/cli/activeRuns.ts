@@ -6,6 +6,7 @@ import {
 
 export interface ActiveRunEntry {
   threadId: string;
+  turnId: string | null;
   status: "running" | "needs_review" | "done" | "failed";
   label: string;
   updatedAt: number;
@@ -33,6 +34,10 @@ export function getActiveRuns() {
   return Array.from(activeRuns.values()).sort(
     (a, b) => b.updatedAt - a.updatedAt,
   );
+}
+
+export function getActiveRun(threadId: string) {
+  return activeRuns.get(threadId);
 }
 
 function labelFromNotification(notification: AppServerNotification) {
@@ -78,13 +83,31 @@ export function registerActiveRunNotification(
   }
 
   const { label, status } = runStateFromNotification(notification);
+  const turn = notification.params
+    ? getObject(notification.params, "turn")
+    : undefined;
+  const turnId =
+    (turn ? getString(turn, "id") : undefined) ??
+    (notification.params
+      ? getString(notification.params, "turnId")
+      : undefined);
+  const previous = activeRuns.get(threadId);
   const entry: ActiveRunEntry = {
     threadId,
+    turnId: turnId ?? previous?.turnId ?? null,
     status,
     label,
     updatedAt: Date.now(),
   };
 
   activeRuns.set(threadId, entry);
+  emit();
+}
+
+export function clearActiveRun(threadId: string) {
+  if (!activeRuns.has(threadId)) {
+    return;
+  }
+  activeRuns.delete(threadId);
   emit();
 }

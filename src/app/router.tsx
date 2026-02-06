@@ -1,6 +1,11 @@
 import { Navigate, RootRoute, Route, Router } from "@tanstack/react-router";
 
+import { AppServerRouteBoundary } from "@/app/components/layout/AppServerRouteBoundary";
 import { AppShell } from "@/app/components/layout/AppShell";
+import {
+  RouteErrorFallback,
+  RoutePendingFallback,
+} from "@/app/components/layout/RouteFallbacks";
 import { AutomationsPage } from "@/app/routes/AutomationsPage";
 import { NewThreadPage } from "@/app/routes/NewThreadPage";
 import { SettingsPage } from "@/app/routes/SettingsPage";
@@ -15,19 +20,37 @@ const rootRoute = new RootRoute({
 const threadRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/t/$threadId",
-  component: ThreadPage,
+  component: () => (
+    <AppServerRouteBoundary>
+      <ThreadPage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
 });
 
 const newThreadRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: NewThreadPage,
+  component: () => (
+    <AppServerRouteBoundary>
+      <NewThreadPage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
 });
 
 const automationsRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/automations",
-  component: AutomationsPage,
+  component: () => (
+    <AppServerRouteBoundary>
+      <AutomationsPage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
 });
 
 const settingsRoute = new Route({
@@ -45,13 +68,25 @@ const settingsRoute = new Route({
 const settingsSectionRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/settings/$section",
-  component: SettingsPage,
+  component: () => (
+    <AppServerRouteBoundary>
+      <SettingsPage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
 });
 
 const skillsRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/skills",
-  component: SkillsPage,
+  component: () => (
+    <AppServerRouteBoundary>
+      <SkillsPage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
 });
 
 const routeTree = rootRoute.addChildren([

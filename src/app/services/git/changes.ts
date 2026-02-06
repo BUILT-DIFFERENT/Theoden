@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+
 import { execCommand } from "@/app/services/cli/commands";
 
 function ensureSuccess(
@@ -13,9 +15,43 @@ async function runGit(args: string[], cwd: string) {
   return execCommand({ command: ["git", ...args], cwd });
 }
 
+interface GitApplyPatchResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+async function applyGitPatch(
+  cwd: string,
+  patch: string,
+  options: {
+    cached?: boolean;
+    reverse?: boolean;
+  } = {},
+) {
+  const result = await invoke<GitApplyPatchResult>("git_apply_patch", {
+    cwd,
+    patch,
+    cached: options.cached ?? false,
+    reverse: options.reverse ?? false,
+  });
+  ensureSuccess(
+    {
+      exitCode: result.code,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    },
+    "Apply git hunk",
+  );
+}
+
 export async function stagePath(cwd: string, path: string) {
   const result = await runGit(["add", "--", path], cwd);
   ensureSuccess(result, "Stage file");
+}
+
+export async function stageHunk(cwd: string, patch: string) {
+  await applyGitPatch(cwd, patch, { cached: true });
 }
 
 export async function stageAllPaths(cwd: string) {
@@ -31,6 +67,10 @@ export async function unstagePath(cwd: string, path: string) {
 
   const resetResult = await runGit(["reset", "HEAD", "--", path], cwd);
   ensureSuccess(resetResult, "Unstage file");
+}
+
+export async function unstageHunk(cwd: string, patch: string) {
+  await applyGitPatch(cwd, patch, { cached: true, reverse: true });
 }
 
 export async function revertPath(
@@ -49,6 +89,26 @@ export async function revertPath(
 
   const result = await runGit(["restore", "--worktree", "--", path], cwd);
   ensureSuccess(result, "Revert file");
+}
+
+export async function revertHunk(
+  cwd: string,
+  patch: string,
+  includeStaged: boolean,
+) {
+  if (includeStaged) {
+    await applyGitPatch(cwd, patch, { cached: true, reverse: true });
+    try {
+      await applyGitPatch(cwd, patch, { reverse: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.toLowerCase().includes("does not apply")) {
+        throw error;
+      }
+    }
+    return;
+  }
+  await applyGitPatch(cwd, patch, { reverse: true });
 }
 
 export async function revertAllPaths(cwd: string, includeStaged: boolean) {

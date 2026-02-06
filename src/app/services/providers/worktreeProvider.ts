@@ -2,6 +2,7 @@ import {
   sendAppServerRequest,
   startAppServer,
 } from "@/app/services/cli/appServer";
+import { nextAppServerRequestId } from "@/app/services/cli/rpc";
 import type {
   Provider,
   RunEventStream,
@@ -19,14 +20,14 @@ export const WorktreeProvider: Provider = {
     const cwd = _request.workspacePath ?? _request.repoPath;
     await startAppServer({ cwd });
     await sendAppServerRequest({
-      id: now,
+      id: nextAppServerRequestId(),
       method: "thread/start",
       params: {
         cwd,
       },
     });
     await sendAppServerRequest({
-      id: now + 1,
+      id: nextAppServerRequestId(),
       method: "turn/start",
       params: {
         threadId: "thread-id-from-start",

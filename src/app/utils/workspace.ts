@@ -20,3 +20,22 @@ export function isLikelyWorkspacePath(value: string) {
     trimmedValue.startsWith("\\\\")
   );
 }
+
+export function resolveWorkspacePath(options: {
+  threadSubtitle?: string | null;
+  selectedWorkspace?: string | null;
+  workspaces?: Array<{ path: string }>;
+  fallbackWorkspace?: string | null;
+}) {
+  const threadWorkspacePath =
+    options.threadSubtitle && isLikelyWorkspacePath(options.threadSubtitle)
+      ? options.threadSubtitle
+      : null;
+  return (
+    threadWorkspacePath ??
+    options.selectedWorkspace ??
+    options.workspaces?.[0]?.path ??
+    options.fallbackWorkspace ??
+    null
+  );
+}

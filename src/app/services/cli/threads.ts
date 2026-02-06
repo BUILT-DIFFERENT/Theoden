@@ -1,4 +1,4 @@
-import { sendAppServerRequest } from "@/app/services/cli/appServer";
+import { requestAppServer } from "@/app/services/cli/rpc";
 
 export interface AppServerThread {
   id: string;
@@ -23,10 +23,6 @@ export interface ThreadReadResponse {
   thread: AppServerThread;
 }
 
-function requestId() {
-  return Math.floor(Date.now() + Math.random() * 1000);
-}
-
 export async function listThreads(
   params: {
     cursor?: string | null;
@@ -36,8 +32,7 @@ export async function listThreads(
     sourceKinds?: string[];
   } = {},
 ): Promise<ThreadListResponse> {
-  const response = await sendAppServerRequest<ThreadListResponse>({
-    id: requestId(),
+  const result = await requestAppServer<ThreadListResponse>({
     method: "thread/list",
     params: {
       cursor: params.cursor ?? null,
@@ -54,11 +49,8 @@ export async function listThreads(
           : null,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
-  }
   return (
-    response.result ?? {
+    result ?? {
       data: [],
       nextCursor: null,
     }
@@ -66,44 +58,30 @@ export async function listThreads(
 }
 
 export async function readThread(threadId: string, includeTurns = false) {
-  const response = await sendAppServerRequest<ThreadReadResponse>({
-    id: requestId(),
+  const result = await requestAppServer<ThreadReadResponse>({
     method: "thread/read",
     params: {
       threadId,
       includeTurns,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
-  }
-  return response.result?.thread;
+  return result?.thread;
 }
 
 export async function archiveThread(threadId: string) {
-  const response = await sendAppServerRequest({
-    id: requestId(),
+  return requestAppServer({
     method: "thread/archive",
     params: {
       threadId,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
-  }
-  return response.result;
 }
 
 export async function unarchiveThread(threadId: string) {
-  const response = await sendAppServerRequest({
-    id: requestId(),
+  return requestAppServer({
     method: "thread/unarchive",
     params: {
       threadId,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
-  }
-  return response.result;
 }

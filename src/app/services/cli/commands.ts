@@ -1,4 +1,8 @@
-import { sendAppServerRequest } from "@/app/services/cli/appServer";
+import { requestAppServer } from "@/app/services/cli/rpc";
+import {
+  getCommandPermissionProfile,
+  sandboxPolicyForProfile,
+} from "@/app/state/commandPolicy";
 
 export interface CommandExecParams {
   command: string[];
@@ -13,26 +17,21 @@ export interface CommandExecResult {
   stderr: string;
 }
 
-let requestNonce = 0;
-
-function requestId() {
-  requestNonce += 1;
-  return Date.now() + requestNonce;
-}
-
 export async function execCommand(
   params: CommandExecParams,
 ): Promise<CommandExecResult> {
-  const response = await sendAppServerRequest<CommandExecResult>({
-    id: requestId(),
+  const sandboxPolicy =
+    params.sandboxPolicy ??
+    sandboxPolicyForProfile(getCommandPermissionProfile());
+  const result = await requestAppServer<CommandExecResult>({
     method: "command/exec",
-    params,
+    params: {
+      ...params,
+      sandboxPolicy,
+    },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
-  }
-  if (!response.result) {
+  if (!result) {
     throw new Error("command/exec returned no result");
   }
-  return response.result;
+  return result;
 }

@@ -73,6 +73,26 @@ export function storeWorkspace(path: string) {
   }
 }
 
+export function removeStoredWorkspace(path: string) {
+  if (typeof window === "undefined") return;
+  const keyToRemove = workspacePathKey(path);
+  const remaining = loadStoredWorkspaces().filter(
+    (workspacePath) => workspacePathKey(workspacePath) !== keyToRemove,
+  );
+  try {
+    if (remaining.length) {
+      window.localStorage.setItem(
+        WORKSPACES_STORAGE_KEY,
+        JSON.stringify(remaining),
+      );
+    } else {
+      window.localStorage.removeItem(WORKSPACES_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.warn("Failed to remove workspace from storage", error);
+  }
+}
+
 export function loadSelectedWorkspace() {
   if (typeof window === "undefined") return null;
   try {
@@ -106,5 +126,15 @@ export function storeSelectedWorkspace(path: string | null) {
     );
   } catch (error) {
     console.warn("Failed to persist selected workspace", error);
+  }
+}
+
+export function clearSelectedWorkspace() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(SELECTED_WORKSPACE_KEY);
+    window.localStorage.removeItem(LEGACY_SELECTED_WORKSPACE_KEY);
+  } catch (error) {
+    console.warn("Failed to clear selected workspace", error);
   }
 }

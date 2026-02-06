@@ -1,9 +1,10 @@
-import { sendAppServerRequest } from "@/app/services/cli/appServer";
 import {
   getString,
   isRecord,
   type JsonObject,
 } from "@/app/services/cli/appServerPayload";
+import { requestAppServer } from "@/app/services/cli/rpc";
+import { normalizeWorkspacePath } from "@/app/utils/workspace";
 
 export interface WorkspaceConfigEntry {
   path: string;
@@ -19,8 +20,8 @@ interface ConfigWriteResponse {
   message?: string;
 }
 
-function requestId() {
-  return Math.floor(Date.now() + Math.random() * 1000);
+function normalizeWorkspacePathKey(path: string) {
+  return normalizeWorkspacePath(path).toLowerCase();
 }
 
 function parseProjects(config?: JsonObject): WorkspaceConfigEntry[] {
@@ -41,19 +42,28 @@ function parseProjects(config?: JsonObject): WorkspaceConfigEntry[] {
   });
 }
 
-export async function listWorkspaces(): Promise<WorkspaceConfigEntry[]> {
-  const response = await sendAppServerRequest<ConfigReadResponse>({
-    id: requestId(),
+async function readProjectsMap() {
+  const result = await requestAppServer<ConfigReadResponse>({
     method: "config/read",
     params: {
       includeLayers: false,
       cwd: null,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
+  const config = result?.config;
+  if (!isRecord(config)) {
+    return {} as JsonObject;
   }
-  return parseProjects(response.result?.config);
+  const projects = config.projects;
+  if (!isRecord(projects)) {
+    return {} as JsonObject;
+  }
+  return { ...projects };
+}
+
+export async function listWorkspaces(): Promise<WorkspaceConfigEntry[]> {
+  const projects = await readProjectsMap();
+  return parseProjects({ projects });
 }
 
 export async function addWorkspace(path: string) {
@@ -61,8 +71,7 @@ export async function addWorkspace(path: string) {
   if (!trimmed) {
     throw new Error("Workspace path is required.");
   }
-  const response = await sendAppServerRequest<ConfigWriteResponse>({
-    id: requestId(),
+  const result = await requestAppServer<ConfigWriteResponse>({
     method: "config/value/write",
     params: {
       keyPath: "projects",
@@ -76,8 +85,68 @@ export async function addWorkspace(path: string) {
       expectedVersion: null,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
+  return result;
+}
+
+export async function removeWorkspace(path: string) {
+  const normalizedPath = normalizeWorkspacePath(path);
+  if (!normalizedPath) {
+    throw new Error("Workspace path is required.");
   }
-  return response.result;
+  const projects = await readProjectsMap();
+  const normalizedKey = normalizeWorkspacePathKey(normalizedPath);
+  const matchingPath = Object.keys(projects).find(
+    (entryPath) => normalizeWorkspacePathKey(entryPath) === normalizedKey,
+  );
+  if (!matchingPath) {
+    return { status: "ok" as const };
+  }
+  delete projects[matchingPath];
+
+  const result = await requestAppServer<ConfigWriteResponse>({
+    method: "config/value/write",
+    params: {
+      keyPath: "projects",
+      value: projects,
+      mergeStrategy: "replace",
+      filePath: null,
+      expectedVersion: null,
+    },
+  });
+  return result;
+}
+
+export async function setWorkspaceTrustLevel(
+  path: string,
+  trustLevel: "trusted" | "untrusted",
+) {
+  const normalizedPath = normalizeWorkspacePath(path);
+  if (!normalizedPath) {
+    throw new Error("Workspace path is required.");
+  }
+
+  const projects = await readProjectsMap();
+  const normalizedKey = normalizeWorkspacePathKey(normalizedPath);
+  const existingPath = Object.keys(projects).find(
+    (entryPath) => normalizeWorkspacePathKey(entryPath) === normalizedKey,
+  );
+  const targetPath = existingPath ?? normalizedPath;
+  const currentEntry = projects[targetPath];
+  const nextEntry: JsonObject = isRecord(currentEntry)
+    ? { ...currentEntry }
+    : {};
+  nextEntry.trust_level = trustLevel;
+  projects[targetPath] = nextEntry;
+
+  const result = await requestAppServer<ConfigWriteResponse>({
+    method: "config/value/write",
+    params: {
+      keyPath: "projects",
+      value: projects,
+      mergeStrategy: "replace",
+      filePath: null,
+      expectedVersion: null,
+    },
+  });
+  return result;
 }

@@ -1,172 +1,72 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import remarkGfm from "remark-gfm";
 
 import type { ThreadMessage } from "@/app/types";
 
-interface TextMessageSegment {
-  kind: "text";
-  value: string;
-}
+import type { PluggableList } from "unified";
 
-interface CodeMessageSegment {
-  kind: "code";
-  value: string;
-  language: string | null;
-}
+const markdownSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...(defaultSchema.attributes ?? {}),
+    code: [
+      ...((defaultSchema.attributes?.code as unknown[]) ?? []),
+      ["className"],
+    ],
+    a: [
+      ...((defaultSchema.attributes?.a as unknown[]) ?? []),
+      ["href"],
+      ["title"],
+      ["target"],
+      ["rel"],
+    ],
+  },
+};
+const markdownRemarkPlugins: PluggableList = [remarkGfm];
+const markdownRehypePlugins: PluggableList = [[rehypeSanitize, markdownSchema]];
 
-type MessageSegment = TextMessageSegment | CodeMessageSegment;
-
-type TextBlock =
-  | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; text: string }
-  | { kind: "unordered-list"; items: string[] }
-  | { kind: "ordered-list"; items: string[] }
-  | { kind: "paragraph"; text: string };
-
-function splitMessageSegments(content: string): MessageSegment[] {
-  const fencePattern = /```([a-zA-Z0-9_-]+)?\n?([\s\S]*?)```/g;
-  const segments: MessageSegment[] = [];
-  let cursor = 0;
-
-  for (const match of content.matchAll(fencePattern)) {
-    const raw = match[0];
-    const language = match[1] ?? null;
-    const code = match[2] ?? "";
-    const startIndex = match.index ?? 0;
-
-    if (startIndex > cursor) {
-      const textContent = content.slice(cursor, startIndex).trim();
-      if (textContent) {
-        segments.push({ kind: "text", value: textContent });
-      }
-    }
-
-    segments.push({
-      kind: "code",
-      language,
-      value: code.replace(/\n$/, ""),
-    });
-
-    cursor = startIndex + raw.length;
+function sanitizeMarkdownLink(uri: string) {
+  const trimmedUri = uri.trim();
+  if (!trimmedUri.length) {
+    return "";
   }
-
-  if (cursor < content.length) {
-    const trailingText = content.slice(cursor).trim();
-    if (trailingText) {
-      segments.push({ kind: "text", value: trailingText });
-    }
+  if (trimmedUri.startsWith("#") || trimmedUri.startsWith("/")) {
+    return trimmedUri;
   }
-
-  if (!segments.length && content.trim()) {
-    segments.push({ kind: "text", value: content.trim() });
+  try {
+    const parsed = new URL(trimmedUri, "https://example.com");
+    if (["http:", "https:", "mailto:"].includes(parsed.protocol)) {
+      return trimmedUri;
+    }
+    return "";
+  } catch {
+    return "";
   }
-
-  return segments;
-}
-
-function parseTextBlocks(content: string): TextBlock[] {
-  const lines = content.split(/\r?\n/);
-  const blocks: TextBlock[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index]?.trim() ?? "";
-    if (!line) {
-      index += 1;
-      continue;
-    }
-
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      blocks.push({
-        kind: "heading",
-        level: headingMatch[1].length as 1 | 2 | 3 | 4 | 5 | 6,
-        text: headingMatch[2].trim(),
-      });
-      index += 1;
-      continue;
-    }
-
-    if (/^[-*+]\s+/.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length) {
-        const nextLine = lines[index]?.trim() ?? "";
-        if (!/^[-*+]\s+/.test(nextLine)) {
-          break;
-        }
-        items.push(nextLine.replace(/^[-*+]\s+/, "").trim());
-        index += 1;
-      }
-      if (items.length) {
-        blocks.push({ kind: "unordered-list", items });
-      }
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length) {
-        const nextLine = lines[index]?.trim() ?? "";
-        if (!/^\d+\.\s+/.test(nextLine)) {
-          break;
-        }
-        items.push(nextLine.replace(/^\d+\.\s+/, "").trim());
-        index += 1;
-      }
-      if (items.length) {
-        blocks.push({ kind: "ordered-list", items });
-      }
-      continue;
-    }
-
-    const paragraphLines: string[] = [];
-    while (index < lines.length) {
-      const nextLine = lines[index]?.trim() ?? "";
-      if (!nextLine) {
-        break;
-      }
-      if (
-        /^(#{1,6})\s+/.test(nextLine) ||
-        /^[-*+]\s+/.test(nextLine) ||
-        /^\d+\.\s+/.test(nextLine)
-      ) {
-        break;
-      }
-      paragraphLines.push(nextLine);
-      index += 1;
-    }
-    if (paragraphLines.length) {
-      blocks.push({
-        kind: "paragraph",
-        text: paragraphLines.join(" "),
-      });
-    } else {
-      index += 1;
-    }
-  }
-
-  return blocks;
-}
-
-function renderInlineCode(text: string, keyPrefix: string): ReactNode[] {
-  return text
-    .split(/(`[^`]+`)/g)
-    .filter((part) => part.length > 0)
-    .map((part, index) => {
-      if (part.startsWith("`") && part.endsWith("`")) {
-        return (
-          <code
-            key={`${keyPrefix}-code-${index}`}
-            className="rounded border border-white/10 bg-black/30 px-1 py-0.5 font-mono text-[0.8em] text-ink-100"
-          >
-            {part.slice(1, -1)}
-          </code>
-        );
-      }
-      return <span key={`${keyPrefix}-text-${index}`}>{part}</span>;
-    });
 }
 
 interface ThreadMessagesProps {
   messages: ThreadMessage[];
+}
+
+function textFromNode(node: ReactNode): string {
+  if (typeof node === "string") {
+    return node;
+  }
+  if (typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(textFromNode).join("");
+  }
+  return "";
 }
 
 export function ThreadMessages({ messages }: ThreadMessagesProps) {
@@ -211,7 +111,95 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
       {messages.map((message) => {
         const isUser = message.role === "user";
         const isAssistant = message.role === "assistant";
-        const segments = splitMessageSegments(message.content);
+        let blockIndex = 0;
+        const markdownComponents: Components = {
+          h1: ({ children, ...props }: ComponentProps<"h1">) => (
+            <h1 className="mt-3 text-lg font-semibold text-ink-50" {...props}>
+              {children}
+            </h1>
+          ),
+          h2: ({ children, ...props }: ComponentProps<"h2">) => (
+            <h2
+              className="mt-3 text-base font-semibold text-ink-100"
+              {...props}
+            >
+              {children}
+            </h2>
+          ),
+          h3: ({ children, ...props }: ComponentProps<"h3">) => (
+            <h3 className="mt-3 text-sm font-semibold text-ink-100" {...props}>
+              {children}
+            </h3>
+          ),
+          p: ({ children, ...props }: ComponentProps<"p">) => (
+            <p className="leading-relaxed text-ink-100" {...props}>
+              {children}
+            </p>
+          ),
+          ul: ({ children, ...props }: ComponentProps<"ul">) => (
+            <ul className="list-disc space-y-1 pl-5 text-ink-100" {...props}>
+              {children}
+            </ul>
+          ),
+          ol: ({ children, ...props }: ComponentProps<"ol">) => (
+            <ol className="list-decimal space-y-1 pl-5 text-ink-100" {...props}>
+              {children}
+            </ol>
+          ),
+          li: ({ children, ...props }: ComponentProps<"li">) => (
+            <li className="leading-relaxed" {...props}>
+              {children}
+            </li>
+          ),
+          a: ({ children, ...props }: ComponentProps<"a">) => (
+            <a
+              {...props}
+              className="text-sky-300 underline underline-offset-2 hover:text-sky-200"
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+            >
+              {children}
+            </a>
+          ),
+          code: ({
+            inline,
+            className,
+            children,
+          }: ComponentProps<"code"> & {
+            inline?: boolean;
+            node?: unknown;
+          }) => {
+            const codeText = textFromNode(children ?? "").replace(/\n$/, "");
+            if (inline) {
+              return (
+                <code className="rounded border border-white/10 bg-black/30 px-1 py-0.5 font-mono text-[0.8em] text-ink-100">
+                  {codeText}
+                </code>
+              );
+            }
+            const segmentId = `${message.id}-code-${blockIndex}`;
+            blockIndex += 1;
+            const language = className?.replace("language-", "") ?? "code";
+            return (
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[0.65rem] text-ink-400">
+                  <span>{language || "code"}</span>
+                  <button
+                    className="rounded-full border border-white/10 px-2 py-0.5 text-[0.65rem] text-ink-200 hover:border-flare-300"
+                    onClick={() => {
+                      void handleCopyCode(segmentId, codeText);
+                    }}
+                  >
+                    {copiedSegmentId === segmentId ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                <pre className="overflow-x-auto p-3 font-mono text-[0.75rem] text-ink-200">
+                  <code>{codeText}</code>
+                </pre>
+              </div>
+            );
+          },
+        };
 
         return (
           <div
@@ -230,97 +218,15 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
               <p className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
                 {message.role}
               </p>
-              <div className="space-y-2">
-                {segments.map((segment, index) => {
-                  const segmentId = `${message.id}-${index}`;
-                  if (segment.kind === "code") {
-                    return (
-                      <div
-                        key={segmentId}
-                        className="overflow-hidden rounded-xl border border-white/10 bg-black/40"
-                      >
-                        <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[0.65rem] text-ink-400">
-                          <span>{segment.language ?? "code"}</span>
-                          <button
-                            className="rounded-full border border-white/10 px-2 py-0.5 text-[0.65rem] text-ink-200 hover:border-flare-300"
-                            onClick={() =>
-                              void handleCopyCode(segmentId, segment.value)
-                            }
-                          >
-                            {copiedSegmentId === segmentId ? "Copied" : "Copy"}
-                          </button>
-                        </div>
-                        <pre className="overflow-x-auto p-3 font-mono text-[0.75rem] text-ink-200">
-                          <code>{segment.value}</code>
-                        </pre>
-                      </div>
-                    );
-                  }
-
-                  const blocks = parseTextBlocks(segment.value);
-                  return (
-                    <div key={segmentId} className="space-y-3">
-                      {blocks.map((block, blockIndex) => {
-                        const blockKey = `${segmentId}-block-${blockIndex}`;
-                        if (block.kind === "heading") {
-                          const headingClass =
-                            block.level === 1
-                              ? "text-lg font-semibold text-ink-50"
-                              : block.level === 2
-                                ? "text-base font-semibold text-ink-100"
-                                : "text-sm font-semibold text-ink-100";
-                          return (
-                            <p key={blockKey} className={headingClass}>
-                              {renderInlineCode(block.text, blockKey)}
-                            </p>
-                          );
-                        }
-                        if (block.kind === "unordered-list") {
-                          return (
-                            <ul
-                              key={blockKey}
-                              className="list-disc space-y-1 pl-5 leading-relaxed text-ink-100"
-                            >
-                              {block.items.map((item, itemIndex) => (
-                                <li key={`${blockKey}-item-${itemIndex}`}>
-                                  {renderInlineCode(
-                                    item,
-                                    `${blockKey}-item-${itemIndex}`,
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          );
-                        }
-                        if (block.kind === "ordered-list") {
-                          return (
-                            <ol
-                              key={blockKey}
-                              className="list-decimal space-y-1 pl-5 leading-relaxed text-ink-100"
-                            >
-                              {block.items.map((item, itemIndex) => (
-                                <li key={`${blockKey}-item-${itemIndex}`}>
-                                  {renderInlineCode(
-                                    item,
-                                    `${blockKey}-item-${itemIndex}`,
-                                  )}
-                                </li>
-                              ))}
-                            </ol>
-                          );
-                        }
-                        return (
-                          <p
-                            key={blockKey}
-                            className="leading-relaxed text-ink-100"
-                          >
-                            {renderInlineCode(block.text, blockKey)}
-                          </p>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+              <div className="space-y-3">
+                <ReactMarkdown
+                  remarkPlugins={markdownRemarkPlugins}
+                  rehypePlugins={markdownRehypePlugins}
+                  urlTransform={sanitizeMarkdownLink}
+                  components={markdownComponents}
+                >
+                  {message.content}
+                </ReactMarkdown>
               </div>
             </div>
           </div>

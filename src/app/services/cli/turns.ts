@@ -1,4 +1,4 @@
-import { sendAppServerRequest } from "@/app/services/cli/appServer";
+import { requestAppServer } from "@/app/services/cli/rpc";
 import type { AppServerThread } from "@/app/services/cli/threads";
 
 export interface ThreadStartResponse {
@@ -9,16 +9,21 @@ export interface TurnStartResponse {
   turn: { id: string; status: string };
 }
 
-function requestId() {
-  return Math.floor(Date.now() + Math.random() * 1000);
+export type TurnInputItem =
+  | { type: "text"; text: string }
+  | { type: "skill"; name: string; path: string }
+  | { type: "mention"; name: string; path: string };
+
+interface TurnCancelResponse {
+  turn?: { id?: string; status?: string };
+  [key: string]: unknown;
 }
 
 export async function startThread(params: {
   cwd?: string | null;
   model?: string | null;
 }) {
-  const response = await sendAppServerRequest<ThreadStartResponse>({
-    id: requestId(),
+  const result = await requestAppServer<ThreadStartResponse>({
     method: "thread/start",
     params: {
       cwd: params.cwd ?? null,
@@ -26,24 +31,17 @@ export async function startThread(params: {
       experimentalRawEvents: false,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
-  }
-  return response.result?.thread;
+  return result?.thread;
 }
 
 export async function resumeThread(params: { threadId: string }) {
-  const response = await sendAppServerRequest<ThreadStartResponse>({
-    id: requestId(),
+  const result = await requestAppServer<ThreadStartResponse>({
     method: "thread/resume",
     params: {
       threadId: params.threadId,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
-  }
-  return response.result?.thread;
+  return result?.thread;
 }
 
 export async function startTurn(params: {
@@ -51,19 +49,55 @@ export async function startTurn(params: {
   input: string;
   cwd?: string | null;
   effort?: "medium" | "high" | "xhigh" | null;
+  inputItems?: TurnInputItem[] | null;
 }) {
-  const response = await sendAppServerRequest<TurnStartResponse>({
-    id: requestId(),
+  const inputItems =
+    params.inputItems && params.inputItems.length
+      ? params.inputItems
+      : [{ type: "text", text: params.input }];
+  const result = await requestAppServer<TurnStartResponse>({
     method: "turn/start",
     params: {
       threadId: params.threadId,
-      input: [{ type: "text", text: params.input }],
+      input: inputItems,
       cwd: params.cwd ?? null,
       effort: params.effort ?? null,
     },
   });
-  if (response.error) {
-    throw new Error(response.error.message);
+  return result?.turn;
+}
+
+export async function cancelTurn(params: {
+  threadId: string;
+  turnId?: string | null;
+}) {
+  if (params.turnId) {
+    const interrupt = await requestAppServer<Record<string, never>>({
+      method: "turn/interrupt",
+      params: {
+        threadId: params.threadId,
+        turnId: params.turnId,
+      },
+    });
+    if (interrupt) {
+      return interrupt;
+    }
   }
-  return response.result?.turn;
+
+  try {
+    return await requestAppServer<TurnCancelResponse>({
+      method: "turn/cancel",
+      params: {
+        threadId: params.threadId,
+      },
+    });
+  } catch {
+    const abortResult = await requestAppServer<TurnCancelResponse>({
+      method: "turn/abort",
+      params: {
+        threadId: params.threadId,
+      },
+    });
+    return abortResult;
+  }
 }

@@ -30,20 +30,29 @@
 @tailwind utilities;
 
 :root {
+  --surface-radius-lg: 1rem;
+  --surface-radius-xl: 1.25rem;
+  --surface-gap-sm: 0.5rem;
+  --surface-gap-md: 0.75rem;
+  --surface-gap-lg: 1rem;
+  --hover-overlay: rgba(255, 255, 255, 0.05);
+  --scrollbar-thumb: rgba(159, 176, 200, 0.38);
+  --scrollbar-thumb-hover: rgba(201, 210, 223, 0.62);
+  --scrollbar-track: rgba(13, 17, 23, 0.5);
   --app-bg:
     radial-gradient(
       circle at 12% 12%,
-      rgba(255, 155, 74, 0.12),
+      rgba(255, 155, 74, 0.08),
       transparent 48%
     ),
     radial-gradient(
       circle at 80% 20%,
-      rgba(84, 153, 255, 0.08),
+      rgba(84, 153, 255, 0.05),
       transparent 46%
     ),
     radial-gradient(
       circle at 35% 85%,
-      rgba(246, 122, 31, 0.1),
+      rgba(246, 122, 31, 0.07),
       transparent 55%
     ),
     #0d1117;
@@ -51,20 +60,24 @@
 }
 
 :root[data-theme="light"] {
+  --hover-overlay: rgba(18, 23, 35, 0.06);
+  --scrollbar-thumb: rgba(58, 70, 88, 0.34);
+  --scrollbar-thumb-hover: rgba(58, 70, 88, 0.52);
+  --scrollbar-track: rgba(228, 233, 240, 0.65);
   --app-bg:
     radial-gradient(
       circle at 16% 16%,
-      rgba(255, 155, 74, 0.14),
+      rgba(255, 155, 74, 0.1),
       transparent 44%
     ),
     radial-gradient(
       circle at 82% 24%,
-      rgba(84, 153, 255, 0.16),
+      rgba(84, 153, 255, 0.12),
       transparent 42%
     ),
     radial-gradient(
       circle at 36% 82%,
-      rgba(246, 122, 31, 0.14),
+      rgba(246, 122, 31, 0.1),
       transparent 50%
     ),
     #f4f7fb;
@@ -83,6 +96,59 @@ body {
   background: var(--app-bg);
   color: var(--app-fg);
   min-height: 100vh;
+}
+
+@layer components {
+  .surface-panel {
+    @apply rounded-2xl border border-white/10 bg-ink-900/70 shadow-card;
+  }
+
+  .surface-card {
+    @apply rounded-xl border border-white/10 bg-black/20;
+  }
+
+  .btn-flat {
+    @apply rounded-full border border-white/10 px-3 py-1 text-xs text-ink-200 transition hover:border-flare-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply rounded-full border border-flare-300 bg-flare-400/15 px-3 py-1 text-xs text-ink-50 transition hover:bg-flare-400/25 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .input-base {
+    @apply w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none;
+  }
+
+  .textarea-base {
+    @apply h-24 w-full resize-none rounded-xl border border-white/10 bg-black/25 p-3 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none;
+  }
+
+  .codex-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  .codex-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .codex-scrollbar::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 999px;
+  }
+
+  .codex-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .codex-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: content-box;
+  }
 }
 
 [data-ui-audit-dead-action="true"] {

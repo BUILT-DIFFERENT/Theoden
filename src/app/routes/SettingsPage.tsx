@@ -5,8 +5,10 @@ import { execCommand } from "@/app/services/cli/commands";
 import {
   loadMergedConfig,
   mcpServersFromConfig,
+  providersFromConfig,
   validateConfig,
   type MappedMcpServer,
+  type MappedProviderStatus,
 } from "@/app/services/cli/config";
 import { listThreads, unarchiveThread } from "@/app/services/cli/threads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
@@ -18,7 +20,6 @@ import {
 import {
   defaultSettingsSection,
   mockEditors,
-  mockProviders,
   settingsSections,
   type SettingsSectionId,
 } from "@/app/state/settingsData";
@@ -43,6 +44,26 @@ const fallbackMcpServers: MappedMcpServer[] = [
     name: "Jira",
     endpoint: "https://mcp.jira.local",
     status: "disabled",
+  },
+];
+
+const fallbackProviderStatuses: MappedProviderStatus[] = [
+  {
+    id: "local",
+    status: isTauri() ? "ready" : "unavailable",
+    detail: isTauri()
+      ? "Desktop runtime connected"
+      : "Desktop runtime unavailable",
+  },
+  {
+    id: "worktree",
+    status: "unavailable",
+    detail: "Add a workspace to enable worktree runs",
+  },
+  {
+    id: "cloud",
+    status: "stub",
+    detail: "Cloud execution not configured",
   },
 ];
 
@@ -158,6 +179,9 @@ export function SettingsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [mcpServers, setMcpServers] =
     useState<MappedMcpServer[]>(fallbackMcpServers);
+  const [providerStatuses, setProviderStatuses] = useState<
+    MappedProviderStatus[]
+  >(fallbackProviderStatuses);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [archivedThreads, setArchivedThreads] = useState<
     Array<{ id: string; preview: string; updatedAt: number }>
@@ -257,6 +281,7 @@ export function SettingsPage() {
       const config = await loadMergedConfig(resolvedWorkspace);
       const parsedServers = mcpServersFromConfig(config);
       setMcpServers(parsedServers.length ? parsedServers : fallbackMcpServers);
+      setProviderStatuses(providersFromConfig(config));
       return parsedServers.length
         ? `Reloaded ${parsedServers.length} MCP server(s).`
         : "No MCP servers found in config. Showing defaults.";
@@ -380,7 +405,11 @@ export function SettingsPage() {
     }, "Failed to restore archived threads.");
 
   useEffect(() => {
-    if (activeSectionId !== "mcp-servers") {
+    if (
+      activeSectionId !== "mcp-servers" &&
+      activeSectionId !== "configuration" &&
+      activeSectionId !== "environments"
+    ) {
       return;
     }
     void refreshMcpServers();
@@ -553,7 +582,7 @@ export function SettingsPage() {
               <h3 className="font-display text-base text-ink-100">
                 Execution backends
               </h3>
-              {mockProviders.map((provider) => (
+              {providerStatuses.map((provider) => (
                 <div
                   key={provider.id}
                   className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
@@ -873,7 +902,7 @@ export function SettingsPage() {
               </label>
             </div>
             <div className="mt-5 space-y-2 text-sm">
-              {mockProviders.map((provider) => (
+              {providerStatuses.map((provider) => (
                 <div
                   key={provider.id}
                   className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2"

@@ -1,5 +1,6 @@
-import { Outlet, useMatchRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { Outlet, useMatchRoute, useNavigate } from "@tanstack/react-router";
+import { listen } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DiffPanel } from "@/app/components/diff/DiffPanel";
 import { BottomBar } from "@/app/components/layout/BottomBar";
@@ -9,20 +10,26 @@ import { ThreadTopBar } from "@/app/components/threads/ThreadTopBar";
 import { WorkspaceModal } from "@/app/components/workspaces/WorkspaceModal";
 import {
   sendAppServerNotification,
-  sendAppServerRequest,
   startAppServer,
 } from "@/app/services/cli/appServer";
+import { requestAppServer } from "@/app/services/cli/rpc";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useInteractionAudit } from "@/app/services/dev/useInteractionAudit";
+import {
+  AppServerHealthProvider,
+  type AppServerHealthStatus,
+} from "@/app/state/appServerHealth";
 import { useAppUi } from "@/app/state/appUi";
 import { EnvironmentUiProvider } from "@/app/state/environmentUi";
+import { defaultSettingsSection } from "@/app/state/settingsData";
 import { ThreadUiProvider, type ThreadModal } from "@/app/state/threadUi";
 import { WorkspaceUiProvider } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
 
 export function AppShell() {
   const matchRoute = useMatchRoute();
+  const navigate = useNavigate();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const newThreadMatch = matchRoute({ to: "/" });
   const automationsMatch = matchRoute({ to: "/automations" });
@@ -32,26 +39,31 @@ export function AppShell() {
   const { thread } = useThreadDetail(threadId);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<ThreadModal>(null);
-  const { isTerminalOpen, toggleTerminal } = useAppUi();
+  const [appServerStatus, setAppServerStatus] = useState<AppServerHealthStatus>(
+    () => (isTauri() ? "booting" : "ready"),
+  );
+  const [appServerError, setAppServerError] = useState<string | null>(null);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const { isTerminalOpen, toggleTerminal, setComposerDraft } = useAppUi();
+  const bootstrapInFlightRef = useRef(false);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef(0);
   useAppServerStream();
   useInteractionAudit();
 
-  useEffect(() => {
-    if (!isTauri()) return;
-    if (
-      window.__CODEX_APP_SERVER_STARTED__ ||
-      window.__THEODEN_APP_SERVER_STARTED__
-    ) {
-      return;
-    }
-    window.__CODEX_APP_SERVER_STARTED__ = true;
-    window.__THEODEN_APP_SERVER_STARTED__ = true;
-
-    const bootstrap = async () => {
+  const bootstrapAppServer = useCallback(
+    async (status: AppServerHealthStatus) => {
+      if (!isTauri()) {
+        return;
+      }
+      if (bootstrapInFlightRef.current) {
+        return;
+      }
+      bootstrapInFlightRef.current = true;
+      setAppServerStatus(status);
       try {
         await startAppServer({});
-        await sendAppServerRequest({
-          id: Date.now(),
+        await requestAppServer({
           method: "initialize",
           params: {
             clientInfo: {
@@ -62,25 +74,255 @@ export function AppShell() {
           },
         });
         await sendAppServerNotification("initialized");
+        reconnectAttemptRef.current = 0;
+        setReconnectAttempts(0);
+        setAppServerError(null);
+        setAppServerStatus("ready");
       } catch (error) {
-        console.warn("App-server bootstrap failed", error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "App-server bootstrap failed.";
+        setAppServerError(message);
+        setAppServerStatus("error");
+      } finally {
+        bootstrapInFlightRef.current = false;
+      }
+    },
+    [],
+  );
+
+  const scheduleReconnect = useCallback(
+    (reason: string) => {
+      if (!isTauri()) {
+        return;
+      }
+      reconnectAttemptRef.current += 1;
+      const attempt = reconnectAttemptRef.current;
+      setReconnectAttempts(attempt);
+      setAppServerError(reason);
+      setAppServerStatus("reconnecting");
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+      }
+      const delayMs = Math.min(1000 * 2 ** Math.max(attempt - 1, 0), 10000);
+      reconnectTimerRef.current = window.setTimeout(() => {
+        reconnectTimerRef.current = null;
+        void bootstrapAppServer("reconnecting");
+      }, delayMs);
+    },
+    [bootstrapAppServer],
+  );
+
+  const restartAppServer = useCallback(() => {
+    reconnectAttemptRef.current = 0;
+    setReconnectAttempts(0);
+    setAppServerError(null);
+    if (reconnectTimerRef.current !== null) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    void bootstrapAppServer("booting");
+  }, [bootstrapAppServer]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    void bootstrapAppServer("booting");
+    return () => {
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+  }, [bootstrapAppServer]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
+    let active = true;
+    let unlistenExit: (() => void) | undefined;
+    let unlistenTimeout: (() => void) | undefined;
+
+    const registerListeners = async () => {
+      const detachExit = await listen<{
+        code?: number | null;
+        success?: boolean;
+        error?: string;
+      }>("app-server-exit", (event) => {
+        const payload = event.payload ?? {};
+        const reason = payload.error
+          ? `app-server exited: ${payload.error}`
+          : payload.code === undefined || payload.code === null
+            ? "app-server exited unexpectedly."
+            : `app-server exited with code ${payload.code}.`;
+        scheduleReconnect(reason);
+      });
+
+      if (active) {
+        unlistenExit = detachExit;
+      } else {
+        detachExit();
+      }
+
+      const detachTimeout = await listen<{ id?: string; method?: string }>(
+        "app-server-timeout",
+        (event) => {
+          const payload = event.payload ?? {};
+          const method = payload.method ?? "unknown";
+          scheduleReconnect(`app-server request timed out (${method}).`);
+        },
+      );
+
+      if (active) {
+        unlistenTimeout = detachTimeout;
+      } else {
+        detachTimeout();
       }
     };
 
-    void bootstrap();
-  }, []);
+    void registerListeners();
+
+    return () => {
+      active = false;
+      unlistenExit?.();
+      unlistenTimeout?.();
+    };
+  }, [scheduleReconnect]);
 
   useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+      if (target.isContentEditable) {
+        return true;
+      }
+      const tagName = target.tagName.toLowerCase();
+      if (tagName === "textarea") {
+        return true;
+      }
+      if (tagName !== "input") {
+        return false;
+      }
+      const input = target as HTMLInputElement;
+      const type = (input.type || "text").toLowerCase();
+      return !["button", "checkbox", "radio", "submit"].includes(type);
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      if (event.key.toLowerCase() !== "j") return;
+      const key = event.key.toLowerCase();
+      const isShortcutModifier = event.metaKey || event.ctrlKey;
+      if (isShortcutModifier && key === "j") {
+        event.preventDefault();
+        toggleTerminal();
+        return;
+      }
+
+      if (
+        event.altKey ||
+        isShortcutModifier ||
+        event.shiftKey ||
+        event.repeat ||
+        isTypingTarget(event.target)
+      ) {
+        return;
+      }
+
+      if (key === "n") {
+        event.preventDefault();
+        setComposerDraft("");
+        setReviewOpen(false);
+        setActiveModal(null);
+        void navigate({ to: "/" });
+        return;
+      }
+      if (key === "a") {
+        event.preventDefault();
+        void navigate({ to: "/automations" });
+        return;
+      }
+      if (key !== "s") {
+        return;
+      }
       event.preventDefault();
-      toggleTerminal();
+      void navigate({ to: "/skills" });
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleTerminal]);
+  }, [
+    navigate,
+    setActiveModal,
+    setComposerDraft,
+    setReviewOpen,
+    toggleTerminal,
+  ]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    const listenForMenuCommands = async () => {
+      const detach = await listen<string>("codex-menu-command", (event) => {
+        switch (event.payload) {
+          case "new-thread":
+            void navigate({ to: "/" });
+            break;
+          case "open-automations":
+            void navigate({ to: "/automations" });
+            break;
+          case "open-skills":
+            void navigate({ to: "/skills" });
+            break;
+          case "open-settings":
+            void navigate({
+              to: "/settings/$section",
+              params: { section: defaultSettingsSection },
+            });
+            break;
+          case "reload-ui":
+            window.location.reload();
+            break;
+          case "toggle-terminal":
+            toggleTerminal();
+            break;
+          case "toggle-review-panel":
+            setReviewOpen((open) => !open);
+            break;
+          case "open-docs":
+            window.open(
+              "https://developers.openai.com/codex/",
+              "_blank",
+              "noopener,noreferrer",
+            );
+            break;
+          default:
+            break;
+        }
+      });
+
+      if (cancelled) {
+        detach();
+        return;
+      }
+      unlisten = detach;
+    };
+
+    void listenForMenuCommands();
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [navigate, toggleTerminal]);
 
   const threadUi = useMemo(
     () => ({
@@ -90,6 +332,15 @@ export function AppShell() {
       setActiveModal,
     }),
     [activeModal, reviewOpen],
+  );
+  const appServerHealth = useMemo(
+    () => ({
+      status: appServerStatus,
+      lastError: appServerError,
+      reconnectAttempts,
+      restart: restartAppServer,
+    }),
+    [appServerError, appServerStatus, reconnectAttempts, restartAppServer],
   );
 
   const topBarTitle = automationsMatch
@@ -104,41 +355,43 @@ export function AppShell() {
   return (
     <WorkspaceUiProvider>
       <EnvironmentUiProvider>
-        <ThreadUiProvider value={threadUi}>
-          <div className="min-h-screen text-ink-50">
-            <div className="flex min-h-screen">
-              <AppSidebar />
-              <main className="flex min-h-screen flex-1 flex-col">
-                <ThreadTopBar
-                  title={topBarTitle}
-                  thread={threadMatch ? thread : undefined}
-                  isNewThread={Boolean(newThreadMatch)}
-                  isTerminalOpen={isTerminalOpen}
-                  onToggleTerminal={toggleTerminal}
-                />
-                <div
-                  className={
-                    showReviewPanel
-                      ? "grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]"
-                      : "flex-1 px-6 py-6"
-                  }
-                >
-                  <section className="min-h-[70vh]">
-                    <Outlet />
-                  </section>
-                  {showReviewPanel ? (
-                    <aside className="hidden lg:block">
-                      <DiffPanel thread={threadMatch ? thread : undefined} />
-                    </aside>
-                  ) : null}
-                </div>
-                <TerminalDrawer isOpen={isTerminalOpen} />
-                <BottomBar />
-              </main>
+        <AppServerHealthProvider value={appServerHealth}>
+          <ThreadUiProvider value={threadUi}>
+            <div className="min-h-screen text-ink-50">
+              <div className="flex min-h-screen">
+                <AppSidebar />
+                <main className="flex min-h-screen flex-1 flex-col">
+                  <ThreadTopBar
+                    title={topBarTitle}
+                    thread={threadMatch ? thread : undefined}
+                    isNewThread={Boolean(newThreadMatch)}
+                    isTerminalOpen={isTerminalOpen}
+                    onToggleTerminal={toggleTerminal}
+                  />
+                  <div
+                    className={
+                      showReviewPanel
+                        ? "grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]"
+                        : "flex-1 px-6 py-6"
+                    }
+                  >
+                    <section className="min-h-[70vh]">
+                      <Outlet />
+                    </section>
+                    {showReviewPanel ? (
+                      <aside className="hidden lg:block">
+                        <DiffPanel thread={threadMatch ? thread : undefined} />
+                      </aside>
+                    ) : null}
+                  </div>
+                  <TerminalDrawer isOpen={isTerminalOpen} />
+                  <BottomBar />
+                </main>
+              </div>
             </div>
-          </div>
-          <WorkspaceModal />
-        </ThreadUiProvider>
+            <WorkspaceModal />
+          </ThreadUiProvider>
+        </AppServerHealthProvider>
       </EnvironmentUiProvider>
     </WorkspaceUiProvider>
   );

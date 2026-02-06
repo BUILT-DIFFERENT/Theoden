@@ -8,6 +8,13 @@ export interface CommitResult {
   logs: string[];
 }
 
+export interface PrPrerequisiteStatus {
+  ready: boolean;
+  reason?: string;
+  steps: string[];
+  account?: string;
+}
+
 const NEWLINE_REGEX = /\r?\n/;
 
 function appendCommandOutput(
@@ -50,6 +57,59 @@ async function ensureGhAvailable(cwd: string) {
       "GitHub CLI (gh) is not available. Install it and run `gh auth login` before creating a PR.",
     );
   }
+}
+
+function parseGhAccount(output: string) {
+  const match = output.match(/Logged in to [^\s]+ as (\S+)/i);
+  return match?.[1];
+}
+
+export async function getPrPrerequisiteStatus(
+  cwd: string,
+): Promise<PrPrerequisiteStatus> {
+  const installSteps = [
+    "Install GitHub CLI from https://cli.github.com/.",
+    "Re-open Codex after installation.",
+  ];
+  const authSteps = [
+    "Run `gh auth login` in this repository.",
+    "Run `gh auth status` to confirm authentication.",
+  ];
+
+  try {
+    const version = await execCommand({ command: ["gh", "--version"], cwd });
+    if (version.exitCode !== 0) {
+      return {
+        ready: false,
+        reason: "GitHub CLI is not installed.",
+        steps: installSteps,
+      };
+    }
+  } catch {
+    return {
+      ready: false,
+      reason: "GitHub CLI is not installed.",
+      steps: installSteps,
+    };
+  }
+
+  const authStatus = await execCommand({
+    command: ["gh", "auth", "status"],
+    cwd,
+  });
+  const combinedOutput = `${authStatus.stdout}\n${authStatus.stderr}`.trim();
+  if (authStatus.exitCode !== 0) {
+    return {
+      ready: false,
+      reason: "GitHub CLI is installed but not authenticated.",
+      steps: authSteps,
+    };
+  }
+  return {
+    ready: true,
+    steps: [],
+    account: parseGhAccount(combinedOutput),
+  };
 }
 
 function summarizeCommitMessage(files: string[]) {
@@ -122,6 +182,14 @@ export async function pushBranch(cwd: string, branch: string) {
 export async function createPullRequest(cwd: string) {
   const logs: string[] = [];
   await ensureGhAvailable(cwd);
+  const prerequisiteStatus = await getPrPrerequisiteStatus(cwd);
+  if (!prerequisiteStatus.ready) {
+    const reason = prerequisiteStatus.reason ?? "PR prerequisites are not met.";
+    const steps = prerequisiteStatus.steps.length
+      ? ` Next steps: ${prerequisiteStatus.steps.join(" ")}`
+      : "";
+    throw new Error(`${reason}${steps}`);
+  }
   const prResult = await execCommand({
     command: ["gh", "pr", "create", "--fill"],
     cwd,

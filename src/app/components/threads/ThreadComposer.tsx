@@ -12,7 +12,14 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { resumeThread, startThread, startTurn } from "@/app/services/cli/turns";
+import { clearActiveRun, getActiveRun } from "@/app/services/cli/activeRuns";
+import { getWorkspaceFileIndex } from "@/app/services/cli/fileIndex";
+import {
+  cancelTurn,
+  resumeThread,
+  startThread,
+  startTurn,
+} from "@/app/services/cli/turns";
 import { useRunProgress } from "@/app/services/cli/useRunProgress";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
@@ -25,7 +32,10 @@ import { useThreadUi } from "@/app/state/threadUi";
 import { useRuntimeSettings } from "@/app/state/useRuntimeSettings";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
-import { workspaceNameFromPath } from "@/app/utils/workspace";
+import {
+  resolveWorkspacePath,
+  workspaceNameFromPath,
+} from "@/app/utils/workspace";
 
 const qualityLabels: Record<QualityPreset, string> = {
   low: "Low",
@@ -45,14 +55,6 @@ const effortFromQuality: Record<
 };
 
 const modelOptions = ["GPT-5.2-Codex", "GPT-5", "o4-mini"] as const;
-const agentOptions = ["Default", "Review", "Docs"] as const;
-const fallbackAttachmentOptions = [
-  "src/app/components/threads/ThreadComposer.tsx",
-  "src/app/routes/ThreadPage.tsx",
-  "src/app/components/diff/DiffPanel.tsx",
-  "docs/custom/plan.md",
-  "package.json",
-] as const;
 const commandOptions = [
   {
     id: "summarize",
@@ -75,6 +77,8 @@ const commandOptions = [
     description: "Ask Codex to refresh plan/checklist progress.",
   },
 ] as const;
+
+type CommandOptionId = (typeof commandOptions)[number]["id"];
 
 type InlineMenuType = "file" | "command";
 
@@ -105,7 +109,7 @@ export function ThreadComposer({
   const { thread: threadDetail } = useThreadDetail(threadId);
   const thread = threadId ? threadDetail : undefined;
   const runProgress = useRunProgress(threadId);
-  const { setActiveModal } = useThreadUi();
+  const { setActiveModal, setReviewOpen } = useThreadUi();
   const { environmentMode, setEnvironmentMode } = useEnvironmentUi();
   const runtimeSettings = useRuntimeSettings();
   const queryClient = useQueryClient();
@@ -118,18 +122,22 @@ export function ThreadComposer({
     setComposerDraft,
   } = useAppUi();
   const { workspaces } = useWorkspaces();
-  const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
-    useWorkspaceUi();
+  const { selectedWorkspace, setWorkspacePickerOpen } = useWorkspaceUi();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const branchMenuRef = useRef<HTMLDivElement | null>(null);
-  const [agent, setAgent] = useState<(typeof agentOptions)[number]>("Default");
   const [attachmentsDrawerOpen, setAttachmentsDrawerOpen] = useState(false);
   const [selectedAttachments, setSelectedAttachments] = useState<string[]>([]);
   const [inlineMenu, setInlineMenu] = useState<InlineMenuState | null>(null);
+  const [inlineSelectionIndex, setInlineSelectionIndex] = useState(0);
+  const [indexedWorkspaceFiles, setIndexedWorkspaceFiles] = useState<string[]>(
+    [],
+  );
+  const [indexingFiles, setIndexingFiles] = useState(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
   const [isContextLocked, setIsContextLocked] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,20 +150,14 @@ export function ThreadComposer({
     if (!thread?.mode) return;
     setEnvironmentMode(thread.mode);
   }, [setEnvironmentMode, thread?.mode]);
-  useEffect(() => {
-    if (selectedWorkspace) return;
-    if (!workspaces.length) return;
-    setSelectedWorkspace(workspaces[0].path);
-  }, [selectedWorkspace, setSelectedWorkspace, workspaces]);
-
   const isRunning = runProgress.isActive;
-  const isBusy = isSubmitting || isRunning;
-  const resolvedWorkspacePath =
-    thread?.subtitle ??
-    selectedWorkspace ??
-    workspaces[0]?.path ??
-    workspaceName ??
-    null;
+  const isBusy = isSubmitting || isRunning || isStopping;
+  const resolvedWorkspacePath = resolveWorkspacePath({
+    threadSubtitle: thread?.subtitle,
+    selectedWorkspace,
+    workspaces,
+    fallbackWorkspace: workspaceName,
+  });
   const canSubmit = useMemo(() => {
     return (
       !isBusy &&
@@ -163,13 +165,59 @@ export function ThreadComposer({
       Boolean(resolvedWorkspacePath)
     );
   }, [composerDraft, isBusy, resolvedWorkspacePath]);
+
+  useEffect(() => {
+    if (!resolvedWorkspacePath) {
+      setIndexedWorkspaceFiles([]);
+      return;
+    }
+    if (!attachmentsDrawerOpen && inlineMenu?.type !== "file") {
+      return;
+    }
+
+    let cancelled = false;
+    setIndexingFiles(true);
+    const timeoutId = window.setTimeout(() => {
+      getWorkspaceFileIndex(resolvedWorkspacePath)
+        .then((files) => {
+          if (!cancelled) {
+            setIndexedWorkspaceFiles(files);
+          }
+        })
+        .catch((indexError) => {
+          if (!cancelled) {
+            setError(
+              indexError instanceof Error
+                ? indexError.message
+                : "Failed to build workspace file index.",
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIndexingFiles(false);
+          }
+        });
+    }, 140);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    attachmentsDrawerOpen,
+    inlineMenu?.query,
+    inlineMenu?.type,
+    resolvedWorkspacePath,
+  ]);
+
   const availableAttachmentOptions = useMemo(() => {
     const options = new Set<string>();
     thread?.attachments.forEach((attachment) => options.add(attachment.path));
     thread?.diffSummary.files.forEach((file) => options.add(file.path));
-    fallbackAttachmentOptions.forEach((path) => options.add(path));
+    indexedWorkspaceFiles.forEach((path) => options.add(path));
     return Array.from(options);
-  }, [thread?.attachments, thread?.diffSummary.files]);
+  }, [indexedWorkspaceFiles, thread?.attachments, thread?.diffSummary.files]);
   const inlineFileOptions = useMemo(() => {
     if (inlineMenu?.type !== "file") {
       return [];
@@ -195,6 +243,46 @@ export function ThreadComposer({
     });
     return filtered.slice(0, 6);
   }, [inlineMenu]);
+  const activeInlineOptions = inlineMenu
+    ? inlineMenu.type === "file"
+      ? inlineFileOptions
+      : inlineCommandOptions
+    : [];
+
+  useEffect(() => {
+    if (!activeInlineOptions.length) {
+      setInlineSelectionIndex(0);
+      return;
+    }
+    setInlineSelectionIndex((current) =>
+      current >= activeInlineOptions.length ? 0 : current,
+    );
+  }, [activeInlineOptions.length, inlineMenu?.tokenStart, inlineMenu?.type]);
+  const selectedInlineFile =
+    inlineMenu?.type === "file"
+      ? inlineFileOptions[inlineSelectionIndex]
+      : null;
+  const selectedInlineCommand =
+    inlineMenu?.type === "command"
+      ? inlineCommandOptions[inlineSelectionIndex]
+      : null;
+
+  const applyActiveInlineSelection = () => {
+    if (!inlineMenu) {
+      return;
+    }
+    if (inlineMenu.type === "file") {
+      if (!selectedInlineFile) {
+        return;
+      }
+      applyInlineSelection(selectedInlineFile);
+      return;
+    }
+    if (!selectedInlineCommand) {
+      return;
+    }
+    applyInlineSelection(selectedInlineCommand.id);
+  };
   const { status: gitStatus } = useWorkspaceGitStatus(resolvedWorkspacePath);
   const { branches } = useWorkspaceBranches(resolvedWorkspacePath);
   const branchLabel = gitStatus?.branch ?? "main";
@@ -256,6 +344,7 @@ export function ThreadComposer({
       tokenStart,
       tokenEnd: resolvedCursor,
     });
+    setInlineSelectionIndex(0);
   };
 
   const addAttachment = (path: string) => {
@@ -273,18 +362,16 @@ export function ThreadComposer({
     );
   };
 
-  const applyInlineSelection = (value: string) => {
+  const applyInlineFileSelection = (value: string) => {
     if (!inlineMenu) {
       return;
     }
     const menuState = inlineMenu;
-    const replacement = menuState.type === "file" ? `@${value} ` : `/${value} `;
+    const replacement = `@${value} `;
     const nextPrompt = `${composerDraft.slice(0, menuState.tokenStart)}${replacement}${composerDraft.slice(menuState.tokenEnd)}`;
     setComposerDraft(nextPrompt);
     setInlineMenu(null);
-    if (menuState.type === "file") {
-      addAttachment(value);
-    }
+    addAttachment(value);
 
     const nextCursor = menuState.tokenStart + replacement.length;
     window.requestAnimationFrame(() => {
@@ -295,66 +382,157 @@ export function ThreadComposer({
     });
   };
 
-  const handleSubmit = async () => {
-    if (!isTauri()) return;
-    if (!canSubmit) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      if (!resolvedWorkspacePath) {
-        setWorkspacePickerOpen(true);
-        throw new Error("Select a workspace before starting a run.");
-      }
-      const cwd = resolvedWorkspacePath ?? undefined;
-      let targetThreadId: string | undefined = threadId;
-      const shouldStartNewThread =
-        !targetThreadId ||
-        runtimeSettings.followUpBehavior === "new-thread" ||
-        (runtimeSettings.followUpBehavior === "ask" &&
-          window.confirm(
-            "Start a new thread for this prompt? Click Cancel to append in the current thread.",
-          ));
+  const submitPrompt = async (
+    prompt: string,
+    attachments: string[] = [],
+    clearComposerAfterSubmit = true,
+  ) => {
+    if (!isTauri()) {
+      throw new Error("Runs are available in the desktop app.");
+    }
+    if (!resolvedWorkspacePath) {
+      setWorkspacePickerOpen(true);
+      throw new Error("Select a workspace before starting a run.");
+    }
 
-      if (shouldStartNewThread) {
-        const newThread = await startThread({ cwd });
-        targetThreadId = newThread?.id;
-        if (targetThreadId) {
-          await navigate({
-            to: "/t/$threadId",
-            params: { threadId: targetThreadId },
-          });
-        }
+    const cwd = resolvedWorkspacePath ?? undefined;
+    let targetThreadId: string | undefined = threadId;
+    const shouldStartNewThread =
+      !targetThreadId ||
+      runtimeSettings.followUpBehavior === "new-thread" ||
+      (runtimeSettings.followUpBehavior === "ask" &&
+        window.confirm(
+          "Start a new thread for this prompt? Click Cancel to append in the current thread.",
+        ));
+
+    if (shouldStartNewThread) {
+      const newThread = await startThread({ cwd });
+      targetThreadId = newThread?.id;
+      if (targetThreadId) {
+        await navigate({
+          to: "/t/$threadId",
+          params: { threadId: targetThreadId },
+        });
       }
-      if (!targetThreadId) {
-        throw new Error("Unable to start a new thread.");
-      }
-      if (!shouldStartNewThread) {
-        await resumeThread({ threadId: targetThreadId });
-      }
-      const trimmedPrompt = composerDraft.trim();
-      const attachmentContext = selectedAttachments.length
-        ? `\n\nAttached files:\n${selectedAttachments.map((path) => `- ${path}`).join("\n")}`
-        : "";
-      const turnInput = `${trimmedPrompt}${attachmentContext}`;
-      await startTurn({
-        threadId: targetThreadId,
-        input: turnInput,
-        cwd,
-        effort: effortFromQuality[qualityPreset],
-      });
-      onSubmitted?.(turnInput);
+    }
+    if (!targetThreadId) {
+      throw new Error("Unable to start a new thread.");
+    }
+    if (!shouldStartNewThread) {
+      await resumeThread({ threadId: targetThreadId });
+    }
+
+    const attachmentContext = attachments.length
+      ? `\n\nAttached files:\n${attachments.map((path) => `- ${path}`).join("\n")}`
+      : "";
+    const turnInput = `${prompt}${attachmentContext}`;
+    await startTurn({
+      threadId: targetThreadId,
+      input: turnInput,
+      cwd,
+      effort: effortFromQuality[qualityPreset],
+    });
+    onSubmitted?.(turnInput);
+
+    if (clearComposerAfterSubmit) {
       setComposerDraft("");
       setSelectedAttachments([]);
       setInlineMenu(null);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to start run.");
+    }
+  };
+
+  const runComposerCommand = async (commandId: CommandOptionId) => {
+    setInlineMenu(null);
+    setError(null);
+    const commandPrompts: Record<CommandOptionId, string> = {
+      summarize:
+        "Summarize the current workspace changes and call out any risks.",
+      tests:
+        "Run the most relevant test commands for the current changes and report failures.",
+      review:
+        "Review the current code changes and list bugs, regressions, and missing tests.",
+      plan: "Update docs/custom/plan.md with current progress and remaining work.",
+    };
+    if (commandId === "review") {
+      setReviewOpen(true);
+    }
+
+    setIsSubmitting(true);
+    try {
+      await submitPrompt(commandPrompts[commandId], []);
+    } catch (commandError) {
+      setError(
+        commandError instanceof Error
+          ? commandError.message
+          : "Failed to run command.",
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleStop = () => {
-    setIsSubmitting(false);
+  const applyInlineSelection = (value: string) => {
+    if (!inlineMenu) {
+      return;
+    }
+    if (inlineMenu.type === "file") {
+      applyInlineFileSelection(value);
+      return;
+    }
+    void runComposerCommand(value as CommandOptionId);
+  };
+
+  const handleSubmit = async () => {
+    if (!canSubmit) {
+      return;
+    }
+    const trimmedPrompt = composerDraft.trim();
+    if (!trimmedPrompt) {
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await submitPrompt(trimmedPrompt, selectedAttachments);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Failed to start run.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (isSubmitting && !isRunning) {
+      setIsSubmitting(false);
+      return;
+    }
+    if (!threadId) {
+      setError("No active thread to cancel.");
+      return;
+    }
+
+    const activeTurnId = getActiveRun(threadId)?.turnId ?? null;
+    setIsStopping(true);
+    setError(null);
+    try {
+      await cancelTurn({ threadId, turnId: activeTurnId });
+      clearActiveRun(threadId);
+      await queryClient.invalidateQueries({
+        queryKey: ["threads", "read", threadId],
+      });
+    } catch (stopError) {
+      setError(
+        stopError instanceof Error
+          ? stopError.message
+          : "Failed to cancel active run.",
+      );
+    } finally {
+      setIsStopping(false);
+    }
   };
 
   useEffect(() => {
@@ -394,7 +572,7 @@ export function ThreadComposer({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-[28px] bg-black/25 p-4 backdrop-blur-xl ring-1 ring-white/10">
+      <div className="rounded-[24px] bg-ink-900/70 p-4 ring-1 ring-white/10">
         {selectedAttachments.length ? (
           <div className="mb-3 flex flex-wrap gap-2">
             {selectedAttachments.map((attachment) => (
@@ -430,74 +608,124 @@ export function ThreadComposer({
             setComposerPrompt(composerDraft, event.currentTarget.selectionStart)
           }
           onKeyDown={(event) => {
-            if (event.key === "Escape" && inlineMenu) {
-              event.preventDefault();
-              setInlineMenu(null);
+            if (inlineMenu) {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setInlineMenu(null);
+                return;
+              }
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                if (!activeInlineOptions.length) {
+                  return;
+                }
+                setInlineSelectionIndex(
+                  (current) => (current + 1) % activeInlineOptions.length,
+                );
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                if (!activeInlineOptions.length) {
+                  return;
+                }
+                setInlineSelectionIndex(
+                  (current) =>
+                    (current - 1 + activeInlineOptions.length) %
+                    activeInlineOptions.length,
+                );
+                return;
+              }
+              if (event.key === "Tab") {
+                event.preventDefault();
+                if (!activeInlineOptions.length) {
+                  return;
+                }
+                if (event.shiftKey) {
+                  setInlineSelectionIndex(
+                    (current) =>
+                      (current - 1 + activeInlineOptions.length) %
+                      activeInlineOptions.length,
+                  );
+                } else {
+                  setInlineSelectionIndex(
+                    (current) => (current + 1) % activeInlineOptions.length,
+                  );
+                }
+                return;
+              }
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                applyActiveInlineSelection();
+                return;
+              }
+            }
+            if (event.key !== "Enter" || event.shiftKey) {
               return;
             }
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              inlineMenu &&
-              (inlineFileOptions.length || inlineCommandOptions.length)
-            ) {
-              event.preventDefault();
-              if (inlineMenu.type === "file" && inlineFileOptions.length) {
-                applyInlineSelection(inlineFileOptions[0]);
-                return;
-              }
-              if (
-                inlineMenu.type === "command" &&
-                inlineCommandOptions.length
-              ) {
-                applyInlineSelection(inlineCommandOptions[0].id);
-                return;
-              }
-            }
-            if (event.key !== "Enter" || event.shiftKey) return;
             event.preventDefault();
             void handleSubmit();
           }}
         />
         {error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}
-        {inlineMenu &&
-        inlineMenu.type === "file" &&
-        inlineFileOptions.length ? (
-          <div className="mt-2 rounded-2xl border border-white/10 bg-ink-900/95 p-2 text-xs shadow-card">
+        {inlineMenu && inlineMenu.type === "file" ? (
+          <div className="surface-panel mt-2 p-2 text-xs">
             <p className="px-2 pb-1 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
               Attach file
             </p>
-            {inlineFileOptions.map((option) => (
-              <button
-                key={option}
-                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
-                onClick={() => applyInlineSelection(option)}
-              >
-                <span className="truncate">{option}</span>
-                <span className="text-[0.65rem] text-ink-500">@</span>
-              </button>
-            ))}
+            {indexingFiles ? (
+              <p className="px-3 py-2 text-[0.65rem] text-ink-500">
+                Indexing workspace files…
+              </p>
+            ) : inlineFileOptions.length ? (
+              inlineFileOptions.map((option, optionIndex) => (
+                <button
+                  key={option}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 ${
+                    optionIndex === inlineSelectionIndex
+                      ? "bg-flare-400/10 text-ink-50"
+                      : "hover:bg-white/5"
+                  }`}
+                  onClick={() => applyInlineSelection(option)}
+                >
+                  <span className="truncate">{option}</span>
+                  <span className="text-[0.65rem] text-ink-500">@</span>
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-2 text-[0.65rem] text-ink-500">
+                No files match this query.
+              </p>
+            )}
           </div>
         ) : null}
-        {inlineMenu &&
-        inlineMenu.type === "command" &&
-        inlineCommandOptions.length ? (
-          <div className="mt-2 rounded-2xl border border-white/10 bg-ink-900/95 p-2 text-xs shadow-card">
+        {inlineMenu && inlineMenu.type === "command" ? (
+          <div className="surface-panel mt-2 p-2 text-xs">
             <p className="px-2 pb-1 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
               Commands
             </p>
-            {inlineCommandOptions.map((option) => (
-              <button
-                key={option.id}
-                className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
-                onClick={() => applyInlineSelection(option.id)}
-              >
-                <p className="text-ink-100">/{option.id}</p>
-                <p className="text-[0.65rem] text-ink-500">
-                  {option.description}
-                </p>
-              </button>
-            ))}
+            {inlineCommandOptions.length ? (
+              inlineCommandOptions.map((option, optionIndex) => (
+                <button
+                  key={option.id}
+                  className={`w-full rounded-xl px-3 py-2 text-left ${
+                    optionIndex === inlineSelectionIndex
+                      ? "bg-flare-400/10"
+                      : "hover:bg-white/5"
+                  }`}
+                  onClick={() => applyInlineSelection(option.id)}
+                >
+                  <p className="text-ink-100">/{option.id}</p>
+                  <p className="text-[0.65rem] text-ink-500">
+                    {option.description}
+                  </p>
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-2 text-[0.65rem] text-ink-500">
+                No commands match this query.
+              </p>
+            )}
           </div>
         ) : null}
         <div
@@ -513,22 +741,14 @@ export function ThreadComposer({
                   : "border-white/10 hover:border-flare-300"
               }`}
               onClick={() => setAttachmentsDrawerOpen((open) => !open)}
+              aria-label={
+                attachmentsDrawerOpen
+                  ? "Close attachment picker"
+                  : "Open attachment picker"
+              }
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
-            <select
-              className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
-              value={agent}
-              onChange={(event) =>
-                setAgent(event.target.value as (typeof agentOptions)[number])
-              }
-            >
-              {agentOptions.map((option) => (
-                <option key={option} value={option}>
-                  Agent: {option}
-                </option>
-              ))}
-            </select>
             <select
               className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
               value={activeModel}
@@ -570,6 +790,11 @@ export function ThreadComposer({
                   ? "Unlock composer controls"
                   : "Lock composer controls"
               }
+              aria-label={
+                isContextLocked
+                  ? "Unlock composer controls"
+                  : "Lock composer controls"
+              }
             >
               <Lock className="h-3.5 w-3.5" />
             </button>
@@ -577,7 +802,13 @@ export function ThreadComposer({
               className={`flex items-center justify-center rounded-full border border-flare-300 bg-flare-400/20 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-black/20 disabled:text-ink-400 ${
                 isCompactComposer ? "h-9 w-9" : "h-10 w-10"
               }`}
-              onClick={() => (isBusy ? handleStop() : void handleSubmit())}
+              onClick={() => {
+                if (isBusy) {
+                  void handleStop();
+                  return;
+                }
+                void handleSubmit();
+              }}
               disabled={!canSubmit && !isBusy}
             >
               {isBusy ? (
@@ -601,7 +832,7 @@ export function ThreadComposer({
                 Close
               </button>
             </div>
-            <div className="mt-2 max-h-40 space-y-1 overflow-auto">
+            <div className="codex-scrollbar mt-2 max-h-40 space-y-1 overflow-auto">
               {availableAttachmentOptions.map((option) => {
                 const attached = selectedAttachments.includes(option);
                 return (
@@ -680,7 +911,7 @@ export function ThreadComposer({
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
             {branchMenuOpen ? (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-white/10 bg-ink-900/95 p-2 text-[0.7rem] text-ink-200 shadow-card">
+              <div className="surface-panel absolute right-0 mt-2 w-56 p-2 text-[0.7rem] text-ink-200">
                 {branches.length ? (
                   branches.map((branch) => (
                     <button

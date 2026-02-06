@@ -10,7 +10,9 @@ import {
   parseAppServerNotification,
   parseAppServerRequest,
 } from "@/app/services/cli/appServerPayload";
+import { registerAutomationRunNotification } from "@/app/services/cli/automationRuns";
 import { registerDiffNotification } from "@/app/services/cli/diffUpdates";
+import { registerTerminalNotification } from "@/app/services/cli/terminalSessions";
 import { isTauri } from "@/app/utils/tauri";
 
 export function useAppServerStream() {
@@ -26,6 +28,8 @@ export function useAppServerStream() {
         registerActiveRunNotification(notification);
         registerApprovalItem(notification);
         registerDiffNotification(notification);
+        registerTerminalNotification(notification);
+        registerAutomationRunNotification(notification);
       }
     })
       .then((stop) => {
@@ -70,6 +74,8 @@ export function useAppServerStream() {
     registerActiveRunNotification,
     registerApprovalItem,
     registerDiffNotification,
+    registerTerminalNotification,
+    registerAutomationRunNotification,
     registerApprovalRequest,
   ]);
 }

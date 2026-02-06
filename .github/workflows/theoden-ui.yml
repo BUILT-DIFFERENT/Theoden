@@ -41,5 +41,8 @@ jobs:
       - name: Format
         run: pnpm format:app
 
+      - name: UI interaction smoke test
+        run: VITE_UI_SMOKE_TEST=1 pnpm app:test
+
       - name: Typecheck build
         run: pnpm app:build

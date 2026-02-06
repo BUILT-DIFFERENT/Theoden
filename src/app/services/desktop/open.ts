@@ -3,9 +3,20 @@ import {
   type CommandExecResult,
 } from "@/app/services/cli/commands";
 
-type DesktopPlatform = "windows" | "macos" | "linux";
+export type DesktopPlatform = "windows" | "macos" | "linux";
 
-function detectDesktopPlatform(): DesktopPlatform {
+export interface OpenTargetOption {
+  id:
+    | "editor"
+    | "terminal"
+    | "explorer"
+    | "windows-terminal"
+    | "command-prompt";
+  label: string;
+  detail: string;
+}
+
+export function detectDesktopPlatform(): DesktopPlatform {
   if (typeof navigator === "undefined") {
     return "linux";
   }
@@ -34,6 +45,62 @@ function ensureSuccess(result: CommandExecResult, action: string) {
 async function runCommand(command: string[], action: string) {
   const result = await execCommand({ command });
   ensureSuccess(result, action);
+}
+
+export function openTargetOptions(editorName: string): OpenTargetOption[] {
+  const platform = detectDesktopPlatform();
+  const targets: OpenTargetOption[] = [
+    {
+      id: "editor",
+      label: `Open in ${editorName}`,
+      detail: "Use configured editor command",
+    },
+    {
+      id: "terminal",
+      label:
+        platform === "windows"
+          ? "Open in terminal"
+          : platform === "macos"
+            ? "Open in Terminal"
+            : "Open in terminal",
+      detail:
+        platform === "windows"
+          ? "Default shell launcher"
+          : platform === "macos"
+            ? "Apple Terminal"
+            : "Detected terminal app",
+    },
+    {
+      id: "explorer",
+      label:
+        platform === "windows"
+          ? "Open in File Explorer"
+          : platform === "macos"
+            ? "Open in Finder"
+            : "Open in file manager",
+      detail:
+        platform === "windows"
+          ? "Reveal folder in Explorer"
+          : platform === "macos"
+            ? "Reveal folder in Finder"
+            : "Reveal folder in file manager",
+    },
+  ];
+
+  if (platform === "windows") {
+    targets.splice(1, 0, {
+      id: "windows-terminal",
+      label: "Open in Windows Terminal",
+      detail: "Launch wt with workspace cwd",
+    });
+    targets.splice(2, 0, {
+      id: "command-prompt",
+      label: "Open in Command Prompt",
+      detail: "Launch cmd.exe in workspace",
+    });
+  }
+
+  return targets;
 }
 
 export async function openPathInExplorer(path: string) {
@@ -88,4 +155,32 @@ export async function openPathInTerminal(path: string) {
   }
 
   throw lastError ?? new Error("No terminal launcher was found.");
+}
+
+export async function openPathInWindowsTerminal(path: string) {
+  const platform = detectDesktopPlatform();
+  if (platform !== "windows") {
+    throw new Error("Windows Terminal is only available on Windows.");
+  }
+  const fallback = ["cmd", "/c", "start", "cmd", "/K", `cd /d "${path}"`];
+  try {
+    await runCommand(["wt", "-d", path], "Open in Windows Terminal");
+  } catch (error) {
+    console.warn(
+      "Failed to launch Windows Terminal, falling back to cmd",
+      error,
+    );
+    await runCommand(fallback, "Open in Command Prompt");
+  }
+}
+
+export async function openPathInCommandPrompt(path: string) {
+  const platform = detectDesktopPlatform();
+  if (platform !== "windows") {
+    throw new Error("Command Prompt is only available on Windows.");
+  }
+  await runCommand(
+    ["cmd", "/c", "start", "cmd", "/K", `cd /d "${path}"`],
+    "Open in Command Prompt",
+  );
 }

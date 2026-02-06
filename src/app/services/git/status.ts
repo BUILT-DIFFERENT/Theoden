@@ -27,25 +27,14 @@ function parseStatusPath(raw: string) {
   return raw.trim();
 }
 
-export async function getGitWorkspaceStatus(
-  cwd: string,
-): Promise<GitWorkspaceStatus> {
-  const result = await execCommand({
-    command: ["git", "status", "--porcelain=v1", "--branch"],
-    cwd,
-  });
-  if (result.exitCode !== 0) {
-    const message = result.stderr.trim() || result.stdout.trim();
-    throw new Error(`Read git status failed${message ? `: ${message}` : ""}`);
-  }
-
+export function parseGitStatusOutput(output: string): GitWorkspaceStatus {
   const stagedPaths = new Set<string>();
   const unstagedPaths = new Set<string>();
   let branch: string | null = null;
   let ahead = 0;
   let behind = 0;
 
-  result.stdout.split(/\r?\n/).forEach((line) => {
+  output.split(/\r?\n/).forEach((line) => {
     if (!line.trim()) return;
     if (line.startsWith("##")) {
       const branchInfo = parseBranchHeader(line);
@@ -75,4 +64,18 @@ export async function getGitWorkspaceStatus(
     stagedPaths: Array.from(stagedPaths),
     unstagedPaths: Array.from(unstagedPaths),
   };
+}
+
+export async function getGitWorkspaceStatus(
+  cwd: string,
+): Promise<GitWorkspaceStatus> {
+  const result = await execCommand({
+    command: ["git", "status", "--porcelain=v1", "--branch"],
+    cwd,
+  });
+  if (result.exitCode !== 0) {
+    const message = result.stderr.trim() || result.stdout.trim();
+    throw new Error(`Read git status failed${message ? `: ${message}` : ""}`);
+  }
+  return parseGitStatusOutput(result.stdout);
 }

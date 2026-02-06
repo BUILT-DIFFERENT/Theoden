@@ -1,7 +1,9 @@
 import { useParams } from "@tanstack/react-router";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { RunTimeline } from "@/app/components/runs/RunTimeline";
+import { ApprovalsPanel } from "@/app/components/threads/ApprovalsPanel";
 import { ThreadComposer } from "@/app/components/threads/ThreadComposer";
 import { ThreadMessages } from "@/app/components/threads/ThreadMessages";
 import { ThreadModals } from "@/app/components/threads/ThreadModals";
@@ -28,6 +30,7 @@ export function ThreadPage() {
   const [optimisticMessages, setOptimisticMessages] = useState<ThreadMessage[]>(
     [],
   );
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [visibleStartIndex, setVisibleStartIndex] = useState(0);
   const [stickToBottom, setStickToBottom] = useState(true);
   const detail = thread ?? mockThreadDetail;
@@ -139,11 +142,11 @@ export function ThreadPage() {
     <div className="flex min-h-[70vh] flex-col gap-4">
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-auto"
+        className="codex-scrollbar flex-1 overflow-auto"
         onScroll={handleMessagesScroll}
       >
         {hiddenMessagesCount > 0 ? (
-          <div className="mb-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-ink-300">
+          <div className="surface-card mb-3 px-4 py-3 text-xs text-ink-300">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span>
                 Showing {visibleMessages.length} of{" "}
@@ -161,8 +164,27 @@ export function ThreadPage() {
         <ThreadMessages messages={visibleMessages} />
       </div>
       <div className="sticky bottom-4 z-10 space-y-3">
+        <ApprovalsPanel threadId={threadId} />
+        <div className="surface-panel px-4 py-3">
+          <button
+            className="flex w-full items-center justify-between text-xs text-ink-200"
+            onClick={() => setTimelineOpen((open) => !open)}
+          >
+            <span>Run timeline</span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition ${
+                timelineOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          {timelineOpen ? (
+            <div className="mt-3 max-h-72 overflow-auto">
+              <RunTimeline />
+            </div>
+          ) : null}
+        </div>
         {hasChanges ? (
-          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-ink-900/80 px-4 py-3 text-xs text-ink-200 shadow-card">
+          <div className="surface-panel flex items-center justify-between px-4 py-3 text-xs text-ink-200">
             <span>
               {summary.filesChanged} file changed +{summary.additions} -
               {summary.deletions}

@@ -1,7 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext } from "react";
 
-export type ThreadModal = "worktree" | "branch" | "commit" | "pr" | null;
+export type ThreadModal =
+  | "worktree"
+  | "branch"
+  | "commit"
+  | "pr"
+  | "merge"
+  | null;
 
 export interface ThreadUiState {
   reviewOpen: boolean;

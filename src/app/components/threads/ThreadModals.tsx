@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
@@ -13,16 +13,20 @@ import {
   checkoutBranch,
   createBranch,
   createWorkspace,
+  mergeWorkspace,
+  WorkspaceCreationCancelledError,
 } from "@/app/services/git/worktrees";
 import { useThreadMetadata } from "@/app/state/threadMetadata";
 import { useThreadUi } from "@/app/state/threadUi";
+import { useRuntimeSettings } from "@/app/state/useRuntimeSettings";
 import type { ThreadDetail } from "@/app/types";
 
 interface ThreadModalsProps {
   thread?: ThreadDetail;
 }
 
-type ModalStatus = "idle" | "running" | "done" | "error";
+type ModalStatus = "idle" | "running" | "done" | "error" | "cancelled";
+type MergeStrategy = "rebase" | "merge" | "squash";
 
 function ModalShell({
   title,
@@ -58,17 +62,66 @@ function StatusIndicator({ status }: { status: ModalStatus }) {
   if (status === "done") {
     return <CheckCircle2 className="h-4 w-4 text-emerald-300" />;
   }
+  if (status === "cancelled") {
+    return <AlertTriangle className="h-4 w-4 text-amber-300" />;
+  }
   if (status === "error") {
     return <AlertTriangle className="h-4 w-4 text-rose-300" />;
   }
   return null;
 }
 
+function sanitizeBranchSegment(value: string) {
+  return value
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^A-Za-z0-9/_-]/g, "")
+    .replace(/\/{2,}/g, "/")
+    .replace(/^\/+|\/+$/g, "");
+}
+
+function withBranchPrefix(
+  branchName: string,
+  branchPrefix: string,
+  applyPrefix: boolean,
+) {
+  const sanitized = sanitizeBranchSegment(branchName);
+  if (!sanitized.length) {
+    return "";
+  }
+  if (!applyPrefix) {
+    return sanitized;
+  }
+  const prefix = sanitizeBranchSegment(branchPrefix);
+  if (!prefix.length) {
+    return sanitized;
+  }
+  if (sanitized.startsWith(`${prefix}/`) || sanitized === prefix) {
+    return sanitized;
+  }
+  return `${prefix}/${sanitized}`;
+}
+
 export function ThreadModals({ thread }: ThreadModalsProps) {
+  const runtimeSettings = useRuntimeSettings();
   const { activeModal, setActiveModal } = useThreadUi();
   const { metadata, setMetadata } = useThreadMetadata(thread?.id);
+  const threadId = thread?.id ?? `thread-${Date.now()}`;
+  const baseBranch = runtimeSettings.defaultBranch || "main";
+  const branchPrefix = runtimeSettings.worktreeBranchPrefix;
+  const retentionDays = Number.parseInt(
+    runtimeSettings.worktreeRetentionDays,
+    10,
+  );
+  const keepMergedDays = Number.isFinite(retentionDays) ? retentionDays : 0;
+  const removeMergedWorktreeDefault =
+    runtimeSettings.autoPruneMergedWorktrees && keepMergedDays <= 0;
+
   const [branchNameInput, setBranchNameInput] = useState(
     metadata.branch ?? thread?.branch ?? "feature/new-branch",
+  );
+  const [applyBranchPrefix, setApplyBranchPrefix] = useState(
+    sanitizeBranchSegment(branchPrefix).length > 0,
   );
   const [commitMessage, setCommitMessage] = useState("");
   const [commitOption, setCommitOption] = useState<
@@ -94,13 +147,19 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
     created: false,
   });
 
-  const handleClose = () => setActiveModal(null);
+  const [mergeStatus, setMergeStatus] = useState<ModalStatus>("idle");
+  const [mergeLogs, setMergeLogs] = useState<string[]>([]);
+  const [mergeStrategy, setMergeStrategy] = useState<MergeStrategy>("merge");
+  const [removeMergedWorktree, setRemoveMergedWorktree] = useState(
+    removeMergedWorktreeDefault,
+  );
+
+  const worktreeAbortRef = useRef<AbortController | null>(null);
 
   const worktreePath = metadata.worktreePath;
   const workspaceCwd = worktreePath ?? thread?.subtitle ?? "";
-  const strategy = thread?.worktreeStrategy ?? "clone";
-  const threadId = thread?.id ?? `thread-${Date.now()}`;
-  const baseBranch = "main";
+  const repoPath = thread?.subtitle ?? "";
+  const strategy = runtimeSettings.worktreeStrategy;
   const branchInputId = "thread-branch-name";
   const commitMessageId = "thread-commit-message";
   const liveDiffText = useThreadDiffText(thread?.id, thread?.diffText ?? "");
@@ -112,6 +171,25 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
         deletions: thread?.diffSummary.deletions ?? 0,
       };
 
+  const resolvedBranchName = withBranchPrefix(
+    branchNameInput,
+    branchPrefix,
+    applyBranchPrefix,
+  );
+
+  const handleClose = () => {
+    setActiveModal(null);
+  };
+
+  const handleCancelWorktreeSetup = () => {
+    if (worktreeStatus !== "running") {
+      handleClose();
+      return;
+    }
+    worktreeAbortRef.current?.abort();
+    setWorktreeLogs((current) => [...current, "Cancellation requested."]);
+  };
+
   useEffect(() => {
     if (metadata.branch) {
       setBranchNameInput(metadata.branch);
@@ -119,54 +197,103 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
     }
     if (thread?.branch) {
       setBranchNameInput(thread.branch);
+      return;
     }
-  }, [metadata.branch, thread?.branch]);
+    const suggested = sanitizeBranchSegment(
+      `${threadId.split("-").slice(-1)[0] ?? "feature"}`,
+    );
+    if (suggested.length) {
+      setBranchNameInput(suggested);
+    }
+  }, [metadata.branch, thread?.branch, threadId]);
 
   useEffect(() => {
-    if (activeModal !== "worktree") return;
-    if (!thread?.subtitle) {
+    if (activeModal !== "merge") {
+      return;
+    }
+    setMergeStatus("idle");
+    setMergeLogs([]);
+    setRemoveMergedWorktree(removeMergedWorktreeDefault);
+  }, [activeModal, removeMergedWorktreeDefault]);
+
+  useEffect(() => {
+    if (activeModal !== "worktree") {
+      return;
+    }
+    if (!repoPath) {
       setWorktreeStatus("error");
       setWorktreeLogs(["Missing repo path for worktree."]);
       return;
     }
-    if (worktreeStatus !== "idle") return;
+    if (worktreeStatus !== "idle") {
+      return;
+    }
+
+    const controller = new AbortController();
+    worktreeAbortRef.current = controller;
     setWorktreeStatus("running");
-    setWorktreeLogs(["Creating worktree and running setup."]);
+    setWorktreeLogs([
+      `Creating worktree with ${strategy === "git_worktree" ? "git worktree" : "clone"} strategy.`,
+      `Base branch: ${baseBranch}`,
+    ]);
+
     const run = async () => {
       try {
-        const result = await createWorkspace({
-          repoPath: thread.subtitle,
-          threadId,
-          baseBranch,
-          strategy,
-          targetPath: worktreePath ?? undefined,
-        });
+        const result = await createWorkspace(
+          {
+            repoPath,
+            threadId,
+            baseBranch,
+            strategy,
+            targetPath: worktreePath ?? undefined,
+          },
+          { signal: controller.signal },
+        );
         setWorktreeLogs(result.logs);
-        setMetadata({ worktreePath: result.info.path });
+        setMetadata({
+          worktreePath: result.info.path,
+          branch: result.info.branch,
+        });
         setWorktreeStatus("done");
       } catch (error) {
+        if (error instanceof WorkspaceCreationCancelledError) {
+          setWorktreeStatus("cancelled");
+          setWorktreeLogs((current) => [
+            ...current,
+            "Worktree creation cancelled.",
+          ]);
+          return;
+        }
         setWorktreeStatus("error");
         setWorktreeLogs([
           "Failed to create worktree.",
           error instanceof Error ? error.message : "Unknown error",
         ]);
+      } finally {
+        if (worktreeAbortRef.current === controller) {
+          worktreeAbortRef.current = null;
+        }
       }
     };
     void run();
   }, [
     activeModal,
     baseBranch,
-    strategy,
-    thread?.subtitle,
-    threadId,
-    worktreeStatus,
-    worktreePath,
+    repoPath,
     setMetadata,
+    strategy,
+    threadId,
+    worktreePath,
+    worktreeStatus,
   ]);
 
   useEffect(() => {
-    if (activeModal !== "commit") return;
-    if (!workspaceCwd) return;
+    if (activeModal !== "commit") {
+      return;
+    }
+    if (!workspaceCwd) {
+      return;
+    }
     const run = async () => {
       try {
         const branch = await getCurrentBranch(workspaceCwd);
@@ -183,8 +310,12 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
   }, [activeModal, setBranchNameInput, setMetadata, workspaceCwd]);
 
   useEffect(() => {
-    if (activeModal !== "pr") return;
-    if (prStatus !== "idle") return;
+    if (activeModal !== "pr") {
+      return;
+    }
+    if (prStatus !== "idle") {
+      return;
+    }
     if (!workspaceCwd) {
       setPrStatus("error");
       setPrLogs(["Missing workspace path."]);
@@ -209,7 +340,9 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
   }, [activeModal, prStatus, workspaceCwd]);
 
   const worktreeLines = useMemo(() => {
-    if (worktreeLogs.length) return worktreeLogs;
+    if (worktreeLogs.length) {
+      return worktreeLogs;
+    }
     return ["Preparing worktree (detached HEAD)"];
   }, [worktreeLogs]);
 
@@ -219,16 +352,25 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
       setBranchLogs(["Missing workspace path."]);
       return;
     }
+    if (!resolvedBranchName.length) {
+      setBranchStatus("error");
+      setBranchLogs(["Enter a valid branch name."]);
+      return;
+    }
     setBranchStatus("running");
+    setBranchLogs([]);
     try {
-      const result = await createBranch(workspaceCwd, branchNameInput);
+      const result = await createBranch(workspaceCwd, resolvedBranchName);
       setBranchLogs(
         ["Branch created.", result.stdout, result.stderr].filter(Boolean),
       );
       setBranchStatus("done");
-      await checkoutBranch(thread?.subtitle ?? workspaceCwd, branchNameInput);
-      setMetadata({ branch: branchNameInput });
-      setActiveModal(null);
+      await checkoutBranch(
+        thread?.subtitle ?? workspaceCwd,
+        resolvedBranchName,
+      );
+      setMetadata({ branch: resolvedBranchName });
+      handleClose();
     } catch (error) {
       setBranchStatus("error");
       setBranchLogs([
@@ -278,11 +420,59 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
     }
   };
 
-  if (!activeModal) return null;
+  const handleMerge = async () => {
+    if (!repoPath || !worktreePath) {
+      setMergeStatus("error");
+      setMergeLogs(["Missing repo/worktree path for merge."]);
+      return;
+    }
+    setMergeStatus("running");
+    setMergeLogs([]);
+    try {
+      const result = await mergeWorkspace({
+        repoPath,
+        workspacePath: worktreePath,
+        targetBranch: baseBranch,
+        strategy: mergeStrategy,
+        removeWorktree: removeMergedWorktree,
+      });
+      setMergeLogs(result.logs);
+      setMetadata({
+        branch: baseBranch,
+        worktreePath: removeMergedWorktree ? undefined : worktreePath,
+      });
+      if (!removeMergedWorktree && keepMergedDays > 0) {
+        setMergeLogs((current) => [
+          ...current,
+          `Keeping merged worktree for ${keepMergedDays} day(s).`,
+        ]);
+      }
+      setMergeStatus("done");
+    } catch (error) {
+      setMergeStatus("error");
+      setMergeLogs([
+        "Failed to bring worktree branch back to main.",
+        error instanceof Error ? error.message : "Unknown error",
+      ]);
+    }
+  };
+
+  if (!activeModal) {
+    return null;
+  }
 
   if (activeModal === "worktree") {
     return (
-      <ModalShell title="Creating worktree" onClose={handleClose}>
+      <ModalShell
+        title="Creating worktree"
+        onClose={() => {
+          if (worktreeStatus === "running") {
+            handleCancelWorktreeSetup();
+            return;
+          }
+          handleClose();
+        }}
+      >
         <p>Creating a worktree and running setup.</p>
         <div className="rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-xs text-ink-200">
           {worktreeLines.map((line, index) => (
@@ -294,14 +484,15 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
           <button
             className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
             onClick={() => setActiveModal(null)}
+            disabled={worktreeStatus === "running"}
           >
             Work locally instead
           </button>
           <button
             className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-            onClick={handleClose}
+            onClick={handleCancelWorktreeSetup}
           >
-            Cancel
+            {worktreeStatus === "running" ? "Cancel setup" : "Close"}
           </button>
         </div>
       </ModalShell>
@@ -313,8 +504,8 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
       <ModalShell title="Create branch" onClose={handleClose}>
         <p>
           A branch will be created and checked out in this worktree. Once
-          created, you should do your work from this directory. You cannot
-          checkout this branch on your local repo.
+          created, continue your changes here before merging back to{" "}
+          {baseBranch}.
         </p>
         <div className="space-y-2">
           <label
@@ -329,10 +520,18 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
             value={branchNameInput}
             onChange={(event) => setBranchNameInput(event.target.value)}
           />
+          <p className="text-xs text-ink-500">
+            Final: {resolvedBranchName || "invalid"}
+          </p>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-ink-400">Set prefix</span>
-          <input type="checkbox" className="accent-flare-300" />
+          <span className="text-ink-400">Apply prefix ({branchPrefix})</span>
+          <input
+            type="checkbox"
+            className="accent-flare-300"
+            checked={applyBranchPrefix}
+            onChange={(event) => setApplyBranchPrefix(event.target.checked)}
+          />
         </div>
         {branchLogs.length ? (
           <div className="rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-xs text-ink-200">
@@ -353,6 +552,7 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
             onClick={() => {
               void handleCreateBranch();
             }}
+            disabled={branchStatus === "running"}
           >
             Continue
           </button>
@@ -360,6 +560,86 @@ export function ThreadModals({ thread }: ThreadModalsProps) {
         <div className="flex items-center gap-2 text-xs text-ink-400">
           <StatusIndicator status={branchStatus} />
           <span>{branchStatus === "running" ? "Creating branch" : ""}</span>
+        </div>
+      </ModalShell>
+    );
+  }
+
+  if (activeModal === "merge") {
+    return (
+      <ModalShell title="Bring back to main" onClose={handleClose}>
+        <p>
+          Merge the current worktree branch back into{" "}
+          <span className="text-ink-100">{baseBranch}</span>.
+        </p>
+        <div className="space-y-2 text-xs">
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              checked={mergeStrategy === "merge"}
+              onChange={() => setMergeStrategy("merge")}
+            />
+            Merge commit
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              checked={mergeStrategy === "rebase"}
+              onChange={() => setMergeStrategy("rebase")}
+            />
+            Rebase then fast-forward
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              checked={mergeStrategy === "squash"}
+              onChange={() => setMergeStrategy("squash")}
+            />
+            Squash merge
+          </label>
+        </div>
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            className="accent-flare-300"
+            checked={removeMergedWorktree}
+            onChange={(event) => setRemoveMergedWorktree(event.target.checked)}
+          />
+          Remove merged worktree immediately
+        </label>
+        {!removeMergedWorktree && keepMergedDays > 0 ? (
+          <p className="text-xs text-ink-500">
+            This worktree will be retained for {keepMergedDays} day(s) per
+            settings.
+          </p>
+        ) : null}
+        {mergeLogs.length ? (
+          <div className="rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-xs text-ink-200">
+            {mergeLogs.map((line, index) => (
+              <div key={`${line}-${index}`}>{line}</div>
+            ))}
+          </div>
+        ) : null}
+        <div className="flex justify-end gap-2 text-xs">
+          <button
+            className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+            onClick={handleClose}
+          >
+            Close
+          </button>
+          <button
+            className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20 disabled:opacity-60"
+            onClick={() => {
+              void handleMerge();
+            }}
+            disabled={mergeStatus === "running"}
+          >
+            {mergeStatus === "running" ? "Merging…" : "Bring back to main"}
+          </button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-ink-400">
+          <StatusIndicator status={mergeStatus} />
+          <span>{mergeStatus === "running" ? "Merging changes" : ""}</span>
         </div>
       </ModalShell>
     );

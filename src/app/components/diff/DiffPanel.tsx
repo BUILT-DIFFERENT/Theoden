@@ -17,20 +17,24 @@ import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { openInEditor } from "@/app/services/desktop/open";
 import {
   revertAllPaths,
-  revertPath,
+  revertHunk,
   stageAllPaths,
-  stagePath,
-  unstagePath,
+  stageHunk,
+  unstageHunk,
 } from "@/app/services/git/changes";
 import { getGitWorkspaceDiff } from "@/app/services/git/diff";
 import { getGitWorkspaceStatus } from "@/app/services/git/status";
 import { mockEditors } from "@/app/state/settingsData";
+import {
+  annotationScopeKey,
+  useDiffAnnotations,
+} from "@/app/state/threadAnnotations";
 import { useThreadUi } from "@/app/state/threadUi";
 import { useRuntimeSettings } from "@/app/state/useRuntimeSettings";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { DiffSummary, ThreadDetail } from "@/app/types";
 import { isTauri } from "@/app/utils/tauri";
-import { isLikelyWorkspacePath } from "@/app/utils/workspace";
+import { resolveWorkspacePath } from "@/app/utils/workspace";
 
 interface DiffSection {
   path: string;
@@ -42,6 +46,17 @@ interface DiffSection {
 interface DiffLineEntry {
   line: string;
   lineNumber: number;
+}
+
+interface DiffHunk {
+  id: string;
+  path: string;
+  header: string;
+  additions: number;
+  deletions: number;
+  lineStart: number;
+  lines: string[];
+  patch: string;
 }
 
 type DiffRenderableChunk =
@@ -60,7 +75,10 @@ function isContextLine(line: string) {
   return line.startsWith(" ");
 }
 
-function toRenderableChunks(lines: string[]): DiffRenderableChunk[] {
+function toRenderableChunks(
+  lines: string[],
+  lineStart = 1,
+): DiffRenderableChunk[] {
   const chunks: DiffRenderableChunk[] = [];
   let contextBuffer: DiffLineEntry[] = [];
 
@@ -81,7 +99,7 @@ function toRenderableChunks(lines: string[]): DiffRenderableChunk[] {
   };
 
   lines.forEach((line, index) => {
-    const entry = { line, lineNumber: index + 1 };
+    const entry = { line, lineNumber: lineStart + index };
     if (isContextLine(line)) {
       contextBuffer.push(entry);
       return;
@@ -92,6 +110,48 @@ function toRenderableChunks(lines: string[]): DiffRenderableChunk[] {
 
   flushContextBuffer();
   return chunks;
+}
+
+function parseDiffHunks(section: DiffSection): DiffHunk[] {
+  if (!section.lines.length) {
+    return [];
+  }
+  const firstHunkIndex = section.lines.findIndex((line) =>
+    line.startsWith("@@"),
+  );
+  if (firstHunkIndex < 0) {
+    return [];
+  }
+
+  const headerLines = section.lines.slice(0, firstHunkIndex);
+  const hunkIndexes: number[] = [];
+  section.lines.forEach((line, index) => {
+    if (line.startsWith("@@")) {
+      hunkIndexes.push(index);
+    }
+  });
+
+  return hunkIndexes.map((start, index) => {
+    const end = hunkIndexes[index + 1] ?? section.lines.length;
+    const hunkLines = section.lines.slice(start, end);
+    const bodyLines = hunkLines.slice(1);
+    const additions = bodyLines.filter(
+      (line) => line.startsWith("+") && !line.startsWith("+++"),
+    ).length;
+    const deletions = bodyLines.filter(
+      (line) => line.startsWith("-") && !line.startsWith("---"),
+    ).length;
+    return {
+      id: `${section.path}:${start + 1}`,
+      path: section.path,
+      header: hunkLines[0] ?? "@@",
+      additions,
+      deletions,
+      lineStart: start + 2,
+      lines: bodyLines,
+      patch: `${[...headerLines, ...hunkLines].join("\n")}\n`,
+    } satisfies DiffHunk;
+  });
 }
 
 function parseDiffSections(
@@ -159,12 +219,13 @@ export function DiffPanel({ thread }: DiffPanelProps) {
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
-  const threadWorkspacePath =
-    thread?.subtitle && isLikelyWorkspacePath(thread.subtitle)
-      ? thread.subtitle
-      : null;
-  const resolvedWorkspacePath =
-    threadWorkspacePath ?? selectedWorkspace ?? workspaces[0]?.path ?? null;
+  const resolvedWorkspacePath = resolveWorkspacePath({
+    threadSubtitle: thread?.subtitle,
+    selectedWorkspace,
+    workspaces,
+  });
+  const annotationsScope = annotationScopeKey(threadId, resolvedWorkspacePath);
+  const { annotations, addAnnotation } = useDiffAnnotations(annotationsScope);
   const diffText = thread?.diffText ?? "";
   const liveDiffText = useThreadDiffText(threadId, diffText);
   const hasLiveDiff = liveDiffText.trim().length > 0;
@@ -199,16 +260,6 @@ export function DiffPanel({ thread }: DiffPanelProps) {
   const [expandedContextBlocks, setExpandedContextBlocks] = useState<
     Record<string, boolean>
   >({});
-  const [annotations, setAnnotations] = useState<
-    Array<{
-      id: string;
-      path: string;
-      lineNumber: number;
-      content: string;
-      comment: string;
-      createdAt: number;
-    }>
-  >([]);
   const canRunGitActions = isTauri() && Boolean(resolvedWorkspacePath);
   const panelMenuRef = useRef<HTMLDivElement | null>(null);
   const preferredEditor =
@@ -345,38 +396,50 @@ export function DiffPanel({ thread }: DiffPanelProps) {
       lines: parsedSection.lines,
     };
   }, [selectedSection, selectedSectionDiff.data]);
-  const selectedSectionChunks = useMemo(
+  const selectedHunks = useMemo(
     () =>
       selectedSectionWithLiveDiff
-        ? toRenderableChunks(selectedSectionWithLiveDiff.lines)
+        ? parseDiffHunks(selectedSectionWithLiveDiff)
         : [],
     [selectedSectionWithLiveDiff],
   );
+  const selectedHunksWithChunks = useMemo(
+    () =>
+      selectedHunks.map((hunk) => ({
+        hunk,
+        chunks: toRenderableChunks(hunk.lines, hunk.lineStart),
+      })),
+    [selectedHunks],
+  );
   const collapsedContextLineCount = useMemo(() => {
-    if (!selectedSectionWithLiveDiff) {
-      return 0;
-    }
-    return selectedSectionChunks.reduce((count, chunk) => {
-      if (chunk.kind !== "context") {
-        return count;
-      }
-      const contextKey = `${selectedSectionWithLiveDiff.path}:${chunk.startLineNumber}`;
-      return expandedContextBlocks[contextKey]
-        ? count
-        : count + chunk.lines.length;
+    return selectedHunksWithChunks.reduce((total, entry) => {
+      return (
+        total +
+        entry.chunks.reduce((count, chunk) => {
+          if (chunk.kind !== "context") {
+            return count;
+          }
+          const contextKey = `${entry.hunk.id}:${chunk.startLineNumber}`;
+          return expandedContextBlocks[contextKey]
+            ? count
+            : count + chunk.lines.length;
+        }, 0)
+      );
     }, 0);
-  }, [
-    expandedContextBlocks,
-    selectedSectionChunks,
-    selectedSectionWithLiveDiff,
-  ]);
+  }, [expandedContextBlocks, selectedHunksWithChunks]);
 
   const stagedCount = stagedSections.length;
   const unstagedCount = unstagedSections.length;
   const hunkActionMutation = useMutation({
     mutationFn: async (action: {
-      kind: "stage" | "unstage" | "revert" | "stage_all" | "revert_all";
+      kind:
+        | "stage_hunk"
+        | "unstage_hunk"
+        | "revert_hunk"
+        | "stage_all"
+        | "revert_all";
       path?: string;
+      patch?: string;
       includeStaged?: boolean;
     }) => {
       if (!resolvedWorkspacePath) {
@@ -393,20 +456,20 @@ export function DiffPanel({ thread }: DiffPanelProps) {
         );
         return;
       }
-      if (!action.path) {
-        throw new Error("No file path available for this diff action.");
+      if (!action.patch) {
+        throw new Error("No patch data available for this diff action.");
       }
-      if (action.kind === "stage") {
-        await stagePath(resolvedWorkspacePath, action.path);
+      if (action.kind === "stage_hunk") {
+        await stageHunk(resolvedWorkspacePath, action.patch);
         return;
       }
-      if (action.kind === "unstage") {
-        await unstagePath(resolvedWorkspacePath, action.path);
+      if (action.kind === "unstage_hunk") {
+        await unstageHunk(resolvedWorkspacePath, action.patch);
         return;
       }
-      await revertPath(
+      await revertHunk(
         resolvedWorkspacePath,
-        action.path,
+        action.patch,
         action.includeStaged ?? false,
       );
     },
@@ -432,15 +495,15 @@ export function DiffPanel({ thread }: DiffPanelProps) {
         );
         return;
       }
-      if (action.kind === "stage" && action.path) {
-        setHunkActionFeedback(`Staged ${action.path}`);
+      if (action.kind === "stage_hunk" && action.path) {
+        setHunkActionFeedback(`Staged hunk in ${action.path}`);
         return;
       }
-      if (action.kind === "unstage" && action.path) {
-        setHunkActionFeedback(`Unstaged ${action.path}`);
+      if (action.kind === "unstage_hunk" && action.path) {
+        setHunkActionFeedback(`Unstaged hunk in ${action.path}`);
         return;
       }
-      setHunkActionFeedback(`Reverted ${action.path ?? "file"}`);
+      setHunkActionFeedback(`Reverted hunk in ${action.path ?? "file"}`);
     },
     onError: (error) => {
       setHunkActionFeedback(null);
@@ -503,10 +566,10 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     return () => window.clearTimeout(timeoutId);
   }, [hunkActionFeedback]);
 
-  const runHunkAction = async (action: "stage" | "unstage" | "revert") => {
-    if (!selectedSection) {
-      return;
-    }
+  const runHunkAction = async (
+    action: "stage_hunk" | "unstage_hunk" | "revert_hunk",
+    hunk: DiffHunk,
+  ) => {
     if (!canRunGitActions) {
       setHunkActionFeedback(null);
       setHunkActionError("Hunk actions are available in the desktop app.");
@@ -516,8 +579,9 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     try {
       await hunkActionMutation.mutateAsync({
         kind: action,
-        path: selectedSection.path,
-        includeStaged: action === "revert" && activeTab === "staged",
+        path: hunk.path,
+        patch: hunk.patch,
+        includeStaged: action === "revert_hunk" && activeTab === "staged",
       });
     } catch {
       // Error state is already handled by the mutation onError callback.
@@ -554,7 +618,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
       comment,
       createdAt: Date.now(),
     };
-    setAnnotations((current) => [...current, annotation]);
+    addAnnotation(annotation);
     try {
       window.dispatchEvent(
         new CustomEvent("theoden:diff-annotation", {
@@ -599,16 +663,14 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     action: "expand-context" | "collapse-context" | "copy-path",
   ) => {
     if (action === "expand-context") {
-      if (!selectedSectionWithLiveDiff) {
-        return;
-      }
       const next: Record<string, boolean> = {};
-      selectedSectionChunks.forEach((chunk) => {
-        if (chunk.kind !== "context") {
-          return;
-        }
-        next[`${selectedSectionWithLiveDiff.path}:${chunk.startLineNumber}`] =
-          true;
+      selectedHunksWithChunks.forEach((entry) => {
+        entry.chunks.forEach((chunk) => {
+          if (chunk.kind !== "context") {
+            return;
+          }
+          next[`${entry.hunk.id}:${chunk.startLineNumber}`] = true;
+        });
       });
       setExpandedContextBlocks((current) => ({
         ...current,
@@ -829,104 +891,116 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                     ? `${collapsedContextLineCount} unmodified lines collapsed`
                     : "All unmodified lines shown"}
                 </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={() => {
-                      void runHunkAction("revert");
-                    }}
-                    disabled={hunkActionMutation.isPending || !selectedSection}
-                    title={
-                      activeTab === "staged"
-                        ? "Revert staged + working tree changes for this file"
-                        : "Revert working tree changes for this file"
-                    }
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                  </button>
-                  <button
-                    className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={() => {
-                      void runHunkAction(
-                        activeTab === "staged" ? "unstage" : "stage",
-                      );
-                    }}
-                    disabled={hunkActionMutation.isPending || !selectedSection}
-                    title={
-                      activeTab === "staged"
-                        ? "Unstage this file"
-                        : "Stage this file"
-                    }
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </div>
               </div>
-              {selectedSectionChunks.length ? (
+              {selectedHunksWithChunks.length ? (
                 <div className="divide-y divide-white/5 font-mono text-[0.65rem]">
-                  {selectedSectionChunks.map((chunk) => {
-                    if (chunk.kind === "line") {
-                      return renderDiffLine(
-                        selectedSectionWithLiveDiff.path,
-                        chunk.entry,
-                      );
-                    }
-
-                    const contextKey = `${selectedSectionWithLiveDiff.path}:${chunk.startLineNumber}`;
-                    const isExpanded =
-                      expandedContextBlocks[contextKey] ?? false;
-                    if (!isExpanded) {
-                      return (
-                        <button
-                          key={contextKey}
-                          type="button"
-                          className="flex w-full items-center justify-between border-l-2 border-transparent px-3 py-1 text-left text-ink-500 hover:bg-white/5"
-                          onClick={() =>
-                            setExpandedContextBlocks((current) => ({
-                              ...current,
-                              [contextKey]: true,
-                            }))
-                          }
-                        >
-                          <span>{chunk.lines.length} unmodified lines</span>
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
-                      );
-                    }
-
-                    return (
-                      <div key={contextKey}>
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between border-l-2 border-transparent px-3 py-1 text-left text-ink-500 hover:bg-white/5"
-                          onClick={() =>
-                            setExpandedContextBlocks((current) => ({
-                              ...current,
-                              [contextKey]: false,
-                            }))
-                          }
-                        >
-                          <span>
-                            Hide {chunk.lines.length} unmodified lines
+                  {selectedHunksWithChunks.map(({ hunk, chunks }) => (
+                    <div key={hunk.id}>
+                      <div className="flex items-center justify-between border-b border-white/5 px-3 py-2 text-[0.62rem] text-ink-400">
+                        <span className="truncate">{hunk.header}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-ink-500">
+                            +{hunk.additions} -{hunk.deletions}
                           </span>
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        </button>
-                        {chunk.lines.map((entry) =>
-                          renderDiffLine(
-                            selectedSectionWithLiveDiff.path,
-                            entry,
-                            "text-ink-400 border-transparent bg-black/20",
-                          ),
-                        )}
+                          <button
+                            className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() => {
+                              void runHunkAction("revert_hunk", hunk);
+                            }}
+                            disabled={hunkActionMutation.isPending}
+                            title={
+                              activeTab === "staged"
+                                ? "Revert staged hunk"
+                                : "Revert unstaged hunk"
+                            }
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </button>
+                          <button
+                            className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() => {
+                              void runHunkAction(
+                                activeTab === "staged"
+                                  ? "unstage_hunk"
+                                  : "stage_hunk",
+                                hunk,
+                              );
+                            }}
+                            disabled={hunkActionMutation.isPending}
+                            title={
+                              activeTab === "staged"
+                                ? "Unstage this hunk"
+                                : "Stage this hunk"
+                            }
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
-                    );
-                  })}
+                      <div className="divide-y divide-white/5">
+                        {chunks.map((chunk) => {
+                          if (chunk.kind === "line") {
+                            return renderDiffLine(hunk.path, chunk.entry);
+                          }
+                          const contextKey = `${hunk.id}:${chunk.startLineNumber}`;
+                          const isExpanded =
+                            expandedContextBlocks[contextKey] ?? false;
+                          if (!isExpanded) {
+                            return (
+                              <button
+                                key={contextKey}
+                                type="button"
+                                className="flex w-full items-center justify-between border-l-2 border-transparent px-3 py-1 text-left text-ink-500 hover:bg-white/5"
+                                onClick={() =>
+                                  setExpandedContextBlocks((current) => ({
+                                    ...current,
+                                    [contextKey]: true,
+                                  }))
+                                }
+                              >
+                                <span>
+                                  {chunk.lines.length} unmodified lines
+                                </span>
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </button>
+                            );
+                          }
+                          return (
+                            <div key={contextKey}>
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between border-l-2 border-transparent px-3 py-1 text-left text-ink-500 hover:bg-white/5"
+                                onClick={() =>
+                                  setExpandedContextBlocks((current) => ({
+                                    ...current,
+                                    [contextKey]: false,
+                                  }))
+                                }
+                              >
+                                <span>
+                                  Hide {chunk.lines.length} unmodified lines
+                                </span>
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              </button>
+                              {chunk.lines.map((entry) =>
+                                renderDiffLine(
+                                  hunk.path,
+                                  entry,
+                                  "text-ink-400 border-transparent bg-black/20",
+                                ),
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="px-3 py-3 text-xs text-ink-500">
                   {selectedSectionDiff.isFetching
                     ? "Loading diff preview..."
-                    : "Diff preview pending."}
+                    : "No hunk data available for this file."}
                 </div>
               )}
             </div>
@@ -981,8 +1055,8 @@ export function DiffPanel({ thread }: DiffPanelProps) {
           )}
           {annotations.length ? (
             <p className="mt-2 text-[0.65rem] text-ink-500">
-              {annotations.length} change request
-              {annotations.length === 1 ? "" : "s"} logged this session.
+              {annotations.length} persisted change request
+              {annotations.length === 1 ? "" : "s"}.
             </p>
           ) : null}
         </div>
