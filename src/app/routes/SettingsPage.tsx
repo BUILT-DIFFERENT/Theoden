@@ -1,6 +1,11 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import {
+  loadStoredSettings,
+  storeSettings,
+  type StoredSettingsSnapshot,
+} from "@/app/state/settings";
 import {
   defaultSettingsSection,
   mockEditors,
@@ -47,48 +52,140 @@ export function SettingsPage() {
   const activeSectionDescription =
     activeSection?.description ??
     "Default editor destination and basic preferences.";
-
-  const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
-  const [openDestination, setOpenDestination] = useState(
-    fallbackEditorId ?? "vscode",
+  const defaultOpenDestination = fallbackEditorId ?? "vscode";
+  const initialSettings = useMemo(
+    () => loadStoredSettings(defaultOpenDestination),
+    [defaultOpenDestination],
   );
+
+  const [theme, setTheme] = useState<"system" | "light" | "dark">(
+    initialSettings.theme,
+  );
+  const [openDestination, setOpenDestination] = useState(() => {
+    if (
+      mockEditors.some(
+        (editor) => editor.id === initialSettings.openDestination,
+      )
+    ) {
+      return initialSettings.openDestination;
+    }
+    return defaultOpenDestination;
+  });
   const [followUpBehavior, setFollowUpBehavior] = useState<
     "append" | "new-thread" | "ask"
-  >("append");
-  const [compactComposer, setCompactComposer] = useState(true);
-  const [displayName, setDisplayName] = useState("Codex Operator");
+  >(initialSettings.followUpBehavior);
+  const [compactComposer, setCompactComposer] = useState(
+    initialSettings.compactComposer,
+  );
+  const [displayName, setDisplayName] = useState(initialSettings.displayName);
   const [responseTone, setResponseTone] = useState<
     "balanced" | "concise" | "verbose"
-  >("balanced");
-  const [showTimestamps, setShowTimestamps] = useState(true);
-  const [includeProjectOverrides, setIncludeProjectOverrides] = useState(true);
-  const [showExperimentalConfig, setShowExperimentalConfig] = useState(false);
-  const [mcpRequestTimeout, setMcpRequestTimeout] = useState("30");
-  const [allowCommunitySkills, setAllowCommunitySkills] = useState(true);
-  const [autoRefreshSkills, setAutoRefreshSkills] = useState(true);
-  const [requireSkillReview, setRequireSkillReview] = useState(true);
-  const [gitAuthorName, setGitAuthorName] = useState("Codex Bot");
-  const [gitAuthorEmail, setGitAuthorEmail] = useState("codex@example.com");
-  const [defaultBranch, setDefaultBranch] = useState("main");
-  const [autoSignCommits, setAutoSignCommits] = useState(false);
+  >(initialSettings.responseTone);
+  const [showTimestamps, setShowTimestamps] = useState(
+    initialSettings.showTimestamps,
+  );
+  const [includeProjectOverrides, setIncludeProjectOverrides] = useState(
+    initialSettings.includeProjectOverrides,
+  );
+  const [showExperimentalConfig, setShowExperimentalConfig] = useState(
+    initialSettings.showExperimentalConfig,
+  );
+  const [mcpRequestTimeout, setMcpRequestTimeout] = useState(
+    initialSettings.mcpRequestTimeout,
+  );
+  const [allowCommunitySkills, setAllowCommunitySkills] = useState(
+    initialSettings.allowCommunitySkills,
+  );
+  const [autoRefreshSkills, setAutoRefreshSkills] = useState(
+    initialSettings.autoRefreshSkills,
+  );
+  const [requireSkillReview, setRequireSkillReview] = useState(
+    initialSettings.requireSkillReview,
+  );
+  const [gitAuthorName, setGitAuthorName] = useState(
+    initialSettings.gitAuthorName,
+  );
+  const [gitAuthorEmail, setGitAuthorEmail] = useState(
+    initialSettings.gitAuthorEmail,
+  );
+  const [defaultBranch, setDefaultBranch] = useState(
+    initialSettings.defaultBranch,
+  );
+  const [autoSignCommits, setAutoSignCommits] = useState(
+    initialSettings.autoSignCommits,
+  );
   const [defaultEnvironment, setDefaultEnvironment] = useState<
     "local" | "worktree" | "cloud"
-  >("local");
-  const [autoCreateWorktrees, setAutoCreateWorktrees] = useState(true);
-  const [cloudRegion, setCloudRegion] = useState("us-east");
+  >(initialSettings.defaultEnvironment);
+  const [autoCreateWorktrees, setAutoCreateWorktrees] = useState(
+    initialSettings.autoCreateWorktrees,
+  );
+  const [cloudRegion, setCloudRegion] = useState(initialSettings.cloudRegion);
   const [worktreeStrategy, setWorktreeStrategy] = useState<
     "clone" | "git_worktree"
-  >("git_worktree");
-  const [worktreeBranchPrefix, setWorktreeBranchPrefix] =
-    useState("codex/thread");
-  const [worktreeRetentionDays, setWorktreeRetentionDays] = useState("7");
-  const [autoPruneMergedWorktrees, setAutoPruneMergedWorktrees] =
-    useState(true);
-  const [archiveRetentionDays, setArchiveRetentionDays] = useState("30");
-  const [autoArchiveCompleted, setAutoArchiveCompleted] = useState(true);
+  >(initialSettings.worktreeStrategy);
+  const [worktreeBranchPrefix, setWorktreeBranchPrefix] = useState(
+    initialSettings.worktreeBranchPrefix,
+  );
+  const [worktreeRetentionDays, setWorktreeRetentionDays] = useState(
+    initialSettings.worktreeRetentionDays,
+  );
+  const [autoPruneMergedWorktrees, setAutoPruneMergedWorktrees] = useState(
+    initialSettings.autoPruneMergedWorktrees,
+  );
+  const [archiveRetentionDays, setArchiveRetentionDays] = useState(
+    initialSettings.archiveRetentionDays,
+  );
+  const [autoArchiveCompleted, setAutoArchiveCompleted] = useState(
+    initialSettings.autoArchiveCompleted,
+  );
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!saveMessage) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setSaveMessage(null);
+    }, 2500);
+    return () => window.clearTimeout(timeoutId);
+  }, [saveMessage]);
+
+  const buildSnapshot = (): StoredSettingsSnapshot => ({
+    theme,
+    openDestination,
+    followUpBehavior,
+    compactComposer,
+    displayName,
+    responseTone,
+    showTimestamps,
+    includeProjectOverrides,
+    showExperimentalConfig,
+    mcpRequestTimeout,
+    allowCommunitySkills,
+    autoRefreshSkills,
+    requireSkillReview,
+    gitAuthorName,
+    gitAuthorEmail,
+    defaultBranch,
+    autoSignCommits,
+    defaultEnvironment,
+    autoCreateWorktrees,
+    cloudRegion,
+    worktreeStrategy,
+    worktreeBranchPrefix,
+    worktreeRetentionDays,
+    autoPruneMergedWorktrees,
+    archiveRetentionDays,
+    autoArchiveCompleted,
+  });
 
   const handleSave = (targetSection: SettingsSectionId) => {
-    console.warn("Save settings", { section: targetSection });
+    storeSettings(buildSnapshot());
+    const label =
+      settingsSections.find((item) => item.id === targetSection)?.label ??
+      "Settings";
+    setSaveMessage(`${label} settings saved.`);
   };
 
   const renderFormForSection = (targetSection: SettingsSectionId) => {
@@ -740,6 +837,9 @@ export function SettingsPage() {
           <p className="mt-2 text-sm text-ink-300">
             {activeSectionDescription}
           </p>
+          {saveMessage ? (
+            <p className="mt-2 text-xs text-emerald-300">{saveMessage}</p>
+          ) : null}
         </section>
         {renderFormForSection(activeSectionId)}
       </div>
