@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowUp,
@@ -15,6 +16,9 @@ import { resumeThread, startThread, startTurn } from "@/app/services/cli/turns";
 import { useRunProgress } from "@/app/services/cli/useRunProgress";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { useWorkspaceBranches } from "@/app/services/git/useWorkspaceBranches";
+import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
+import { checkoutBranch } from "@/app/services/git/worktrees";
 import { type QualityPreset, useAppUi } from "@/app/state/appUi";
 import { useEnvironmentUi } from "@/app/state/environmentUi";
 import { useThreadUi } from "@/app/state/threadUi";
@@ -102,6 +106,7 @@ export function ThreadComposer({
   const runProgress = useRunProgress(threadId);
   const { setActiveModal } = useThreadUi();
   const { environmentMode, setEnvironmentMode } = useEnvironmentUi();
+  const queryClient = useQueryClient();
   const {
     activeModel,
     setActiveModel,
@@ -114,10 +119,13 @@ export function ThreadComposer({
   const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
     useWorkspaceUi();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const branchMenuRef = useRef<HTMLDivElement | null>(null);
   const [agent, setAgent] = useState<(typeof agentOptions)[number]>("Default");
   const [attachmentsDrawerOpen, setAttachmentsDrawerOpen] = useState(false);
   const [selectedAttachments, setSelectedAttachments] = useState<string[]>([]);
   const [inlineMenu, setInlineMenu] = useState<InlineMenuState | null>(null);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [branchError, setBranchError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -184,6 +192,30 @@ export function ThreadComposer({
     });
     return filtered.slice(0, 6);
   }, [inlineMenu]);
+  const { status: gitStatus } = useWorkspaceGitStatus(resolvedWorkspacePath);
+  const { branches } = useWorkspaceBranches(resolvedWorkspacePath);
+  const branchLabel = gitStatus?.branch ?? "main";
+  const checkoutMutation = useMutation({
+    mutationFn: async (branch: string) => {
+      if (!resolvedWorkspacePath) {
+        throw new Error("Select a workspace before changing branch.");
+      }
+      await checkoutBranch(resolvedWorkspacePath, branch);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["git", "status", resolvedWorkspacePath],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["git", "branches", resolvedWorkspacePath],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["git", "diff", resolvedWorkspacePath],
+        }),
+      ]);
+    },
+  });
 
   const handleModeChange = (option: typeof environmentMode) => {
     setEnvironmentMode(option);
@@ -310,13 +342,35 @@ export function ThreadComposer({
     setIsSubmitting(false);
   };
 
+  useEffect(() => {
+    if (!branchMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (branchMenuRef.current?.contains(event.target as Node)) return;
+      setBranchMenuOpen(false);
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [branchMenuOpen]);
+
+  const handleBranchSelect = async (branch: string) => {
+    setBranchError(null);
+    try {
+      await checkoutMutation.mutateAsync(branch);
+      setBranchMenuOpen(false);
+    } catch (checkoutError) {
+      setBranchError(
+        checkoutError instanceof Error
+          ? checkoutError.message
+          : "Failed to switch branch.",
+      );
+    }
+  };
+
   const progressPercent = runProgress.percent || (isSubmitting ? 5 : 0);
   const showProgress = isRunning || isSubmitting;
   const workspaceLabel = resolvedWorkspacePath
     ? workspaceNameFromPath(resolvedWorkspacePath)
     : "Add workspace";
-  const branchLabel =
-    environmentMode === "worktree" ? "From main" : "From main";
 
   return (
     <div className="space-y-3">
@@ -564,11 +618,50 @@ export function ThreadComposer({
             {workspaceLabel}
             <ChevronDown className="h-3.5 w-3.5" />
           </button>
-          <button className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
-            <GitBranch className="h-3.5 w-3.5" />
-            {branchLabel}
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
+          <div className="relative" ref={branchMenuRef}>
+            <button
+              className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+              onClick={() => setBranchMenuOpen((open) => !open)}
+            >
+              <GitBranch className="h-3.5 w-3.5" />
+              From {branchLabel}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {branchMenuOpen ? (
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-white/10 bg-ink-900/95 p-2 text-[0.7rem] text-ink-200 shadow-card">
+                {branches.length ? (
+                  branches.map((branch) => (
+                    <button
+                      key={branch}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-white/5 ${
+                        branch === branchLabel ? "text-ink-50" : "text-ink-300"
+                      }`}
+                      onClick={() => {
+                        void handleBranchSelect(branch);
+                      }}
+                      disabled={checkoutMutation.isPending}
+                    >
+                      <span className="truncate">{branch}</span>
+                      {branch === branchLabel ? (
+                        <span className="text-[0.65rem] text-emerald-300">
+                          current
+                        </span>
+                      ) : null}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-[0.65rem] text-ink-500">
+                    No branches available.
+                  </p>
+                )}
+                {branchError ? (
+                  <p className="px-3 py-2 text-[0.65rem] text-rose-300">
+                    {branchError}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
