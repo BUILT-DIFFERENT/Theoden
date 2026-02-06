@@ -117,6 +117,7 @@ export function ThreadTopBar({
   const [runSubmitting, setRunSubmitting] = useState(false);
   const [openMessage, setOpenMessage] = useState<string | null>(null);
   const [gitMessage, setGitMessage] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [gitSubmitting, setGitSubmitting] = useState<"push" | "pr" | null>(
     null,
   );
@@ -291,6 +292,11 @@ export function ThreadTopBar({
     window.setTimeout(() => setGitMessage(null), 2500);
   };
 
+  const showCopyMessage = (message: string) => {
+    setCopyMessage(message);
+    window.setTimeout(() => setCopyMessage(null), 2000);
+  };
+
   const handlePush = async () => {
     if (!resolvedWorkspacePath) {
       showGitMessage("No workspace selected.");
@@ -332,6 +338,25 @@ export function ThreadTopBar({
       );
     } finally {
       setGitSubmitting(null);
+    }
+  };
+
+  const handleCopyContext = async () => {
+    const threadLink = threadId
+      ? new URL(`/t/${threadId}`, window.location.origin).toString()
+      : null;
+    const fallbackPath = resolvedWorkspacePath;
+    const copyValue = threadLink ?? fallbackPath;
+    if (!copyValue) {
+      showCopyMessage("Nothing to copy.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(copyValue);
+      showCopyMessage(threadLink ? "Thread link copied." : "Path copied.");
+    } catch (error) {
+      console.warn("Failed to copy context", error);
+      showCopyMessage("Unable to copy.");
     }
   };
 
@@ -532,9 +557,19 @@ export function ThreadTopBar({
           <span className="text-ink-400">+{aheadCount}</span>
           <span className="text-ink-500">-{behindCount}</span>
         </button>
-        <button className="rounded-full border border-white/10 p-2 text-ink-300 hover:border-flare-300">
+        <button
+          className="rounded-full border border-white/10 p-2 text-ink-300 hover:border-flare-300"
+          onClick={() => {
+            void handleCopyContext();
+          }}
+          title={threadId ? "Copy thread link" : "Copy workspace path"}
+          aria-label={threadId ? "Copy thread link" : "Copy workspace path"}
+        >
           <Copy className="h-3.5 w-3.5" />
         </button>
+        {copyMessage ? (
+          <span className="text-[0.65rem] text-ink-400">{copyMessage}</span>
+        ) : null}
         <button
           className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${
             isTerminalOpen
