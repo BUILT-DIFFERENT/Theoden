@@ -16,42 +16,59 @@ export function AppServerRouteBoundary({
     return <>{children}</>;
   }
 
-  if (status === "booting" || status === "reconnecting") {
-    return (
-      <div className="surface-panel mx-auto max-w-2xl px-5 py-6 text-sm text-ink-200">
-        <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
-          App-server
-        </p>
-        <h2 className="mt-2 font-display text-lg text-ink-50">
-          {status === "booting"
-            ? "Starting local app-server…"
-            : "Reconnecting to local app-server…"}
-        </h2>
-        <p className="mt-2 text-xs text-ink-400">
-          Routes are paused until the RPC transport is healthy.
-        </p>
-      </div>
-    );
-  }
+  const showBanner = status === "booting" || status === "reconnecting";
+  const showError = status === "error";
+  const bannerLabel =
+    status === "booting"
+      ? "Starting local app-server…"
+      : "Reconnecting to local app-server…";
 
-  if (status === "error") {
-    return (
-      <div className="surface-panel mx-auto max-w-2xl px-5 py-6 text-sm text-ink-200">
-        <p className="text-xs uppercase tracking-[0.2em] text-rose-300">
-          App-server unavailable
-        </p>
-        <p className="mt-2 text-xs text-ink-400">
-          {lastError ?? "Connection to app-server failed."}
-        </p>
-        <button
-          className="mt-4 rounded-full border border-flare-300 bg-flare-400/10 px-4 py-1.5 text-xs text-ink-50 hover:bg-flare-400/20"
-          onClick={restart}
+  return (
+    <div className="flex flex-col gap-4">
+      {showBanner ? (
+        <div
+          className="surface-panel px-4 py-3 text-xs text-ink-200"
+          role="status"
+          aria-live="polite"
         >
-          Retry connection
-        </button>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.25em] text-ink-500">
+                App-server
+              </p>
+              <p className="mt-1 text-sm text-ink-50">{bannerLabel}</p>
+            </div>
+            <p className="text-xs text-ink-400">
+              You can keep working while we reconnect.
+            </p>
+          </div>
+        </div>
+      ) : null}
+      {showError ? (
+        <div
+          className="surface-panel px-4 py-3 text-xs text-ink-200"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.25em] text-rose-300">
+                App-server unavailable
+              </p>
+              <p className="mt-1 text-xs text-ink-400">
+                {lastError ?? "Connection to app-server failed."}
+              </p>
+            </div>
+            <button
+              className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-[11px] text-ink-50 hover:bg-flare-400/20"
+              onClick={restart}
+            >
+              Retry connection
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {children}
+    </div>
+  );
 }

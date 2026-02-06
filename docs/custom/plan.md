@@ -120,8 +120,8 @@ The real app shows git-related UI in at least two ways:
 #### ✅ Real app
 - [ ] Opens into working UI without a blocking “app-server bootstrap failed” state in the recording.
 
-#### ❌ Clone
-- [ ] Shows blocking panel: **“APP‑SERVER UNAVAILABLE — App-server bootstrap failed.”** with a retry button.
+#### ✅ Clone (updated)
+- [x] Shows a non-blocking banner when the app-server is unavailable; routes remain accessible.
 
 #### Required changes (P0)
 - [ ] Rework backend architecture so the UI can render and be usable even if:
@@ -132,7 +132,7 @@ The real app shows git-related UI in at least two ways:
   - [ ] Use Tauri/Rust commands (IPC) to call the Codex CLI directly and stream results
   - [ ] Or, if a local server is necessary, embed lifecycle management so it starts reliably and the UI degrades gracefully.
 - [ ] Implement a real-app-like empty/error state:
-  - [ ] Show a small banner/toast and guidance, **not** a full-page block that prevents navigation.
+  - [x] Show a small banner/toast and guidance, **not** a full-page block that prevents navigation.
 
 ---
 
@@ -371,7 +371,7 @@ The real app shows git-related UI in at least two ways:
 ## 5) Suggested implementation plan (pragmatic, clone-first)
 
 ### Phase 1 — Unblock & match shell (P0)
-1. [ ] Remove app-server blocking error; show non-blocking banner if backend is down.
+1. [x] Remove app-server blocking error; show non-blocking banner if backend is down.
 2. [ ] Rebuild left sidebar to match real IA:
    - [ ] top nav icons
    - [ ] threads grouped by workspace
