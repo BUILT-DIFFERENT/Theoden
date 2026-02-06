@@ -6,6 +6,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
+import { WorkspacePickerDropdown } from "@/app/components/workspaces/WorkspacePickerDropdown";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { workspaceNameFromPath } from "@/app/utils/workspace";
@@ -34,8 +35,7 @@ const starterPrompts = [
 
 export function ThreadEmptyState({ onSelectPrompt }: ThreadEmptyStateProps) {
   const { workspaces } = useWorkspaces();
-  const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
-    useWorkspaceUi();
+  const { selectedWorkspace } = useWorkspaceUi();
   const resolvedWorkspace =
     selectedWorkspace ?? workspaces[0]?.path ?? "Add workspace";
   const label = resolvedWorkspace
@@ -49,18 +49,20 @@ export function ThreadEmptyState({ onSelectPrompt }: ThreadEmptyStateProps) {
       <h2 className="mt-6 font-display text-5xl font-semibold text-ink-50">
         Let&apos;s build
       </h2>
-      <button
-        className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-ink-300 transition hover:bg-white/5 hover:text-ink-100"
-        onClick={() => {
-          if (workspaces[0]?.path && !selectedWorkspace) {
-            setSelectedWorkspace(workspaces[0].path);
-          }
-          setWorkspacePickerOpen(true);
-        }}
-      >
-        {label}
-        <ChevronDown className="h-3.5 w-3.5" />
-      </button>
+      <div className="mt-4">
+        <WorkspacePickerDropdown
+          align="left"
+          trigger={({ toggle }) => (
+            <button
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-ink-300 transition hover:bg-white/5 hover:text-ink-100"
+              onClick={toggle}
+            >
+              {label}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          )}
+        />
+      </div>
       <div className="mt-8 grid w-full gap-3 text-left text-sm md:grid-cols-3">
         {starterPrompts.map((prompt) => (
           <button

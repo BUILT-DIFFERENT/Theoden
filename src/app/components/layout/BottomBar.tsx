@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, GitBranch, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { WorkspacePickerDropdown } from "@/app/components/workspaces/WorkspacePickerDropdown";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useWorkspaceBranches } from "@/app/services/git/useWorkspaceBranches";
 import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
@@ -22,7 +23,7 @@ const environmentLabels: Record<EnvironmentMode, string> = {
 export function BottomBar() {
   const queryClient = useQueryClient();
   const { workspaces } = useWorkspaces();
-  const { selectedWorkspace, setWorkspacePickerOpen } = useWorkspaceUi();
+  const { selectedWorkspace } = useWorkspaceUi();
   const { environmentMode, setEnvironmentMode } = useEnvironmentUi();
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
@@ -95,14 +96,19 @@ export function BottomBar() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
-          onClick={() => setWorkspacePickerOpen(true)}
-        >
-          <Settings className="h-3.5 w-3.5" />
-          {workspaceLabel}
-          <ChevronDown className="h-3.5 w-3.5" />
-        </button>
+        <WorkspacePickerDropdown
+          align="right"
+          trigger={({ toggle }) => (
+            <button
+              className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+              onClick={toggle}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              {workspaceLabel}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          )}
+        />
         <div className="relative" ref={branchMenuRef}>
           <button
             className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
