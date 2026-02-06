@@ -111,6 +111,8 @@ export function useThreadList(options: ThreadListOptions = {}) {
     initialPageParam: null,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: isDesktop,
+    refetchOnWindowFocus: isDesktop,
+    refetchInterval: isDesktop ? 5000 : false,
   });
 
   const allThreads = useMemo(() => {

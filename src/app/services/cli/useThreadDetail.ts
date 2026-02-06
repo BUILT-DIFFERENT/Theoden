@@ -20,6 +20,8 @@ export function useThreadDetail(threadId: string | undefined) {
     queryKey: ["threads", "read", threadId],
     queryFn: () => readThread(threadId ?? "", true),
     enabled: isDesktop && Boolean(threadId),
+    refetchOnWindowFocus: isDesktop,
+    refetchInterval: isDesktop && threadId ? 5000 : false,
   });
 
   const thread = useMemo(() => {

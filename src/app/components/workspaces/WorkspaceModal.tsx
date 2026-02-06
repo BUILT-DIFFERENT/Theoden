@@ -1,9 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Check } from "lucide-react";
+import { Check, FolderOpen } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { addWorkspace } from "@/app/services/cli/workspaces";
+import { pickWorkspaceDirectory } from "@/app/services/desktop/dialog";
 import { storeWorkspace } from "@/app/state/workspaces";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import {
@@ -23,6 +24,7 @@ export function WorkspaceModal() {
   const [pathInput, setPathInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPickingPath, setIsPickingPath] = useState(false);
   const normalizedSelectedWorkspace = selectedWorkspace
     ? normalizeWorkspacePath(selectedWorkspace).toLowerCase()
     : null;
@@ -58,6 +60,23 @@ export function WorkspaceModal() {
       setError(err instanceof Error ? err.message : "Failed to add workspace.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePickWorkspace = async () => {
+    setIsPickingPath(true);
+    setError(null);
+    try {
+      const selectedPath = await pickWorkspaceDirectory();
+      if (selectedPath) {
+        setPathInput(selectedPath);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to open workspace picker.",
+      );
+    } finally {
+      setIsPickingPath(false);
     }
   };
 
@@ -122,12 +141,25 @@ export function WorkspaceModal() {
             <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
               Add a workspace
             </p>
-            <input
-              className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100"
-              placeholder="C:\\Repos\\my-project"
-              value={pathInput}
-              onChange={(event) => setPathInput(event.target.value)}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100"
+                placeholder="C:\\Repos\\my-project"
+                value={pathInput}
+                onChange={(event) => setPathInput(event.target.value)}
+              />
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-2 text-xs text-ink-200 hover:border-flare-300 disabled:opacity-60"
+                onClick={() => {
+                  void handlePickWorkspace();
+                }}
+                disabled={isSaving || isPickingPath}
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                {isPickingPath ? "Opening…" : "Browse"}
+              </button>
+            </div>
             {pathInput ? (
               <p className="text-xs text-ink-500">
                 Will add{" "}

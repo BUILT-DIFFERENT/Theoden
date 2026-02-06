@@ -216,7 +216,10 @@ async fn app_server_notify(
         .write_all(line.as_bytes())
         .await
         .map_err(|err| err.to_string())?;
-    stdin.write_all(b"\n").await.map_err(|err| err.to_string())?;
+    stdin
+        .write_all(b"\n")
+        .await
+        .map_err(|err| err.to_string())?;
     Ok(())
 }
 
@@ -244,7 +247,10 @@ async fn app_server_respond(
         .write_all(line.as_bytes())
         .await
         .map_err(|err| err.to_string())?;
-    stdin.write_all(b"\n").await.map_err(|err| err.to_string())?;
+    stdin
+        .write_all(b"\n")
+        .await
+        .map_err(|err| err.to_string())?;
     Ok(())
 }
 
@@ -293,6 +299,7 @@ fn id_to_string(value: &serde_json::Value) -> Option<String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(AppServerBridge::new()))
         .invoke_handler(tauri::generate_handler![
             load_config,

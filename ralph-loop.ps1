@@ -1,6 +1,6 @@
 # ralph-loop.ps1
 
-$iterations = 25
+$iterations = 35
 $codexCommand = "codex"
 $ralphPrompt = "Look through the plan in \docs\custom\plan.md Pick the most important task and complete it. If there are no and you have verified, find something to refactor or improve. When done create a commit and push. "
 
