@@ -2,6 +2,7 @@ import { ChevronDown, GitBranch, Settings } from "lucide-react";
 import { useState } from "react";
 
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { workspaceNameFromPath } from "@/app/utils/workspace";
 
@@ -20,9 +21,11 @@ export function BottomBar() {
     useState<EnvironmentMode>("local");
 
   const resolvedWorkspace = selectedWorkspace ?? workspaces[0]?.path ?? null;
+  const { status: gitStatus } = useWorkspaceGitStatus(resolvedWorkspace);
   const workspaceLabel = resolvedWorkspace
     ? workspaceNameFromPath(resolvedWorkspace)
     : "Add workspace";
+  const branchLabel = gitStatus?.branch ?? "main";
 
   return (
     <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 bg-black/30 px-6 py-3 text-xs text-ink-300 backdrop-blur-xl">
@@ -53,7 +56,7 @@ export function BottomBar() {
         </button>
         <button className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
           <GitBranch className="h-3.5 w-3.5" />
-          From main
+          From {branchLabel}
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </div>

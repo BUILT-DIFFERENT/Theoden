@@ -8,7 +8,7 @@ interface MessageSegment {
 function splitMessageSegments(content: string): MessageSegment[] {
   const parts = content.split("```");
   return parts
-    .map((part, index) => ({
+    .map<MessageSegment>((part, index) => ({
       kind: index % 2 === 0 ? "text" : "code",
       value: part.trim(),
     }))

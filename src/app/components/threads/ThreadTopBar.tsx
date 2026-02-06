@@ -12,6 +12,7 @@ import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { resumeThread, startThread, startTurn } from "@/app/services/cli/turns";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
 import { checkoutBranch } from "@/app/services/git/worktrees";
 import { mockThreadDetail } from "@/app/state/mockData";
 import { useThreadMetadata } from "@/app/state/threadMetadata";
@@ -58,7 +59,6 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
         deletions: liveStats.deletions,
       };
   const hasChanges = !isNewThread && summary.filesChanged > 0;
-  const gitBranch = metadata.branch ?? detail.branch ?? "main";
   const isWorktree = !isNewThread && detail.mode === "worktree";
   const title = isNewThread ? "New thread" : detail.title;
   const fallbackWorkspace = selectedWorkspace ?? workspaces[0]?.path ?? null;
@@ -67,7 +67,14 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
       ? workspaceNameFromPath(fallbackWorkspace)
       : "Pick a workspace"
     : detail.subtitle;
-  const resolvedWorkspacePath = detail.subtitle ?? fallbackWorkspace ?? null;
+  const resolvedWorkspacePath = isNewThread
+    ? fallbackWorkspace
+    : (detail.subtitle ?? fallbackWorkspace ?? null);
+  const { status: gitStatus } = useWorkspaceGitStatus(resolvedWorkspacePath);
+  const gitBranch =
+    gitStatus?.branch ?? metadata.branch ?? detail.branch ?? "main";
+  const aheadCount = gitStatus?.ahead ?? 0;
+  const behindCount = gitStatus?.behind ?? 0;
 
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const [openMenuOpen, setOpenMenuOpen] = useState(false);
@@ -312,8 +319,8 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
         >
           <GitBranch className="h-3.5 w-3.5" />
           {gitBranch}
-          <span className="text-ink-400">+{summary.additions}</span>
-          <span className="text-ink-500">-{summary.deletions}</span>
+          <span className="text-ink-400">+{aheadCount}</span>
+          <span className="text-ink-500">-{behindCount}</span>
         </button>
         <button className="rounded-full border border-white/10 p-2 text-ink-300 hover:border-flare-300">
           <Copy className="h-3.5 w-3.5" />

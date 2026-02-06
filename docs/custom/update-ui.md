@@ -338,7 +338,7 @@ This document enumerates **all required UI/UX + functional changes** to bring th
   - [x] sidebar threads list
   - [x] home header label
   - [x] bottom bar label
-  - [ ] git status + branch indicator
+  - [x] git status + branch indicator
 - [ ] Workspace list supports:
   - [x] checkmark on active
   - [x] “Add new workspace” action (can be stubbed)
