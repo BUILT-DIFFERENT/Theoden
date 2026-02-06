@@ -355,8 +355,8 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 - [ ] Composer supports sending and appending messages
 
 ### Diff panel (P1)
-- [ ] Git status displayed in top bar
-- [ ] Clicking git indicator toggles diff panel
+- [x] Git status displayed in top bar
+- [x] Clicking git indicator toggles diff panel
 - [ ] Tabs for staged/unstaged with correct counts
 
 ---

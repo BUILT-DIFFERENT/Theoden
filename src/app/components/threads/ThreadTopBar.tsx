@@ -1,5 +1,11 @@
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Copy, MoreHorizontal, Play } from "lucide-react";
+import {
+  ChevronDown,
+  Copy,
+  GitBranch,
+  MoreHorizontal,
+  Play,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
@@ -21,7 +27,7 @@ interface ThreadTopBarProps {
 }
 
 export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
-  const { setActiveModal, setReviewOpen } = useThreadUi();
+  const { reviewOpen, setActiveModal, setReviewOpen } = useThreadUi();
   const { selectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
   const navigate = useNavigate();
@@ -52,6 +58,7 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
         deletions: liveStats.deletions,
       };
   const hasChanges = !isNewThread && summary.filesChanged > 0;
+  const gitBranch = metadata.branch ?? detail.branch ?? "main";
   const isWorktree = !isNewThread && detail.mode === "worktree";
   const title = isNewThread ? "New thread" : detail.title;
   const fallbackWorkspace = selectedWorkspace ?? workspaces[0]?.path ?? null;
@@ -296,10 +303,17 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
           </button>
         ) : null}
         <button
-          className="rounded-full border border-white/10 px-3 py-1 text-ink-300 hover:border-flare-300"
-          onClick={() => setReviewOpen(true)}
+          className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${
+            reviewOpen
+              ? "border-flare-300 bg-flare-400/10 text-ink-50"
+              : "border-white/10 text-ink-300 hover:border-flare-300"
+          }`}
+          onClick={() => setReviewOpen(!reviewOpen)}
         >
-          +{summary.additions} -{summary.deletions}
+          <GitBranch className="h-3.5 w-3.5" />
+          {gitBranch}
+          <span className="text-ink-400">+{summary.additions}</span>
+          <span className="text-ink-500">-{summary.deletions}</span>
         </button>
         <button className="rounded-full border border-white/10 p-2 text-ink-300 hover:border-flare-300">
           <Copy className="h-3.5 w-3.5" />
