@@ -1,20 +1,31 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { Check } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { addWorkspace } from "@/app/services/cli/workspaces";
 import { storeWorkspace } from "@/app/state/workspaces";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
-import { workspaceNameFromPath } from "@/app/utils/workspace";
+import {
+  normalizeWorkspacePath,
+  workspaceNameFromPath,
+} from "@/app/utils/workspace";
 
 export function WorkspaceModal() {
-  const { workspacePickerOpen, setWorkspacePickerOpen, setSelectedWorkspace } =
-    useWorkspaceUi();
+  const {
+    workspacePickerOpen,
+    setWorkspacePickerOpen,
+    selectedWorkspace,
+    setSelectedWorkspace,
+  } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
   const queryClient = useQueryClient();
   const [pathInput, setPathInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const normalizedSelectedWorkspace = selectedWorkspace
+    ? normalizeWorkspacePath(selectedWorkspace).toLowerCase()
+    : null;
 
   const sortedWorkspaces = useMemo(
     () => workspaces.slice().sort((a, b) => a.name.localeCompare(b.name)),
@@ -72,21 +83,33 @@ export function WorkspaceModal() {
             </p>
             <div className="mt-2 grid gap-2">
               {sortedWorkspaces.length ? (
-                sortedWorkspaces.map((workspace) => (
-                  <button
-                    key={workspace.path}
-                    className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left text-sm text-ink-100 hover:border-flare-300"
-                    onClick={() => {
-                      setSelectedWorkspace(workspace.path);
-                      setWorkspacePickerOpen(false);
-                    }}
-                  >
-                    <span>{workspace.name}</span>
-                    <span className="text-xs text-ink-500">
-                      {workspace.path}
-                    </span>
-                  </button>
-                ))
+                sortedWorkspaces.map((workspace) => {
+                  const isSelected =
+                    normalizedSelectedWorkspace ===
+                    normalizeWorkspacePath(workspace.path).toLowerCase();
+                  return (
+                    <button
+                      key={workspace.path}
+                      className={`flex items-center justify-between rounded-xl border bg-black/20 px-3 py-2 text-left text-sm text-ink-100 transition hover:border-flare-300 ${
+                        isSelected ? "border-flare-300/70" : "border-white/10"
+                      }`}
+                      onClick={() => {
+                        setSelectedWorkspace(workspace.path);
+                        setWorkspacePickerOpen(false);
+                      }}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{workspace.name}</span>
+                        {isSelected ? (
+                          <Check className="h-4 w-4 text-emerald-300" />
+                        ) : null}
+                      </div>
+                      <span className="truncate text-xs text-ink-500">
+                        {workspace.path}
+                      </span>
+                    </button>
+                  );
+                })
               ) : (
                 <p className="text-xs text-ink-500">
                   No workspaces configured yet.

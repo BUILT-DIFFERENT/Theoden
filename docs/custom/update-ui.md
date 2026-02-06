@@ -332,15 +332,15 @@ This document enumerates **all required UI/UX + functional changes** to bring th
 ### Workspace selection (P0)
 - [ ] Workspace dropdown opens from:
   - [x] Home header (“Let’s build {workspace}”)
-  - [ ] Bottom bar gear dropdown
+  - [x] Bottom bar gear dropdown
   - [x] Sidebar workspace list selection
 - [ ] Changing workspace updates:
   - [x] sidebar threads list
   - [x] home header label
-  - [ ] bottom bar label
+  - [x] bottom bar label
   - [ ] git status + branch indicator
 - [ ] Workspace list supports:
-  - [ ] checkmark on active
+  - [x] checkmark on active
   - [x] “Add new workspace” action (can be stubbed)
 
 ### Buttons do something (P0)

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ControlRoomSidebar } from "@/app/components/control-room/ControlRoomSidebar";
 import { DiffPanel } from "@/app/components/diff/DiffPanel";
+import { BottomBar } from "@/app/components/layout/BottomBar";
 import { ThreadTopBar } from "@/app/components/threads/ThreadTopBar";
 import { WorkspaceModal } from "@/app/components/workspaces/WorkspaceModal";
 import {
@@ -73,7 +74,7 @@ export function AppShell() {
         <div className="min-h-screen text-ink-50">
           <div className="flex min-h-screen">
             <ControlRoomSidebar />
-            <main className="flex-1">
+            <main className="flex min-h-screen flex-1 flex-col">
               {showThreadHeader ? (
                 <ThreadTopBar
                   thread={thread}
@@ -120,8 +121,8 @@ export function AppShell() {
               <div
                 className={
                   showReviewPanel
-                    ? "grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]"
-                    : "px-6 py-6"
+                    ? "grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]"
+                    : "flex-1 px-6 py-6"
                 }
               >
                 <section className="min-h-[70vh]">
@@ -133,6 +134,7 @@ export function AppShell() {
                   </aside>
                 ) : null}
               </div>
+              <BottomBar />
             </main>
           </div>
         </div>
