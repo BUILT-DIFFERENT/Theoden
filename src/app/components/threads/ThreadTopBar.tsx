@@ -3,11 +3,14 @@ import { ChevronDown, Copy, MoreHorizontal, Play } from "lucide-react";
 
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
+import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { checkoutBranch } from "@/app/services/git/worktrees";
 import { mockThreadDetail } from "@/app/state/mockData";
 import { useThreadMetadata } from "@/app/state/threadMetadata";
 import { useThreadUi } from "@/app/state/threadUi";
+import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { ThreadDetail } from "@/app/types";
+import { workspaceNameFromPath } from "@/app/utils/workspace";
 
 interface ThreadTopBarProps {
   thread?: ThreadDetail;
@@ -16,6 +19,8 @@ interface ThreadTopBarProps {
 
 export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
   const { setActiveModal, setReviewOpen } = useThreadUi();
+  const { selectedWorkspace } = useWorkspaceUi();
+  const { workspaces } = useWorkspaces();
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/threads/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
@@ -45,7 +50,11 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
   const hasChanges = !isNewThread && summary.filesChanged > 0;
   const isWorktree = !isNewThread && detail.mode === "worktree";
   const title = isNewThread ? "New thread" : detail.title;
-  const subtitle = isNewThread ? "Pick a workspace" : detail.subtitle;
+  const resolvedWorkspace =
+    selectedWorkspace ?? workspaces[0]?.path ?? "Pick a workspace";
+  const subtitle = isNewThread
+    ? workspaceNameFromPath(resolvedWorkspace)
+    : detail.subtitle;
 
   const handleCheckoutLocal = async () => {
     const branch = metadata.branch ?? detail.branch;
@@ -59,7 +68,7 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
   };
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-ink-900/70 px-6 py-4 backdrop-blur-xl">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-black/20 px-6 py-4 backdrop-blur-xl">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <h1 className="font-display text-lg text-ink-50">{title}</h1>

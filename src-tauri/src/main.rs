@@ -259,13 +259,28 @@ async fn app_server_stop(state: tauri::State<'_, Arc<AppServerBridge>>) -> Resul
 }
 
 #[tauri::command]
-fn run_cli(
-    _args: Vec<String>,
-    _cwd: Option<String>,
-    _env: Option<HashMap<String, String>>,
+async fn run_cli(
+    args: Vec<String>,
+    cwd: Option<String>,
+    env: Option<HashMap<String, String>>,
 ) -> Result<CliRunResult, String> {
-    // Placeholder: execute `codex` CLI with args and working directory.
-    Err("run_cli not implemented yet".to_string())
+    let mut cmd = Command::new("codex");
+    cmd.args(args);
+    if let Some(cwd) = cwd {
+        cmd.current_dir(cwd);
+    }
+    if let Some(env) = env {
+        cmd.envs(env);
+    }
+    let output = cmd
+        .output()
+        .await
+        .map_err(|err| format!("failed to run codex CLI: {err}"))?;
+    Ok(CliRunResult {
+        code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
 }
 
 fn id_to_string(value: &serde_json::Value) -> Option<String> {

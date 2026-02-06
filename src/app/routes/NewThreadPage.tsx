@@ -6,16 +6,12 @@ import { ThreadModals } from "@/app/components/threads/ThreadModals";
 
 export function NewThreadPage() {
   const [prefill, setPrefill] = useState("");
-  const workspaceName = "photobooth";
 
   return (
-    <div className="space-y-6">
-      <ThreadEmptyState
-        workspaceName={workspaceName}
-        onSelectPrompt={setPrefill}
-      />
+    <div className="flex min-h-[70vh] flex-col justify-between gap-10">
+      <ThreadEmptyState onSelectPrompt={setPrefill} />
       <div className="sticky bottom-4 z-10 space-y-3">
-        <ThreadComposer prefillPrompt={prefill} workspaceName={workspaceName} />
+        <ThreadComposer prefillPrompt={prefill} />
       </div>
       <ThreadModals />
     </div>

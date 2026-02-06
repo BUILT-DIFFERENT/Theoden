@@ -6,20 +6,20 @@ const config: Config = {
     extend: {
       fontFamily: {
         display: ["Space Grotesk", "sans-serif"],
-        body: ["Inter", "system-ui", "sans-serif"]
+        body: ["Instrument Sans", "sans-serif"]
       },
       colors: {
         ink: {
-          50: "#f4f6f8",
-          100: "#e6e9ef",
-          200: "#c6cedb",
-          300: "#a2adbf",
-          400: "#7b8aa2",
-          500: "#5f6e86",
-          600: "#4a586d",
-          700: "#3b4758",
-          800: "#2a323f",
-          900: "#1a202b"
+          50: "#f6f8fb",
+          100: "#e4e9f0",
+          200: "#c9d2df",
+          300: "#9fb0c8",
+          400: "#5a6b82",
+          500: "#3a4658",
+          600: "#273141",
+          700: "#1a2230",
+          800: "#121723",
+          900: "#0d1117"
         },
         flare: {
           100: "#ffe8d1",

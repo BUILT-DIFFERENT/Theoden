@@ -78,6 +78,14 @@ export interface Project {
   lastThreadId: string;
 }
 
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  path: string;
+  trustLevel?: "trusted" | "untrusted";
+  source: "config" | "threads" | "local";
+}
+
 export interface EditorOption {
   id: string;
   name: string;
@@ -122,10 +130,17 @@ export interface RemoteSkillSummary {
 
 export interface CloudTaskSummary {
   id: string;
+  title?: string;
+  url?: string;
   environment: string;
   status: "queued" | "running" | "completed" | "failed";
   updatedAt: string;
   branch?: string;
+  filesChanged?: number;
+  linesAdded?: number;
+  linesRemoved?: number;
+  isReview?: boolean;
+  attemptTotal?: number;
 }
 
 export interface ProviderStatus {

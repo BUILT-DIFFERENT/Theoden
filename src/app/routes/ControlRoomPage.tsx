@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { useActiveRuns } from "@/app/services/cli/useActiveRuns";
+import { useCloudTasks } from "@/app/services/cli/useCloudTasks";
 import { useThreadList } from "@/app/services/cli/useThreads";
 
 export function ControlRoomPage() {
@@ -9,6 +10,11 @@ export function ControlRoomPage() {
   const { threads, allThreads, hasMore, loadMore, isFetchingMore } =
     useThreadList({ search, limit: 25 });
   const activeRuns = useActiveRuns(allThreads);
+  const {
+    tasks,
+    isLoading: tasksLoading,
+    refetch: refetchTasks,
+  } = useCloudTasks({ limit: 6 });
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
@@ -40,6 +46,61 @@ export function ControlRoomPage() {
           ) : (
             <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-ink-400">
               No active runs yet.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Cloud Tasks
+            </p>
+            <h2 className="font-display text-xl">Background web runs</h2>
+          </div>
+          <button
+            className="rounded-full border border-white/10 px-4 py-2 text-xs hover:border-flare-300"
+            onClick={() => void refetchTasks()}
+            disabled={tasksLoading}
+          >
+            Refresh
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {tasksLoading ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-ink-400">
+              Loading cloud tasks…
+            </div>
+          ) : tasks.length ? (
+            tasks.map((task) => (
+              <div
+                key={task.id}
+                className="rounded-xl border border-white/10 bg-black/20 p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-ink-100">
+                    {task.title ?? "Cloud task"}
+                  </p>
+                  <span className="rounded-full border border-white/10 px-2 py-1 text-[0.65rem] text-ink-300">
+                    {task.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-ink-400">{task.environment}</p>
+                <p className="mt-2 text-xs text-ink-300">
+                  Updated {task.updatedAt}
+                </p>
+                {typeof task.filesChanged === "number" ? (
+                  <p className="mt-2 text-xs text-ink-400">
+                    {task.filesChanged} files · +{task.linesAdded ?? 0} / -
+                    {task.linesRemoved ?? 0}
+                  </p>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-ink-400">
+              No cloud tasks yet.
             </div>
           )}
         </div>

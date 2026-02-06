@@ -1,3 +1,30 @@
+@font-face {
+  font-family: "Instrument Sans";
+  src: url("../assets/fonts/InstrumentSans-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Instrument Sans";
+  src: url("../assets/fonts/InstrumentSans-VariableItalic.ttf")
+    format("truetype");
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("../assets/fonts/SpaceGrotesk-Variable.ttf") format("truetype");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,19 +34,24 @@
 }
 
 body {
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "Instrument Sans", sans-serif;
   background:
     radial-gradient(
-      circle at top left,
-      rgba(255, 155, 74, 0.08),
-      transparent 55%
+      circle at 12% 12%,
+      rgba(255, 155, 74, 0.12),
+      transparent 48%
     ),
     radial-gradient(
-      circle at 25% 80%,
-      rgba(246, 122, 31, 0.08),
+      circle at 80% 20%,
+      rgba(84, 153, 255, 0.08),
+      transparent 46%
+    ),
+    radial-gradient(
+      circle at 35% 85%,
+      rgba(246, 122, 31, 0.1),
       transparent 55%
     ),
-    #141923;
+    #0d1117;
   min-height: 100vh;
 }
 

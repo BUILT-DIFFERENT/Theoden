@@ -13,8 +13,11 @@ import { useEffect, useMemo, useState } from "react";
 import { resumeThread, startThread, startTurn } from "@/app/services/cli/turns";
 import { useRunProgress } from "@/app/services/cli/useRunProgress";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
+import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useThreadUi } from "@/app/state/threadUi";
+import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
+import { workspaceNameFromPath } from "@/app/utils/workspace";
 
 type ComposerMode = "local" | "worktree" | "cloud";
 type EffortLevel = "medium" | "high" | "xhigh";
@@ -45,6 +48,9 @@ export function ThreadComposer({
   const thread = threadId ? threadDetail : undefined;
   const runProgress = useRunProgress(threadId);
   const { setActiveModal } = useThreadUi();
+  const { workspaces } = useWorkspaces();
+  const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
+    useWorkspaceUi();
   const [prompt, setPrompt] = useState(prefillPrompt ?? "");
   const [mode, setMode] = useState<ComposerMode>(thread?.mode ?? "local");
   const [effort, setEffort] = useState<EffortLevel>("high");
@@ -65,12 +71,25 @@ export function ThreadComposer({
       setMode(thread.mode);
     }
   }, [thread?.mode]);
+  useEffect(() => {
+    if (selectedWorkspace) return;
+    if (!workspaces.length) return;
+    setSelectedWorkspace(workspaces[0].path);
+  }, [selectedWorkspace, setSelectedWorkspace, workspaces]);
 
   const isRunning = runProgress.isActive;
   const isBusy = isSubmitting || isRunning;
+  const resolvedWorkspacePath =
+    thread?.subtitle ??
+    selectedWorkspace ??
+    workspaces[0]?.path ??
+    workspaceName ??
+    null;
   const canSubmit = useMemo(() => {
-    return !isBusy && prompt.trim().length > 0;
-  }, [isBusy, prompt]);
+    return (
+      !isBusy && prompt.trim().length > 0 && Boolean(resolvedWorkspacePath)
+    );
+  }, [isBusy, prompt, resolvedWorkspacePath]);
 
   const handleModeChange = (option: ComposerMode) => {
     setMode(option);
@@ -85,7 +104,11 @@ export function ThreadComposer({
     setIsSubmitting(true);
     setError(null);
     try {
-      const cwd = thread?.subtitle ?? workspaceName ?? undefined;
+      if (!resolvedWorkspacePath) {
+        setWorkspacePickerOpen(true);
+        throw new Error("Select a workspace before starting a run.");
+      }
+      const cwd = resolvedWorkspacePath ?? undefined;
       let targetThreadId: string | undefined = threadId;
       if (!targetThreadId) {
         const newThread = await startThread({ cwd });
@@ -123,14 +146,16 @@ export function ThreadComposer({
 
   const progressPercent = runProgress.percent || (isSubmitting ? 5 : 0);
   const showProgress = isRunning || isSubmitting;
-  const workspaceLabel = workspaceName ?? thread?.subtitle ?? "photobooth";
+  const workspaceLabel = resolvedWorkspacePath
+    ? workspaceNameFromPath(resolvedWorkspacePath)
+    : "Add workspace";
   const branchLabel = mode === "worktree" ? "From main" : "From main";
 
   return (
     <div className="space-y-3">
-      <div className="rounded-3xl border border-white/10 bg-ink-900/70 p-4 shadow-card">
+      <div className="rounded-[28px] bg-black/25 p-4 backdrop-blur-xl ring-1 ring-white/10">
         <textarea
-          className="h-28 w-full resize-none rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-ink-100 focus:outline-none"
+          className="h-28 w-full resize-none bg-transparent p-2 text-base text-ink-100 placeholder:text-ink-500 focus:outline-none"
           placeholder="Type your request (use @ to attach files or / for commands)"
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
@@ -142,7 +167,7 @@ export function ThreadComposer({
               <Plus className="h-3.5 w-3.5" />
             </button>
             <select
-              className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-100"
+              className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
               value={agent}
               onChange={(event) =>
                 setAgent(event.target.value as (typeof agentOptions)[number])
@@ -155,7 +180,7 @@ export function ThreadComposer({
               ))}
             </select>
             <select
-              className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-100"
+              className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
               value={model}
               onChange={(event) =>
                 setModel(event.target.value as (typeof modelOptions)[number])
@@ -168,7 +193,7 @@ export function ThreadComposer({
               ))}
             </select>
             <select
-              className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-100"
+              className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
               value={effort}
               onChange={(event) => setEffort(event.target.value as EffortLevel)}
             >
@@ -215,7 +240,10 @@ export function ThreadComposer({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300">
+          <button
+            className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+            onClick={() => setWorkspacePickerOpen(true)}
+          >
             <Settings className="h-3.5 w-3.5" />
             {workspaceLabel}
             <ChevronDown className="h-3.5 w-3.5" />
