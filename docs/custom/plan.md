@@ -1,258 +1,412 @@
-# Codex Desktop Parity Plan (Codebase-Specific)
+# Codex Desktop Clone — Gap Analysis & Required Changes (Actual App vs Agent Build)
 
-This plan replaces the generic merged checklist with tasks mapped to the current Theoden codebase.
+This document lists **everything I can confirm from the two screen recordings**:
 
-Status rule:
-- `[x]` means implemented in this repo and kept as baseline.
-- `[ ]` means missing, partial, or needs parity-hardening.
-- If behavior differs by route or platform, the task stays `[ ]` until all target paths are covered.
+- [ ] **Actual Codex desktop app recording** (`actual-codex-app.mp4`, ~9:15)
+- [ ] **Agent-built clone recording** (`codex-desktop-agent.mp4`, ~1:26)
 
-## 1) Foundation and Branding
+> Note: the clone recording is dominated by an **“APP‑SERVER UNAVAILABLE”** state, so several flows can’t be validated end-to-end from video. Where that happens, I mark the item as **[UNVERIFIED IN CLONE]** and still describe what the real app does (from the actual recording) so you can implement it.
 
-- [x] Rename desktop product identity to `Codex` everywhere in Tauri config.
-  Files: `src-tauri/tauri.conf.json` (`productName`, `mainBinaryName`, `identifier`, window `title`).
-- [x] Update app-server client metadata branding.
-  Files: `src/app/components/layout/AppShell.tsx` (`clientInfo.name`, `clientInfo.title`).
-- [x] Remove leftover Theoden naming from persisted keys only if migration is provided.
-  Files: `src/app/state/workspaces.ts`, `src/app/state/settings.ts`, `src/app/state/automations.ts`.
-  Guidance: implement a one-time localStorage migration map to avoid losing user data.
-- [x] Add native desktop menu parity (File/Edit/View/Window/Help) with accelerators.
-  Files: `src-tauri/src/main.rs` (menu setup + command routing).
+---
 
-## 2) Routing and Shell
+## 0) Executive summary (P0 blockers)
 
-- [x] Keep canonical route tree based on `/`, `/t/$threadId`, `/automations`, `/skills`, `/settings/$section`.
-  Files: `src/app/router.tsx`.
-- [x] Add explicit no-workspace onboarding state before the normal New Thread empty state.
-  Files: `src/app/routes/NewThreadPage.tsx`, `src/app/components/threads/ThreadEmptyState.tsx`, `src/app/components/workspaces/WorkspaceModal.tsx`.
-- [x] Show right diff/review panel when launched from New Thread review workflows, not only active thread route.
-  Files: `src/app/components/layout/AppShell.tsx`, `src/app/state/threadUi.tsx`.
-- [x] Add route-level loading/error boundaries for app-server failures.
-  Files: `src/app/router.tsx`, route components in `src/app/routes`.
+### P0 — must fix before “full clone” is even testable
+1. [ ] **Remove/repair the “app-server bootstrap” dependency**: the clone UI is effectively non-functional due to a hard error panel (“APP‑SERVER UNAVAILABLE / App‑server bootstrap failed.”). The real app does **not** present this gate during normal use.
+2. [ ] **Rebuild left navigation + thread list to match the real app** (information architecture, spacing, typography, grouping, row affordances).
+3. [ ] **Match top-bar semantics** (real app: thread title + workspace label + overflow menu; clone: “Run/Open” controls that do not exist in the real app UI shown).
+4. [ ] **Implement the core screens the real app has**: New thread home, Thread view (assistant output + command log blocks), Automations templates + creation sheet, Settings (multi-section), Git/changes viewing.
 
-## 3) Workspace and Thread Context
+---
 
-- [x] Keep workspace selection persistence and normalization.
-  Files: `src/app/state/workspaceUi.tsx`, `src/app/state/workspaces.ts`, `src/app/utils/workspace.ts`.
-- [x] Keep workspace list merge strategy (config + local fallback) and dedupe by normalized path.
-  Files: `src/app/services/cli/useWorkspaces.ts`.
-- [x] Add explicit workspace removal/unavailability handling with UX fallback.
-  Files: `src/app/state/workspaceUi.tsx`, `src/app/components/workspaces/WorkspaceModal.tsx`.
-- [x] Add trust-level surfacing and actions in workspace picker.
-  Files: `src/app/components/workspaces/WorkspacePickerDropdown.tsx`, `src/app/services/cli/workspaces.ts`.
-- [x] Ensure all actions consume one resolved workspace source-of-truth helper instead of duplicating fallback logic.
-  Files: `src/app/components/threads/ThreadTopBar.tsx`, `src/app/components/layout/BottomBar.tsx`, `src/app/components/threads/ThreadComposer.tsx`, `src/app/components/diff/DiffPanel.tsx`.
+## 1) Reference UI from the actual recording (what we’re cloning)
 
-## 4) Sidebar Parity
+### 1.1 Left side navigation (real app)
+Real app uses a **single left sidebar** containing:
+- [ ] A compact **icon/label nav** at top: **New thread**, **Automations**, **Skills** (each with an icon).
+- [ ] A “Threads” section below with:
+  - [ ] **Workspace “folders”** (e.g., “Codex‑Windows”, “Handy”).
+  - [ ] Threads listed beneath each workspace.
+  - [ ] Per-thread metadata: **relative time** (e.g., “4h”, “2d”), and for some threads **git change counters** like **+76 −30** and/or an **unread dot**.
+  - [ ] Small controls near “Threads” header (icons consistent with “add” and “sort/filter”).
 
-- [x] Keep primary sidebar nav links (`New thread`, `Automations`, `Skills`) and thread grouping by workspace.
-  Files: `src/app/components/sidebar/AppSidebar.tsx`.
-- [x] Replace non-target `Providers` block with account/org footer menu.
-  Files: `src/app/components/sidebar/AppSidebar.tsx`.
-  Guidance: populate from `account/read` via app-server API and include docs/logout actions.
-- [x] Wire filter/sort button to real controls (organize/sort/show), not a decorative icon.
-  Files: `src/app/components/sidebar/AppSidebar.tsx`, `src/app/services/cli/useThreads.ts`.
-- [x] Add keyboard shortcuts for `N`, `A`, `S` at app level, while ignoring text inputs.
-  Files: `src/app/components/layout/AppShell.tsx`.
-- [x] Add virtualization for large thread/workspace lists.
-  Files: `src/app/components/sidebar/AppSidebar.tsx`.
+### 1.2 New thread home (real app)
+The “New thread” screen is intentionally minimal:
+- [ ] Empty main canvas with a large **“Let’s build”** headline.
+- [ ] A **workspace selector** rendered near the “Let’s build” label (dropdown caret).
+- [ ] A large floating/illustrative icon near the headline.
 
-## 5) Top Bar Actions
+### 1.3 Thread view (real app)
+The thread view is a **chat-like transcript**, but *not* “bubble chat”:
+- [ ] Assistant output is rendered as markdown: headings, lists, inline code, links.
+- [ ] The app includes **execution logs** (e.g., repeated “Ran …” lines for commands) and a compact **“Worked for Xm Ys”** duration indicator.
+- [ ] There is a **copy icon** for assistant message content (visible near the bottom of the assistant message block in the actual recording).
 
-- [x] Keep run/start flow from top bar and new thread creation fallback.
-  Files: `src/app/components/threads/ThreadTopBar.tsx`, `src/app/services/cli/turns.ts`.
-- [x] Keep Open dropdown with copy path + editor/terminal/explorer actions.
-  Files: `src/app/components/threads/ThreadTopBar.tsx`, `src/app/services/desktop/open.ts`.
-- [x] Drive default Open action from saved settings (`openDestination`).
-  Files: `src/app/routes/SettingsPage.tsx`, `src/app/state/settings.ts`, `src/app/components/threads/ThreadTopBar.tsx`.
-- [x] Expand Open target list per OS parity and show platform-specific labels/icons.
-  Files: `src/app/components/threads/ThreadTopBar.tsx`, `src/app/services/desktop/open.ts`.
-- [x] Add gh-auth prerequisite UX for Create PR (`next steps`) instead of transient error text.
-  Files: `src/app/components/threads/ThreadTopBar.tsx`, `src/app/services/git/commits.ts`.
-- [x] Make git action enable/disable states repo-aware and branch-state-aware.
-  Files: `src/app/components/threads/ThreadTopBar.tsx`, `src/app/services/git/useWorkspaceGitStatus.ts`.
-- [x] Wire top-bar overflow button to a real context menu.
-  Files: `src/app/components/threads/ThreadTopBar.tsx`.
+### 1.4 Automations (real app)
+Automations has:
+- [ ] Page title **“Automations”** with a **“Beta”** pill badge.
+- [ ] Subtitle: “Automate work by setting up scheduled threads.” with a **Learn more** link.
+- [ ] A “Start with a template” section showing **template cards in a grid** (2 columns in the recording), each card with:
+  - [ ] A small icon/emoji tile top-left
+  - [ ] Title/description copy
+  - [ ] Hover/focus affordances
+- [ ] Clicking a template opens a **right-side creation sheet** (“Create automation”) containing:
+  - [ ] A prominent **red warning callout** about sandbox settings and risk, with inline links (“rules”, etc.).
+  - [ ] Fields: **Name**, **Projects** (chip/tokens), **Prompt** (multiline).
+  - [ ] The sheet overlays the main page while leaving the left sidebar visible.
 
-## 6) Bottom Bar and Environment Controls
+### 1.5 Settings (real app)
+Settings is a distinct section with its own internal navigation list:
+- [ ] Left settings nav items include (as seen): **General, Configuration, Personalization, MCP servers, Git, Environments, Worktrees, Archived threads**.
+- [ ] Example shown: **Environments** → select “Codex‑Windows” → edit form with environment details.
 
-- [x] Keep interactive Local/Worktree/Cloud mode controls and branch switching.
-  Files: `src/app/components/layout/BottomBar.tsx`, `src/app/state/environmentUi.tsx`.
-- [x] Replace environment pills with target-style `Continue in` dropdown and explicit option descriptions.
-  Files: `src/app/components/layout/BottomBar.tsx`.
-- [x] Add permission profile dropdown and pass policy to `command/exec` calls.
-  Files: `src/app/components/layout/BottomBar.tsx`, `src/app/services/cli/commands.ts`.
+### 1.6 Changes / diff viewing (real app)
+The real app shows git-related UI in at least two ways:
+- [ ] A right-side “changes” context panel in some thread views (uncommitted changes / status).
+- [ ] A full “changes/diff” view showing:
+  - [ ] File path headers
+  - [ ] Line numbers
+  - [ ] Green-highlighted added blocks
+  - [ ] Per-file change counts
 
-## 7) New Thread Empty State
+---
 
-- [x] Keep centered `Let's build` state with workspace dropdown and starter cards.
-  Files: `src/app/components/threads/ThreadEmptyState.tsx`.
-- [x] Replace fixed 3-card prompt list with categorized task catalog and `Start with a task` dropdown.
-  Files: `src/app/components/threads/ThreadEmptyState.tsx`.
-- [x] Wire `Explore more` button to open task catalog or templates route.
-  Files: `src/app/components/threads/ThreadEmptyState.tsx`.
-- [x] Add explicit onboarding CTA pair (`Add project`, `Skip`) when no workspace exists.
-  Files: `src/app/routes/NewThreadPage.tsx`, `src/app/components/workspaces/WorkspaceModal.tsx`.
+## 2) Confirmed differences (clone vs real) and required changes
 
-## 8) Composer Parity
+### 2.1 Global layout & navigation
 
-- [x] Keep send flow, branch controls, run progress ring, and attachment chips.
-  Files: `src/app/components/threads/ThreadComposer.tsx`.
-- [x] Remove or feature-flag non-target `Agent` selector unless target parity explicitly needs it.
-  Files: `src/app/components/threads/ThreadComposer.tsx`.
-- [x] Remove or implement lock semantics; current lock button is visual-only.
-  Files: `src/app/components/threads/ThreadComposer.tsx`.
-- [x] Apply `compactComposer` setting to actual composer layout variants.
-  Files: `src/app/routes/SettingsPage.tsx`, `src/app/state/settings.ts`, `src/app/components/threads/ThreadComposer.tsx`.
-- [x] Implement real `@` file index from selected workspace rather than fallback hardcoded list.
-  Files: `src/app/components/threads/ThreadComposer.tsx`.
-  Guidance: build index via `command/exec` (`rg --files`) with debounce and cache by workspace path.
-- [x] Add keyboard navigation in `@` and `/` menus (ArrowUp/ArrowDown/Tab/Enter/Escape).
-  Files: `src/app/components/threads/ThreadComposer.tsx`.
-- [x] Convert `/` command items from text insertion to executable actions.
-  Files: `src/app/components/threads/ThreadComposer.tsx`, related service modules under `src/app/services`.
-- [x] Implement real stop/cancel behavior for active runs.
-  Files: `src/app/components/threads/ThreadComposer.tsx`, app-server bridge/services.
+#### ✅ Real app behavior/appearance
+- [ ] Left sidebar is **compact** and utilitarian (no “Navigation” headline).
+- [ ] Navigation items are **icon + label**, with subtle hover/selected backgrounds.
+- [ ] Threads are grouped under workspaces (folder-like).
 
-## 9) Thread View and Timeline
+#### ❌ Clone behavior/appearance
+- [ ] Left sidebar uses a prominent **“Navigation”** heading and “CODEX” label.
+- [ ] Adds sections “RECENTS” and “THREADS” with pill buttons (“+ Add”, “Sort”).
+- [ ] Shows shortcut letters (N/A/S) aligned at right of nav rows.
+- [ ] UI appears to use heavier “glass/blur” styling than the real app.
 
-- [x] Keep thread route with message stream, optimistic user message append, and bottom-stick autoscroll behavior.
-  Files: `src/app/routes/ThreadPage.tsx`.
-- [x] Keep markdown-style message rendering with code block copy actions.
-  Files: `src/app/components/threads/ThreadMessages.tsx`.
-- [x] Replace custom markdown parsing with a robust renderer supporting nested structures and links safely.
-  Files: `src/app/components/threads/ThreadMessages.tsx`.
-- [x] Integrate run timeline (`RunTimeline`) into active thread page or remove dead path.
-  Files: `src/app/components/runs/RunTimeline.tsx`, `src/app/routes/ThreadPage.tsx`.
+#### Required changes
+- [ ] Remove the **“Navigation”** header + “CODEX” wordmark presentation. Replace with the real app’s compact icon+label block.
+- [ ] Remove right-aligned shortcut letters (N/A/S) from the sidebar rows (real app doesn’t show them persistently).
+- [ ] Replace “RECENTS” section with the real app’s **workspace-grouped thread list**.
+- [ ] Implement the real app’s **Threads header row** including the small icon buttons for add/sort/filter.
+- [ ] Match sidebar width (~25–30% of window in the recording) and internal spacing.
 
-## 10) Diff and Review Panel
+---
 
-- [x] Keep staged/unstaged tabs, file selection, diff parsing, context collapsing, and stage/revert actions.
-  Files: `src/app/components/diff/DiffPanel.tsx`, `src/app/services/git/changes.ts`, `src/app/services/git/diff.ts`.
-- [x] Keep line-level `Request change` interaction and custom event emission.
-  Files: `src/app/components/diff/DiffPanel.tsx`.
-- [x] Replace per-file stage/revert controls with true per-hunk actions where target expects hunk-level operations.
-  Files: `src/app/components/diff/DiffPanel.tsx`, git service layer.
-- [x] Persist review annotations into thread history/state instead of session-only in-memory list.
-  Files: `src/app/components/diff/DiffPanel.tsx`, `src/app/services/cli/threadMessages.ts` or dedicated annotation service.
-- [x] Wire folder/open and overflow header buttons.
-  Files: `src/app/components/diff/DiffPanel.tsx`.
+### 2.2 Top bar / window chrome
 
-## 11) Terminal Drawer
+#### ✅ Real app
+- [ ] Thread view top bar contains: **thread title**, **workspace label**, and a **“…” overflow** menu.
+- [ ] New thread screen shows a simple “New thread” header in the main area (not a toolbar full of controls).
+- [ ] No visible “Run” and “Open” primary actions in the top-right (in the portions shown).
 
-- [x] Keep global toggle from top bar and `Ctrl/Cmd+J` shortcut wiring.
-  Files: `src/app/components/layout/AppShell.tsx`, `src/app/components/threads/ThreadTopBar.tsx`.
-- [x] Replace static terminal transcript with real streaming command output.
-  Files: `src/app/components/layout/TerminalDrawer.tsx`, `src/app/services/cli/commands.ts`.
-- [x] Add terminal session scoping per workspace/thread and persist recent output.
-  Files: `src/app/components/layout/TerminalDrawer.tsx`, new terminal state/service module.
-- [x] Add clear output and copy-selection actions.
-  Files: `src/app/components/layout/TerminalDrawer.tsx`.
+#### ❌ Clone
+- [ ] Persistent **Run** and **Open** buttons in the top-right (plus extra controls like “Git”) regardless of page.
+- [ ] Title bar area doesn’t match the real app’s thread header semantics.
 
-## 12) Worktree, Branch, Commit, PR Flows
+#### Required changes
+- [ ] Remove **Run/Open** from the primary top bar and align with the real app:
+  - [ ] In thread view: show **[Thread title] [Workspace] […]**
+  - [ ] In New thread: show minimal header (“New thread”) and keep the emphasis on the “Let’s build” canvas.
+  - [ ] Settings/Automations: show the page title only (plus small contextual actions if the real app has them).
+- [ ] Ensure the app icon/title in the OS chrome matches the real app (real shows Codex mark; clone shows orange dot).
 
-- [x] Keep worktree creation modal and log output flow.
-  Files: `src/app/components/threads/ThreadModals.tsx`, `src/app/services/git/worktrees.ts`.
-- [x] Keep branch creation and commit/push/PR modal flows.
-  Files: `src/app/components/threads/ThreadModals.tsx`, `src/app/services/git/commits.ts`.
-- [x] Implement real cancelation for in-progress worktree creation.
-  Files: `src/app/components/threads/ThreadModals.tsx`, `src/app/services/git/worktrees.ts`.
-- [x] Use saved worktree settings (`strategy`, prefix, retention) in worktree and branch flows.
-  Files: `src/app/state/settings.ts`, `src/app/routes/SettingsPage.tsx`, `src/app/services/git/worktrees.ts`.
-- [x] Implement `mergeWorkspace` and wire `Bring back to main` actions.
-  Files: `src/app/services/git/worktrees.ts`, `src/app/components/threads/ThreadMetaPanel.tsx` or integrated thread actions.
+---
 
-## 13) Automations
+### 2.3 App initialization / backend connectivity (critical)
 
-- [x] Keep automation list/create modal with local persistence.
-  Files: `src/app/routes/AutomationsPage.tsx`, `src/app/state/automations.ts`.
-- [x] Wire `Learn more` to real docs/help target.
-  Files: `src/app/routes/AutomationsPage.tsx`.
-- [x] Add Run now and execution history fields backed by real run events.
-  Files: `src/app/routes/AutomationsPage.tsx`, app-server service layer.
-- [x] Move schedule model from display string to normalized recurrence payload.
-  Files: `src/app/state/automations.ts`, `src/app/routes/AutomationsPage.tsx`.
+#### ✅ Real app
+- [ ] Opens into working UI without a blocking “app-server bootstrap failed” state in the recording.
 
-## 14) Skills
+#### ❌ Clone
+- [ ] Shows blocking panel: **“APP‑SERVER UNAVAILABLE — App-server bootstrap failed.”** with a retry button.
 
-- [x] Keep installed/recommended sections, search, detail modal, install/uninstall, and try/open actions.
-  Files: `src/app/routes/SkillsPage.tsx`.
-- [x] Replace mock catalogs with `skills/list` and experimental remote skills APIs behind feature flag.
-  Files: `src/app/routes/SkillsPage.tsx`, new/extended service module under `src/app/services/cli`.
-- [x] Make `Try` start or seed a real thread turn instead of only prefill + navigate.
-  Files: `src/app/routes/SkillsPage.tsx`, `src/app/services/cli/turns.ts`.
-- [x] Persist custom/new skills through app-server config instead of local-only arrays.
-  Files: `src/app/routes/SkillsPage.tsx`, skills service modules.
+#### Required changes (P0)
+- [ ] Rework backend architecture so the UI can render and be usable even if:
+  - [ ] the CLI is not found / not configured
+  - [ ] the selected workspace has issues
+  - [ ] background services are down  
+- [ ] Replace “app-server” with a Codex-native model:
+  - [ ] Use Tauri/Rust commands (IPC) to call the Codex CLI directly and stream results
+  - [ ] Or, if a local server is necessary, embed lifecycle management so it starts reliably and the UI degrades gracefully.
+- [ ] Implement a real-app-like empty/error state:
+  - [ ] Show a small banner/toast and guidance, **not** a full-page block that prevents navigation.
 
-## 15) Settings
+---
 
-- [x] Keep multi-section settings nav and persisted snapshots.
-  Files: `src/app/routes/SettingsPage.tsx`, `src/app/state/settings.ts`, `src/app/state/settingsData.ts`.
-- [x] Apply saved theme globally (currently saved but not applied to document classes).
-  Files: `src/main.tsx`, `src/styles/index.css`, `src/app/routes/SettingsPage.tsx`.
-- [x] Apply `defaultOpenDestination` and follow-up behavior to runtime controls.
-  Files: `src/app/routes/SettingsPage.tsx`, top bar/composer components.
-- [x] Wire placeholder action buttons in settings (config file open/validate, MCP add/reload, prune now, archive restore).
-  Files: `src/app/routes/SettingsPage.tsx`.
-- [x] Replace mock MCP/provider data with live app-server values.
-  Files: `src/app/routes/SettingsPage.tsx`, service layer under `src/app/services/cli`.
+### 2.4 New thread home (“Let’s build”)
 
-## 16) App-Server and Event Integration
+#### ✅ Real app
+- [ ] Large “Let’s build” text at the lower-right quadrant.
+- [ ] Workspace name below with dropdown caret.
+- [ ] Minimal rest of the canvas.
 
-- [x] Keep app-server bootstrap and event subscriptions (`initialize` -> `initialized`).
-  Files: `src/app/components/layout/AppShell.tsx`, `src/app/services/cli/useAppServerStream.ts`, `src-tauri/src/main.rs`.
-- [x] Add reconnect strategy when app-server child exits or times out.
-  Files: `src-tauri/src/main.rs`, `src/app/services/cli/appServer.ts`, bootstrap flow in `AppShell.tsx`.
-- [x] Centralize request-id generation and response typing to avoid per-file nonce drift.
-  Files: modules under `src/app/services/cli`.
-- [x] Surface approvals UI in active thread view; currently approvals plumbing exists but panel is not rendered.
-  Files: `src/app/components/threads/ApprovalsPanel.tsx`, `src/app/routes/ThreadPage.tsx`.
-- [x] Expand account/auth integration (`account/read`, login/logout) and connect to sidebar footer menu.
-  Files: service modules + `src/app/components/sidebar/AppSidebar.tsx`.
+#### ❌ Clone
+- [ ] Shows “New thread” in top bar with “Pick a workspace” microcopy.
+- [ ] Main canvas occupied by the app-server error card.
 
-## 17) Visual and Interaction Parity
+#### Required changes
+- [ ] Implement real layout:
+  - [ ] Center/empty canvas
+  - [ ] “Let’s build” + workspace dropdown anchored at bottom-right area
+  - [ ] Decorative icon near the headline (real app uses a large outline icon)
+- [ ] Ensure no blocking system errors cover this surface.
 
-- [x] Keep custom typography and design tokens baseline.
-  Files: `src/styles/index.css`, `tailwind.config.ts`.
-- [x] Reduce Command-Center style blur/chrome where target uses flatter surfaces.
-  Files: layout and page components under `src/app/components` and `src/app/routes`.
-- [x] Standardize spacing/radius/hover tokens across sidebar/cards/popovers.
-  Files: `tailwind.config.ts`, shared utility class constants or component primitives.
-- [x] Add consistent scrollbars for sidebar/main/diff/terminal containers.
-  Files: `src/styles/index.css`.
-- [x] Verify icon usage consistency and remove dead icon-only buttons.
-  Files: all top-level UI components in `src/app/components`.
+---
 
-## 18) No-op Cleanup and Dead Surfaces
+### 2.5 Thread list (left sidebar)
 
-- [x] Keep dev interaction audit hook for route/click logging and smoke highlighting.
-  Files: `src/app/services/dev/useInteractionAudit.ts`, `src/styles/index.css`.
-- [x] Eliminate remaining no-op controls (`Explore more`, settings placeholder actions, filter/menu buttons, lock button, diff header folder/menu).
-  Files: route and component files listed in sections above.
-- [x] Remove or integrate orphan components not in route tree (`ThreadMetaPanel`, `FilesChangedCard`) to avoid drift.
-  Files: `src/app/components/threads/ThreadMetaPanel.tsx`, `src/app/components/diff/FilesChangedCard.tsx`.
+#### ✅ Real app
+- [ ] Workspaces appear like folders and group threads beneath them.
+- [ ] Thread rows include:
+  - [ ] Truncated title
+  - [ ] Relative age on the right (“4h”, “2d”, …)
+  - [ ] Optional **unread dot**
+  - [ ] Optional **git change counters** (e.g., “+76 −30”)
+  - [ ] Some rows show a **pin** icon on the left when pinned/active
+  - [ ] Some rows show a small “open/changes” icon on the right when applicable
 
-## 19) Verification and Delivery Gates
+#### ❌ Clone
+- [ ] Shows no real workspaces detected and a generic empty state.
+- [ ] Different row styling and controls (“+ Add”, “Sort”).
 
-- [x] Add parser/service unit tests for diff/status/message mapping.
-  Files: tests adjacent to `src/app/services/cli/diffSummary.ts`, `src/app/services/git/status.ts`, `src/app/services/cli/threadMessages.ts`.
-- [x] Add integration tests for workspace switching propagation (sidebar/header/composer/bottom bar).
-  Files: component tests for `AppShell`, `AppSidebar`, `ThreadTopBar`, `BottomBar`.
-- [x] Add interaction smoke test in CI using `VITE_UI_SMOKE_TEST=1`.
-  Files: test runner config + CI workflow.
-- [x] Require this command gate before parity sign-off.
-  Commands: `pnpm lint`, `pnpm format:app`, `pnpm app:build`.
-- [x] Add manual parity checklist with screenshots for canonical states.
-  Files: `docs/custom/parity-checklist.md` (new).
+#### Required changes
+- [ ] Build a thread list component that supports:
+  - [ ] Workspace grouping and expand/collapse
+  - [ ] Sorting (by recency) identical to real behavior
+  - [ ] Per-row metadata: age, unread dot, change counters
+  - [ ] Active row highlight that matches the real app (subtle rounded rectangle)
+  - [ ] Context actions on hover (pin, overflow, open diff) consistent with real affordances
+- [ ] Persist:
+  - [ ] last selected workspace
+  - [ ] expanded workspace folders
+  - [ ] scroll position of thread list
 
-## 20) Recommended Execution Order
+---
 
-- [x] Phase A: Branding + no-op elimination + settings wiring.
-- [x] Phase B: Sidebar/account/footer + onboarding + composer parity hardening.
-- [x] Phase C: Terminal streaming + worktree/PR hardening + approvals surface.
-- [x] Phase D: Skills/automations live APIs + visual parity polish + tests.
+### 2.6 Thread view content rendering (chat transcript)
 
-Extra guidance:
-- Keep UI state in providers under `src/app/state`, but move network/business logic into `src/app/services`.
-- Prefer app-server methods over local mock data whenever an API exists.
-- For parity work, capture before/after screenshots for each route (`/`, `/t/:id`, `/automations`, `/skills`, `/settings/:section`) on desktop widths.
+#### ✅ Real app
+- [ ] Markdown rendering with:
+  - [ ] Bulleted lists
+  - [ ] Inline code as pill chips (rounded background)
+  - [ ] Links in muted blue
+- [ ] Execution log lines prefixed by “Ran …” and grouped visually
+- [ ] “Worked for Xm Ys” indicator aligned on the right
+- [ ] Copy-to-clipboard icon for assistant content
+
+#### ❌ Clone
+- [ ] Not observable due to app-server error and no thread content shown.
+
+#### Required changes
+- [ ] Implement a message renderer that matches:
+  - [ ] Typography scale (real app uses larger body text, generous line height)
+  - [ ] Inline code pill style (dark pill with light text)
+  - [ ] Code blocks (monospace, subtle background, padding, scroll)
+  - [ ] Message spacing (no chat bubbles; full-width blocks)
+  - [ ] Copy icon placement and hover behavior
+- [ ] Add an “agent activity” subcomponent:
+  - [ ] “Ran …” lines rendered in a distinct style
+  - [ ] Collapsible grouping for long command logs (recommended)
+  - [ ] Duration indicator “Worked for …”
+
+---
+
+### 2.7 Git / changes viewing (right panel + full diff view)
+
+#### ✅ Real app
+- [ ] Right-side context panel appears in thread view for git/uncommitted changes.
+- [ ] A dedicated changes/diff view exists:
+  - [ ] File header rows
+  - [ ] Per-file change counts
+  - [ ] Inline diff styling (green additions visible)
+  - [ ] Line numbers
+
+#### ❌ Clone
+- [ ] Not observable.
+
+#### Required changes
+- [ ] Add a **right-side panel** component:
+  - [ ] Toggleable / collapsible
+  - [ ] Shows git status, changed files list, and quick actions
+- [ ] Add a **diff viewer** route/view:
+  - [ ] Side-by-side or unified diff (real looks unified in the recording)
+  - [ ] Syntax highlighting for code (optional but recommended)
+  - [ ] Accurate +/− counters
+- [ ] Wire this to Codex CLI outputs (status/diff) and to “thread worktrees” behavior.
+
+---
+
+### 2.8 Automations page (templates grid)
+
+#### ✅ Real app
+- [ ] “Automations” title with **Beta** badge
+- [ ] Subtitle and Learn more link
+- [ ] Template cards grid with consistent card sizing and icon tile
+
+#### ❌ Clone
+- [ ] Navigates to an “Automations” page but content is blocked by app-server error.
+- [ ] Sidebar styling differs from real app.
+
+#### Required changes
+- [ ] Match the Automations page layout:
+  - [ ] Header typography (“Automations” large)
+  - [ ] Beta badge size/shape
+  - [ ] Template cards: padding, corner radius, hover elevation, icon tile
+  - [ ] Two-column responsive grid (in the recording window size)
+- [ ] Ensure templates populate even without workspaces (or show a soft empty state explaining requirement).
+
+---
+
+### 2.9 Create automation sheet (modal)
+
+#### ✅ Real app
+- [ ] Opens as a **right-side overlay sheet** (“Create automation”)
+- [ ] Contains:
+  - [ ] Red warning callout about sandbox settings
+  - [ ] Name field
+  - [ ] Projects chips/tokens
+  - [ ] Prompt textarea
+
+#### ❌ Clone
+- [ ] Not shown.
+
+#### Required changes
+- [ ] Implement a right-side sheet component with:
+  - [ ] Rounded corners and shadow
+  - [ ] Scrollable internal content
+  - [ ] Escape key to close, click-outside to close
+  - [ ] Focus trap for accessibility
+- [ ] Implement form components that visually match real app:
+  - [ ] Text input styling
+  - [ ] Chip/tokens with remove “x”
+  - [ ] Multiline prompt box
+  - [ ] Primary/secondary actions (not visible in frame; ensure there is a save/create CTA consistent with real app)
+
+---
+
+### 2.10 Settings section
+
+#### ✅ Real app
+- [ ] Left settings nav with categories:
+  - [ ] General
+  - [ ] Configuration
+  - [ ] Personalization
+  - [ ] MCP servers
+  - [ ] Git
+  - [ ] Environments
+  - [ ] Worktrees
+  - [ ] Archived threads
+- [ ] Environments page supports selecting and editing an environment.
+
+#### ❌ Clone
+- [ ] A “Settings” title exists but appears to be the same error canvas.
+
+#### Required changes
+- [ ] Implement Settings as a first-class route with internal nav.
+- [ ] Match nav typography, spacing, and active state.
+- [ ] Implement at minimum:
+  - [ ] Environments list
+  - [ ] Environment edit view (name, paths, etc.)
+  - [ ] Git settings stub (if not fully implemented yet)
+  - [ ] Archived threads view (list + restore/delete actions)
+
+---
+
+## 3) Visual design tokens to align (based on the actual recording)
+
+> Exact values will require inspecting the source CSS from the real app, but these are consistent with what’s visible in-frame.
+
+### 3.1 Color & contrast
+- [ ] Base background: very dark neutral (~#181818).
+- [ ] Sidebar background: slightly differentiated from main canvas (subtle gradient).
+- [ ] Text:
+  - [ ] Primary: near-white (#E6E6E6)
+  - [ ] Secondary: muted gray (#A0A0A0)
+- [ ] Links: muted blue (real app uses subtle, not neon)
+- [ ] Diff colors: green additions, red deletions (with muted saturation)
+
+### 3.2 Typography
+- [ ] Use system UI font stack (SF/Segoe/Inter-like).
+- [ ] Larger-than-default body size and generous line-height for assistant output.
+- [ ] Page titles (“Automations”, “Settings”) are large and bold.
+
+### 3.3 Shape, elevation, and motion
+- [ ] Rounded rectangles throughout (medium radius).
+- [ ] Cards and sheets use soft shadow and subtle elevation.
+- [ ] Hover states are understated (background tint, slight elevation).
+
+---
+
+## 4) Functional parity checklist (what to implement to claim “full clone”)
+
+### 4.1 Core
+- [ ] Workspace discovery + selection (matches real behavior and placement)
+- [ ] Thread creation, listing, selection, and persistence
+- [ ] Thread transcript rendering (markdown + logs + copy)
+- [ ] Git status panel + diff viewer
+
+### 4.2 Automations
+- [ ] Templates page
+- [ ] Create automation sheet
+- [ ] Scheduling + background execution on worktrees
+- [ ] Inbox/archiving behavior for automation results
+
+### 4.3 Settings
+- [ ] Settings nav sections
+- [ ] Environment CRUD
+- [ ] Worktrees management
+- [ ] Archived threads management
+
+### 4.4 UX polish
+- [ ] Keyboard shortcuts (match real; don’t show letter hints unless real does)
+- [ ] Empty states (no workspaces, no threads, disconnected)
+- [ ] Loading states (skeletons / spinners)
+- [ ] Accessibility (focus states, escape closes sheets, tab order)
+
+---
+
+## 5) Suggested implementation plan (pragmatic, clone-first)
+
+### Phase 1 — Unblock & match shell (P0)
+1. [ ] Remove app-server blocking error; show non-blocking banner if backend is down.
+2. [ ] Rebuild left sidebar to match real IA:
+   - [ ] top nav icons
+   - [ ] threads grouped by workspace
+3. [ ] Replace top bar with real app semantics (thread title/workspace/overflow).
+4. [ ] Implement New thread home “Let’s build” layout.
+
+### Phase 2 — Core thread experience
+1. [ ] Message renderer that matches typography + markdown + inline code pills.
+2. [ ] Agent activity log component (“Ran …”, “Worked for …”).
+3. [ ] Copy icon + affordances.
+
+### Phase 3 — Automations
+1. [ ] Templates grid
+2. [ ] Create automation sheet
+3. [ ] Wire up to CLI automation primitives
+
+### Phase 4 — Settings + Git UI
+1. [ ] Settings internal nav + pages (Environments first)
+2. [ ] Git status panel + diff view
+
+---
+
+## Appendix A — Reference frames I used (timecodes)
+
+### Actual app frames
+- [ ] ~00:01:00 Thread view (conversation layout)
+- [ ] ~00:02:00 Settings → Environments edit
+- [ ] ~00:04:00 New thread home (“Let’s build”)
+- [ ] ~00:07:00 Automations templates grid (“Beta” badge)
+- [ ] ~00:07:30 Create automation sheet (right overlay)
+- [ ] ~00:08:30 Thread transcript showing “Ran …” logs + “Worked for …”
+- [ ] ~00:09:00 Changes/diff view
+
+### Clone frames
+- [ ] ~00:00:00 Sidebar with “Navigation/Recents/Threads”
+- [ ] ~00:00:20 “APP‑SERVER UNAVAILABLE” blocking state
+- [ ] ~00:01:10 Automations route still blocked by the same error
+
