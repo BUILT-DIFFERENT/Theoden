@@ -8,6 +8,10 @@ export const mockThreads: ThreadSummary[] = [
     status: "needs_review",
     projectId: "project-northstar",
     lastUpdated: "2 minutes ago",
+    changeSummary: {
+      additions: 76,
+      deletions: 30,
+    },
     modelProvider: "openai",
     source: "cli",
   },

@@ -31,6 +31,10 @@ export interface ThreadSummary {
   status: RunStatus;
   projectId: string;
   lastUpdated: string;
+  changeSummary?: {
+    additions: number;
+    deletions: number;
+  };
   modelProvider?: string;
   source?: string;
 }

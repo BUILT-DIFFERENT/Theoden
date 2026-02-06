@@ -10,8 +10,11 @@ import {
   Folder,
   LogOut,
   Plus,
+  SquarePen,
   Settings,
   UserRound,
+  WandSparkles,
+  Workflow,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -22,11 +25,19 @@ import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useAppUi } from "@/app/state/appUi";
 import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
+import type { ThreadSummary } from "@/app/types";
 import {
-  isLikelyWorkspacePath,
   normalizeWorkspacePath,
   workspaceNameFromPath,
 } from "@/app/utils/workspace";
+
+type WorkspaceGroup = {
+  id: string;
+  name: string;
+  path: string;
+  key: string;
+  threads: ThreadSummary[];
+};
 
 function readLoginUrl(result: unknown) {
   if (!result || typeof result !== "object") {
@@ -57,10 +68,13 @@ export function AppSidebar() {
   const { account } = useAccount();
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
+  const newThreadMatch = matchRoute({ to: "/" });
+  const automationsMatch = matchRoute({ to: "/automations" });
+  const skillsMatch = matchRoute({ to: "/skills" });
   const selectedThreadId = threadMatch ? threadMatch.threadId : undefined;
   const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
     useWorkspaceUi();
-  const { projects, threads, allThreads } = useThreadList({
+  const { projects, allThreads } = useThreadList({
     limit: 100,
     workspacePath: selectedWorkspace,
   });
@@ -87,20 +101,20 @@ export function AppSidebar() {
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const threadListParentRef = useRef<HTMLDivElement | null>(null);
 
-  const recents = useMemo(() => threads.slice(0, 6), [threads]);
-  const workspaceEntries = workspaces.length
-    ? workspaces.map((workspace) => ({
-        id: workspace.path,
-        name: workspace.name,
-        path: workspace.path,
-      }))
-    : projects.map((project) => ({
-        id: project.id,
-        name: project.name,
-        path: project.path,
-      }));
-  const workspaceThreadsMap = useMemo(() => {
-    const map = new Map<string, typeof allThreads>();
+  const workspaceEntries: Array<{ id: string; name: string; path: string }> =
+    workspaces.length
+      ? workspaces.map((workspace) => ({
+          id: workspace.path,
+          name: workspace.name,
+          path: workspace.path,
+        }))
+      : projects.map((project) => ({
+          id: project.id,
+          name: project.name,
+          path: project.path,
+        }));
+  const workspaceThreadsMap = useMemo<Map<string, ThreadSummary[]>>(() => {
+    const map = new Map<string, ThreadSummary[]>();
     allThreads.forEach((thread) => {
       const key = normalizeWorkspacePath(thread.subtitle).toLowerCase();
       const entries = map.get(key);
@@ -112,7 +126,7 @@ export function AppSidebar() {
     });
     return map;
   }, [allThreads]);
-  const workspaceTree = useMemo(() => {
+  const workspaceTree = useMemo<WorkspaceGroup[]>(() => {
     const knownEntries = new Set<string>();
     const entries = workspaceEntries.map((workspace) => {
       const key = normalizeWorkspacePath(workspace.path).toLowerCase();
@@ -141,7 +155,7 @@ export function AppSidebar() {
     });
     return entries;
   }, [workspaceEntries, workspaceThreadsMap]);
-  const visibleWorkspaceTree = useMemo(() => {
+  const visibleWorkspaceTree = useMemo<WorkspaceGroup[]>(() => {
     return workspaceTree
       .map((workspace) => {
         const filteredThreads = workspace.threads.filter((thread) => {
@@ -174,7 +188,7 @@ export function AppSidebar() {
   const rowVirtualizer = useVirtualizer({
     count: visibleWorkspaceTree.length,
     getScrollElement: () => threadListParentRef.current,
-    estimateSize: () => 112,
+    estimateSize: () => 92,
     overscan: 8,
   });
 
@@ -286,118 +300,68 @@ export function AppSidebar() {
   const accountAvatar = accountEmail.slice(0, 1).toUpperCase() || "?";
 
   return (
-    <aside className="flex min-h-screen w-60 flex-col border-r border-white/10 bg-ink-900/70 px-4 py-6">
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Codex</p>
-        <h2 className="font-display text-lg">Navigation</h2>
-      </div>
-
-      <nav className="space-y-1 text-sm">
+    <aside className="flex min-h-screen w-72 flex-col border-r border-white/10 bg-ink-900/70 px-4 py-6">
+      <nav className="space-y-1 text-[0.85rem]">
         <Link
           to="/"
-          className="flex items-center justify-between rounded-xl px-3 py-2 text-ink-200 transition hover:bg-white/5 hover:text-ink-50"
+          className={`flex items-center gap-3 rounded-xl px-3 py-2 transition ${
+            newThreadMatch
+              ? "bg-white/10 text-ink-50"
+              : "text-ink-200 hover:bg-white/5 hover:text-ink-50"
+          }`}
           onClick={() => {
             setComposerDraft("");
             setReviewOpen(false);
             setActiveModal(null);
           }}
         >
+          <SquarePen className="h-4 w-4 text-ink-400" />
           <span>New thread</span>
-          <span className="text-xs text-ink-400">N</span>
         </Link>
         <Link
           to="/automations"
-          className="flex items-center justify-between rounded-xl px-3 py-2 text-ink-300 transition hover:bg-white/5 hover:text-ink-50"
+          className={`flex items-center gap-3 rounded-xl px-3 py-2 transition ${
+            automationsMatch
+              ? "bg-white/10 text-ink-50"
+              : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
+          }`}
         >
+          <Workflow className="h-4 w-4 text-ink-400" />
           <span>Automations</span>
-          <span className="text-xs text-ink-500">A</span>
         </Link>
         <Link
           to="/skills"
-          className="flex items-center justify-between rounded-xl px-3 py-2 text-ink-300 transition hover:bg-white/5 hover:text-ink-50"
+          className={`flex items-center gap-3 rounded-xl px-3 py-2 transition ${
+            skillsMatch
+              ? "bg-white/10 text-ink-50"
+              : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
+          }`}
         >
+          <WandSparkles className="h-4 w-4 text-ink-400" />
           <span>Skills</span>
-          <span className="text-xs text-ink-500">S</span>
         </Link>
       </nav>
 
-      <div className="mt-6">
-        <div className="flex items-center justify-between">
-          <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-            Recents
-          </p>
-          <span className="text-[0.65rem] text-ink-500">
-            {recents.length} showing
-          </span>
-        </div>
-        <div className="mt-3 space-y-1 text-xs">
-          {recents.length ? (
-            recents.map((thread) => {
-              const isSelected = thread.id === selectedThreadId;
-              const showDot =
-                thread.status === "needs_review" || thread.status === "running";
-              return (
-                <Link
-                  key={thread.id}
-                  to="/t/$threadId"
-                  params={{ threadId: thread.id }}
-                  className={`flex items-center justify-between rounded-xl px-3 py-2 transition ${
-                    isSelected
-                      ? "bg-white/10 text-ink-50"
-                      : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
-                  }`}
-                  onClick={() => {
-                    if (isLikelyWorkspacePath(thread.subtitle)) {
-                      setSelectedWorkspace(thread.subtitle);
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    {showDot ? (
-                      <span className="h-2 w-2 rounded-full bg-sky-400" />
-                    ) : (
-                      <span className="h-2 w-2 rounded-full border border-white/10" />
-                    )}
-                    <span className="max-w-[110px] truncate">
-                      {thread.title}
-                    </span>
-                  </div>
-                  <span className="text-[0.65rem] text-ink-500">
-                    {thread.lastUpdated}
-                  </span>
-                </Link>
-              );
-            })
-          ) : (
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-ink-500">
-              No recent threads.
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="mt-6 flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between">
-          <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+          <p className="text-[0.65rem] uppercase tracking-[0.25em] text-ink-400">
             Threads
           </p>
-          <div className="flex items-center gap-2 text-ink-400">
+          <div className="flex items-center gap-1.5 text-ink-400">
             <button
-              className="btn-flat inline-flex items-center gap-1 px-2"
+              className="btn-flat inline-flex h-7 w-7 items-center justify-center"
               onClick={() => setWorkspacePickerOpen(true)}
               aria-label="Add workspace"
             >
-              <Plus className="h-3 w-3" />
-              <span className="text-[0.65rem]">Add</span>
+              <Plus className="h-3.5 w-3.5" />
             </button>
             <div className="relative" ref={filterMenuRef}>
               <button
-                className="btn-flat inline-flex items-center gap-1 px-2"
+                className="btn-flat inline-flex h-7 w-7 items-center justify-center"
                 onClick={() => setFilterMenuOpen((open) => !open)}
                 aria-label="Thread sort and filter"
               >
-                <Filter className="h-3 w-3" />
-                <span className="text-[0.65rem]">Sort</span>
+                <Filter className="h-3.5 w-3.5" />
               </button>
               {filterMenuOpen ? (
                 <div className="surface-panel absolute right-0 top-8 z-30 w-52 p-2 text-[0.7rem]">
@@ -494,16 +458,16 @@ export function AppSidebar() {
                     }}
                   >
                     <div
-                      className={`mb-1 rounded-xl border text-ink-300 transition ${
+                      className={`mb-2 rounded-xl border text-ink-300 transition ${
                         isSelected
                           ? "border-white/15 bg-white/10"
                           : "border-white/5 bg-black/10"
                       }`}
                     >
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center justify-between px-3 py-2">
                         <button
                           type="button"
-                          className="flex min-w-0 flex-1 items-center gap-2 rounded-l-xl px-3 py-2 text-left hover:bg-white/5"
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-ink-50"
                           onClick={() => {
                             setSelectedWorkspace(workspace.path);
                             setExpandedWorkspaces((current) => ({
@@ -513,18 +477,13 @@ export function AppSidebar() {
                           }}
                         >
                           <Folder className="h-3.5 w-3.5 text-ink-400" />
-                          <div className="min-w-0">
-                            <p className="truncate text-ink-100">
-                              {workspace.name}
-                            </p>
-                            <p className="truncate text-[0.65rem] text-ink-500">
-                              {workspace.path}
-                            </p>
-                          </div>
+                          <p className="truncate text-[0.8rem] text-ink-100">
+                            {workspace.name}
+                          </p>
                         </button>
                         <button
                           type="button"
-                          className="rounded-r-xl border-l border-white/10 px-2 py-2 text-ink-400 hover:bg-white/5 hover:text-ink-200"
+                          className="rounded-lg p-1 text-ink-400 hover:bg-white/5 hover:text-ink-200"
                           onClick={() =>
                             toggleWorkspaceExpanded(workspace.path)
                           }
@@ -544,15 +503,23 @@ export function AppSidebar() {
                       {isExpanded ? (
                         <div className="border-t border-white/10 px-2 pb-2 pt-1">
                           {workspace.threads.length ? (
-                            workspace.threads.slice(0, 8).map((thread) => {
+                            workspace.threads.slice(0, 10).map((thread) => {
                               const isThreadSelected =
                                 thread.id === selectedThreadId;
+                              const showDot =
+                                thread.status === "needs_review" ||
+                                thread.status === "running";
+                              const changeSummary = thread.changeSummary;
+                              const showChanges =
+                                changeSummary &&
+                                (changeSummary.additions > 0 ||
+                                  changeSummary.deletions > 0);
                               return (
                                 <Link
                                   key={thread.id}
                                   to="/t/$threadId"
                                   params={{ threadId: thread.id }}
-                                  className={`mt-1 flex items-center justify-between rounded-lg px-2 py-1.5 text-[0.7rem] transition ${
+                                  className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[0.7rem] transition ${
                                     isThreadSelected
                                       ? "bg-flare-400/15 text-ink-50"
                                       : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
@@ -561,12 +528,25 @@ export function AppSidebar() {
                                     setSelectedWorkspace(workspace.path)
                                   }
                                 >
-                                  <span className="truncate">
-                                    {thread.title}
-                                  </span>
-                                  <span className="ml-2 text-ink-500">
-                                    {thread.lastUpdated}
-                                  </span>
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    {showDot ? (
+                                      <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                                    ) : (
+                                      <span className="h-1.5 w-1.5 rounded-full border border-white/10" />
+                                    )}
+                                    <span className="truncate">
+                                      {thread.title}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[0.65rem] text-ink-500">
+                                    {showChanges ? (
+                                      <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[0.6rem]">
+                                        +{changeSummary.additions} -
+                                        {changeSummary.deletions}
+                                      </span>
+                                    ) : null}
+                                    <span>{thread.lastUpdated}</span>
+                                  </div>
                                 </Link>
                               );
                             })

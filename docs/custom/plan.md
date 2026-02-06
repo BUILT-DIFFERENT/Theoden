@@ -13,7 +13,7 @@ This document lists **everything I can confirm from the two screen recordings**:
 
 ### P0 — must fix before “full clone” is even testable
 1. [ ] **Remove/repair the “app-server bootstrap” dependency**: the clone UI is effectively non-functional due to a hard error panel (“APP‑SERVER UNAVAILABLE / App‑server bootstrap failed.”). The real app does **not** present this gate during normal use.
-2. [ ] **Rebuild left navigation + thread list to match the real app** (information architecture, spacing, typography, grouping, row affordances).
+2. [x] **Rebuild left navigation + thread list to match the real app** (information architecture, spacing, typography, grouping, row affordances).
 3. [ ] **Match top-bar semantics** (real app: thread title + workspace label + overflow menu; clone: “Run/Open” controls that do not exist in the real app UI shown).
 4. [ ] **Implement the core screens the real app has**: New thread home, Thread view (assistant output + command log blocks), Automations templates + creation sheet, Settings (multi-section), Git/changes viewing.
 
@@ -87,11 +87,11 @@ The real app shows git-related UI in at least two ways:
 - [ ] UI appears to use heavier “glass/blur” styling than the real app.
 
 #### Required changes
-- [ ] Remove the **“Navigation”** header + “CODEX” wordmark presentation. Replace with the real app’s compact icon+label block.
-- [ ] Remove right-aligned shortcut letters (N/A/S) from the sidebar rows (real app doesn’t show them persistently).
-- [ ] Replace “RECENTS” section with the real app’s **workspace-grouped thread list**.
-- [ ] Implement the real app’s **Threads header row** including the small icon buttons for add/sort/filter.
-- [ ] Match sidebar width (~25–30% of window in the recording) and internal spacing.
+- [x] Remove the **“Navigation”** header + “CODEX” wordmark presentation. Replace with the real app’s compact icon+label block.
+- [x] Remove right-aligned shortcut letters (N/A/S) from the sidebar rows (real app doesn’t show them persistently).
+- [x] Replace “RECENTS” section with the real app’s **workspace-grouped thread list**.
+- [x] Implement the real app’s **Threads header row** including the small icon buttons for add/sort/filter.
+- [x] Match sidebar width (~25–30% of window in the recording) and internal spacing.
 
 ---
 
@@ -372,9 +372,9 @@ The real app shows git-related UI in at least two ways:
 
 ### Phase 1 — Unblock & match shell (P0)
 1. [x] Remove app-server blocking error; show non-blocking banner if backend is down.
-2. [ ] Rebuild left sidebar to match real IA:
-   - [ ] top nav icons
-   - [ ] threads grouped by workspace
+2. [x] Rebuild left sidebar to match real IA:
+   - [x] top nav icons
+   - [x] threads grouped by workspace
 3. [ ] Replace top bar with real app semantics (thread title/workspace/overflow).
 4. [ ] Implement New thread home “Let’s build” layout.
 

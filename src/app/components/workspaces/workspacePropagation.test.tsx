@@ -275,7 +275,7 @@ describe("workspace switching propagation", () => {
     expect(within(header).getByText("alpha")).toBeInTheDocument();
 
     const bravoWorkspaceButton = screen.getByRole("button", {
-      name: /bravo c:\/repo\/bravo/i,
+      name: /^bravo$/i,
     });
     fireEvent.click(bravoWorkspaceButton);
 
