@@ -14,6 +14,7 @@ import {
 } from "@/app/services/cli/appServer";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
+import { useAppUi } from "@/app/state/appUi";
 import { EnvironmentUiProvider } from "@/app/state/environmentUi";
 import { ThreadUiProvider, type ThreadModal } from "@/app/state/threadUi";
 import { WorkspaceUiProvider } from "@/app/state/workspaceUi";
@@ -30,7 +31,7 @@ export function AppShell() {
   const { thread } = useThreadDetail(threadId);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<ThreadModal>(null);
-  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const { isTerminalOpen, toggleTerminal } = useAppUi();
   useAppServerStream();
 
   useEffect(() => {
@@ -66,12 +67,12 @@ export function AppShell() {
       if (!(event.metaKey || event.ctrlKey)) return;
       if (event.key.toLowerCase() !== "j") return;
       event.preventDefault();
-      setIsTerminalOpen((open) => !open);
+      toggleTerminal();
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [toggleTerminal]);
 
   const threadUi = useMemo(
     () => ({
@@ -105,7 +106,7 @@ export function AppShell() {
                   thread={threadMatch ? thread : undefined}
                   isNewThread={Boolean(newThreadMatch)}
                   isTerminalOpen={isTerminalOpen}
-                  onToggleTerminal={() => setIsTerminalOpen((open) => !open)}
+                  onToggleTerminal={toggleTerminal}
                 />
                 <div
                   className={

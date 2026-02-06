@@ -4,6 +4,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import { router } from "@/app/router";
+import { AppUiProvider } from "@/app/state/appUi";
 import "@/styles/index.css";
 
 const queryClient = new QueryClient({
@@ -25,7 +26,9 @@ if (!root) {
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <AppUiProvider>
+        <RouterProvider router={router} />
+      </AppUiProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );

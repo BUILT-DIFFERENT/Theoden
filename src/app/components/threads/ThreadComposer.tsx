@@ -15,20 +15,29 @@ import { resumeThread, startThread, startTurn } from "@/app/services/cli/turns";
 import { useRunProgress } from "@/app/services/cli/useRunProgress";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { type QualityPreset, useAppUi } from "@/app/state/appUi";
 import { useEnvironmentUi } from "@/app/state/environmentUi";
 import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
 import { workspaceNameFromPath } from "@/app/utils/workspace";
 
-type EffortLevel = "medium" | "high" | "xhigh";
-
-const effortLabels: Record<EffortLevel, string> = {
+const qualityLabels: Record<QualityPreset, string> = {
+  low: "Low",
   medium: "Medium",
   high: "High",
-  xhigh: "Extra high",
+  extra_high: "Extra high",
 };
 const environmentModes = ["local", "worktree", "cloud"] as const;
+const effortFromQuality: Record<
+  QualityPreset,
+  "medium" | "high" | "xhigh" | null
+> = {
+  low: null,
+  medium: "medium",
+  high: "high",
+  extra_high: "xhigh",
+};
 
 const modelOptions = ["GPT-5.2-Codex", "GPT-5", "o4-mini"] as const;
 const agentOptions = ["Default", "Review", "Docs"] as const;
@@ -93,14 +102,18 @@ export function ThreadComposer({
   const runProgress = useRunProgress(threadId);
   const { setActiveModal } = useThreadUi();
   const { environmentMode, setEnvironmentMode } = useEnvironmentUi();
+  const {
+    activeModel,
+    setActiveModel,
+    qualityPreset,
+    setQualityPreset,
+    composerDraft,
+    setComposerDraft,
+  } = useAppUi();
   const { workspaces } = useWorkspaces();
   const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
     useWorkspaceUi();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
-  const [prompt, setPrompt] = useState(prefillPrompt ?? "");
-  const [effort, setEffort] = useState<EffortLevel>("high");
-  const [model, setModel] =
-    useState<(typeof modelOptions)[number]>("GPT-5.2-Codex");
   const [agent, setAgent] = useState<(typeof agentOptions)[number]>("Default");
   const [attachmentsDrawerOpen, setAttachmentsDrawerOpen] = useState(false);
   const [selectedAttachments, setSelectedAttachments] = useState<string[]>([]);
@@ -110,9 +123,9 @@ export function ThreadComposer({
 
   useEffect(() => {
     if (prefillPrompt) {
-      setPrompt(prefillPrompt);
+      setComposerDraft(prefillPrompt);
     }
-  }, [prefillPrompt]);
+  }, [prefillPrompt, setComposerDraft]);
 
   useEffect(() => {
     if (!thread?.mode) return;
@@ -134,9 +147,11 @@ export function ThreadComposer({
     null;
   const canSubmit = useMemo(() => {
     return (
-      !isBusy && prompt.trim().length > 0 && Boolean(resolvedWorkspacePath)
+      !isBusy &&
+      composerDraft.trim().length > 0 &&
+      Boolean(resolvedWorkspacePath)
     );
-  }, [isBusy, prompt, resolvedWorkspacePath]);
+  }, [composerDraft, isBusy, resolvedWorkspacePath]);
   const availableAttachmentOptions = useMemo(() => {
     const options = new Set<string>();
     thread?.attachments.forEach((attachment) => options.add(attachment.path));
@@ -178,7 +193,7 @@ export function ThreadComposer({
   };
 
   const setComposerPrompt = (value: string, cursorPosition?: number | null) => {
-    setPrompt(value);
+    setComposerDraft(value);
     const resolvedCursor =
       cursorPosition ?? composerRef.current?.selectionStart ?? value.length;
     const beforeCursor = value.slice(0, resolvedCursor);
@@ -225,8 +240,8 @@ export function ThreadComposer({
     }
     const menuState = inlineMenu;
     const replacement = menuState.type === "file" ? `@${value} ` : `/${value} `;
-    const nextPrompt = `${prompt.slice(0, menuState.tokenStart)}${replacement}${prompt.slice(menuState.tokenEnd)}`;
-    setPrompt(nextPrompt);
+    const nextPrompt = `${composerDraft.slice(0, menuState.tokenStart)}${replacement}${composerDraft.slice(menuState.tokenEnd)}`;
+    setComposerDraft(nextPrompt);
     setInlineMenu(null);
     if (menuState.type === "file") {
       addAttachment(value);
@@ -269,7 +284,7 @@ export function ThreadComposer({
       if (threadId) {
         await resumeThread({ threadId });
       }
-      const trimmedPrompt = prompt.trim();
+      const trimmedPrompt = composerDraft.trim();
       const attachmentContext = selectedAttachments.length
         ? `\n\nAttached files:\n${selectedAttachments.map((path) => `- ${path}`).join("\n")}`
         : "";
@@ -278,14 +293,14 @@ export function ThreadComposer({
         threadId: targetThreadId,
         input: turnInput,
         cwd,
-        effort,
+        effort: effortFromQuality[qualityPreset],
       });
       onSubmitted?.(turnInput);
-      setPrompt("");
+      setComposerDraft("");
       setSelectedAttachments([]);
       setInlineMenu(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start run.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to start run.");
     } finally {
       setIsSubmitting(false);
     }
@@ -328,15 +343,15 @@ export function ThreadComposer({
           placeholder={
             placeholder ?? "Ask Codex anything, @ to add files, / for commands"
           }
-          value={prompt}
+          value={composerDraft}
           onChange={(event) =>
             setComposerPrompt(event.target.value, event.target.selectionStart)
           }
           onClick={(event) =>
-            setComposerPrompt(prompt, event.currentTarget.selectionStart)
+            setComposerPrompt(composerDraft, event.currentTarget.selectionStart)
           }
           onKeyUp={(event) =>
-            setComposerPrompt(prompt, event.currentTarget.selectionStart)
+            setComposerPrompt(composerDraft, event.currentTarget.selectionStart)
           }
           onKeyDown={(event) => {
             if (event.key === "Escape" && inlineMenu) {
@@ -436,10 +451,8 @@ export function ThreadComposer({
             </select>
             <select
               className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
-              value={model}
-              onChange={(event) =>
-                setModel(event.target.value as (typeof modelOptions)[number])
-              }
+              value={activeModel}
+              onChange={(event) => setActiveModel(event.target.value)}
             >
               {modelOptions.map((option) => (
                 <option key={option} value={option}>
@@ -449,10 +462,12 @@ export function ThreadComposer({
             </select>
             <select
               className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
-              value={effort}
-              onChange={(event) => setEffort(event.target.value as EffortLevel)}
+              value={qualityPreset}
+              onChange={(event) =>
+                setQualityPreset(event.target.value as QualityPreset)
+              }
             >
-              {Object.entries(effortLabels).map(([value, label]) => (
+              {Object.entries(qualityLabels).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
