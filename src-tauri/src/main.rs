@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::menu::{
@@ -52,6 +54,155 @@ impl AppServerBridge {
     }
 }
 
+struct CodexCliCommand {
+    program: PathBuf,
+    prepended_path_entries: Vec<PathBuf>,
+}
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn normalize_path(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn paths_match(a: &Path, b: &Path) -> bool {
+    let normalized_a = normalize_path(a);
+    let normalized_b = normalize_path(b);
+    if cfg!(windows) {
+        normalized_a
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&normalized_b.to_string_lossy())
+    } else {
+        normalized_a == normalized_b
+    }
+}
+
+fn configure_command_for_desktop(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
+fn codex_vendor_target_triple() -> Option<&'static str> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("windows", "x86_64") => Some("x86_64-pc-windows-msvc"),
+        ("windows", "aarch64") => Some("aarch64-pc-windows-msvc"),
+        ("linux", "x86_64") => Some("x86_64-unknown-linux-musl"),
+        ("linux", "aarch64") => Some("aarch64-unknown-linux-musl"),
+        ("android", "x86_64") => Some("x86_64-unknown-linux-musl"),
+        ("android", "aarch64") => Some("aarch64-unknown-linux-musl"),
+        ("macos", "x86_64") => Some("x86_64-apple-darwin"),
+        ("macos", "aarch64") => Some("aarch64-apple-darwin"),
+        _ => None,
+    }
+}
+
+fn codex_vendor_command_from_root(vendor_root: &Path) -> Option<CodexCliCommand> {
+    let target_triple = codex_vendor_target_triple()?;
+    let target_root = vendor_root.join(target_triple);
+    let binary_name = if cfg!(windows) { "codex.exe" } else { "codex" };
+    let native_binary = target_root.join("codex").join(binary_name);
+    if !native_binary.exists() {
+        return None;
+    }
+
+    let mut prepended_path_entries = Vec::new();
+    let path_dir = target_root.join("path");
+    if path_dir.exists() {
+        prepended_path_entries.push(path_dir);
+    }
+
+    Some(CodexCliCommand {
+        program: native_binary,
+        prepended_path_entries,
+    })
+}
+
+fn resolve_codex_from_npm_shim(codex_path: &Path) -> Option<CodexCliCommand> {
+    let extension = codex_path.extension().and_then(OsStr::to_str)?;
+    if !extension.eq_ignore_ascii_case("cmd") && !extension.eq_ignore_ascii_case("bat") {
+        return None;
+    }
+
+    let shim_dir = codex_path.parent()?;
+    let vendor_root = shim_dir
+        .join("node_modules")
+        .join("@openai")
+        .join("codex")
+        .join("vendor");
+    codex_vendor_command_from_root(&vendor_root)
+}
+
+#[cfg(windows)]
+fn resolve_codex_from_windows_appdata() -> Option<CodexCliCommand> {
+    let app_data = std::env::var_os("APPDATA")?;
+    let vendor_root = PathBuf::from(app_data)
+        .join("npm")
+        .join("node_modules")
+        .join("@openai")
+        .join("codex")
+        .join("vendor");
+    codex_vendor_command_from_root(&vendor_root)
+}
+
+fn build_prepended_path(
+    prepended_path_entries: &[PathBuf],
+    base_path: Option<OsString>,
+) -> Option<OsString> {
+    if prepended_path_entries.is_empty() {
+        return None;
+    }
+
+    let mut path_entries = prepended_path_entries.to_vec();
+    if let Some(path) = base_path.or_else(|| std::env::var_os("PATH")) {
+        path_entries.extend(std::env::split_paths(&path));
+    }
+    std::env::join_paths(path_entries).ok()
+}
+
+fn apply_cli_path_to_command(
+    command: &mut Command,
+    prepended_path_entries: &[PathBuf],
+    base_path: Option<OsString>,
+) {
+    if let Some(path) = build_prepended_path(prepended_path_entries, base_path) {
+        command.env("PATH", path);
+    }
+}
+
+fn resolve_codex_cli_command() -> Result<CodexCliCommand, String> {
+    let current_exe = std::env::current_exe()
+        .map_err(|err| format!("failed to resolve current executable path: {err}"))?;
+    let mut candidate_commands = Vec::new();
+
+    if let Ok(discovered_codex_path) = which::which("codex") {
+        let command =
+            resolve_codex_from_npm_shim(&discovered_codex_path).unwrap_or(CodexCliCommand {
+                program: discovered_codex_path,
+                prepended_path_entries: Vec::new(),
+            });
+        candidate_commands.push(command);
+    }
+
+    #[cfg(windows)]
+    if let Some(app_data_command) = resolve_codex_from_windows_appdata() {
+        candidate_commands.push(app_data_command);
+    }
+
+    for candidate in candidate_commands {
+        if !paths_match(&current_exe, &candidate.program) {
+            return Ok(candidate);
+        }
+    }
+
+    Err(
+        "failed to resolve a runnable `codex` CLI for desktop bridge; install Codex CLI and ensure it is available on PATH or under %APPDATA%\\npm\\node_modules\\@openai\\codex"
+            .to_string(),
+    )
+}
+
 #[tauri::command]
 fn load_config() -> ConfigPayload {
     ConfigPayload {
@@ -79,13 +230,16 @@ async fn app_server_start(
     cwd: Option<String>,
 ) -> Result<(), String> {
     let (stdout, stderr, stdin) = {
+        let codex_command = resolve_codex_cli_command()?;
         let mut child_guard = state.child.lock().await;
         if child_guard.is_some() {
             return Ok(());
         }
 
-        let mut cmd = Command::new("codex");
+        let mut cmd = Command::new(codex_command.program);
+        configure_command_for_desktop(&mut cmd);
         cmd.arg("app-server");
+        apply_cli_path_to_command(&mut cmd, &codex_command.prepended_path_entries, None);
         if let Some(extra_args) = args {
             cmd.args(extra_args);
         }
@@ -337,13 +491,20 @@ async fn run_cli(
     cwd: Option<String>,
     env: Option<HashMap<String, String>>,
 ) -> Result<CliRunResult, String> {
-    let mut cmd = Command::new("codex");
+    let codex_command = resolve_codex_cli_command()?;
+    let mut cmd = Command::new(codex_command.program);
+    configure_command_for_desktop(&mut cmd);
     cmd.args(args);
     if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
     }
-    if let Some(env) = env {
-        cmd.envs(env);
+    let mut merged_env = env.unwrap_or_default();
+    let env_path = merged_env.get("PATH").map(OsString::from);
+    if let Some(path) = build_prepended_path(&codex_command.prepended_path_entries, env_path) {
+        merged_env.insert("PATH".to_string(), path.to_string_lossy().to_string());
+    }
+    if !merged_env.is_empty() {
+        cmd.envs(merged_env);
     }
     let output = cmd
         .output()
@@ -364,6 +525,7 @@ async fn git_apply_patch(
     reverse: bool,
 ) -> Result<CliRunResult, String> {
     let mut cmd = Command::new("git");
+    configure_command_for_desktop(&mut cmd);
     cmd.arg("apply").arg("--unidiff-zero");
     if cached {
         cmd.arg("--cached");

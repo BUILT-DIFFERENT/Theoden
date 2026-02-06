@@ -25,6 +25,8 @@ The UI runs in Tauri/React and talks to `codex app-server` for thread, turn, con
 - Rust toolchain + Cargo (for Tauri host and `codex-rs` work)
 - Platform-native Tauri prerequisites
 - `codex` CLI available on `PATH` (desktop shell starts `codex app-server`)
+- Desktop binary is named `codex-desktop` to avoid colliding with the `codex` CLI executable on Windows
+- On Windows, the bridge resolves the npm shim (`codex.cmd`) to the packaged native Codex binary to keep stdio JSON-RPC stable.
 
 ## Quickstart
 

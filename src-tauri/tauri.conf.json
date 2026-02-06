@@ -1,7 +1,7 @@
 {
   "$schema": "./gen/schemas/desktop-schema.json",
   "productName": "Codex",
-  "mainBinaryName": "codex",
+  "mainBinaryName": "codex-desktop",
   "version": "0.1.0",
   "identifier": "com.openai.codex.desktop",
   "build": {
