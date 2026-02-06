@@ -14,6 +14,7 @@ import {
 } from "@/app/services/cli/appServer";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
+import { EnvironmentUiProvider } from "@/app/state/environmentUi";
 import { ThreadUiProvider, type ThreadModal } from "@/app/state/threadUi";
 import { WorkspaceUiProvider } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
@@ -93,41 +94,43 @@ export function AppShell() {
 
   return (
     <WorkspaceUiProvider>
-      <ThreadUiProvider value={threadUi}>
-        <div className="min-h-screen text-ink-50">
-          <div className="flex min-h-screen">
-            <AppSidebar />
-            <main className="flex min-h-screen flex-1 flex-col">
-              <ThreadTopBar
-                title={topBarTitle}
-                thread={threadMatch ? thread : undefined}
-                isNewThread={Boolean(newThreadMatch)}
-                isTerminalOpen={isTerminalOpen}
-                onToggleTerminal={() => setIsTerminalOpen((open) => !open)}
-              />
-              <div
-                className={
-                  showReviewPanel
-                    ? "grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]"
-                    : "flex-1 px-6 py-6"
-                }
-              >
-                <section className="min-h-[70vh]">
-                  <Outlet />
-                </section>
-                {showReviewPanel ? (
-                  <aside className="hidden lg:block">
-                    <DiffPanel thread={threadMatch ? thread : undefined} />
-                  </aside>
-                ) : null}
-              </div>
-              <TerminalDrawer isOpen={isTerminalOpen} />
-              <BottomBar />
-            </main>
+      <EnvironmentUiProvider>
+        <ThreadUiProvider value={threadUi}>
+          <div className="min-h-screen text-ink-50">
+            <div className="flex min-h-screen">
+              <AppSidebar />
+              <main className="flex min-h-screen flex-1 flex-col">
+                <ThreadTopBar
+                  title={topBarTitle}
+                  thread={threadMatch ? thread : undefined}
+                  isNewThread={Boolean(newThreadMatch)}
+                  isTerminalOpen={isTerminalOpen}
+                  onToggleTerminal={() => setIsTerminalOpen((open) => !open)}
+                />
+                <div
+                  className={
+                    showReviewPanel
+                      ? "grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]"
+                      : "flex-1 px-6 py-6"
+                  }
+                >
+                  <section className="min-h-[70vh]">
+                    <Outlet />
+                  </section>
+                  {showReviewPanel ? (
+                    <aside className="hidden lg:block">
+                      <DiffPanel thread={threadMatch ? thread : undefined} />
+                    </aside>
+                  ) : null}
+                </div>
+                <TerminalDrawer isOpen={isTerminalOpen} />
+                <BottomBar />
+              </main>
+            </div>
           </div>
-        </div>
-        <WorkspaceModal />
-      </ThreadUiProvider>
+          <WorkspaceModal />
+        </ThreadUiProvider>
+      </EnvironmentUiProvider>
     </WorkspaceUiProvider>
   );
 }

@@ -6,10 +6,12 @@ import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useWorkspaceBranches } from "@/app/services/git/useWorkspaceBranches";
 import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
 import { checkoutBranch } from "@/app/services/git/worktrees";
+import {
+  type EnvironmentMode,
+  useEnvironmentUi,
+} from "@/app/state/environmentUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { workspaceNameFromPath } from "@/app/utils/workspace";
-
-type EnvironmentMode = "local" | "worktree" | "cloud";
 
 const environmentLabels: Record<EnvironmentMode, string> = {
   local: "Local",
@@ -21,8 +23,7 @@ export function BottomBar() {
   const queryClient = useQueryClient();
   const { workspaces } = useWorkspaces();
   const { selectedWorkspace, setWorkspacePickerOpen } = useWorkspaceUi();
-  const [environmentMode, setEnvironmentMode] =
-    useState<EnvironmentMode>("local");
+  const { environmentMode, setEnvironmentMode } = useEnvironmentUi();
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
   const branchMenuRef = useRef<HTMLDivElement | null>(null);

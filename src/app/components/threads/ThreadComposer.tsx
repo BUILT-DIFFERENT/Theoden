@@ -15,12 +15,12 @@ import { resumeThread, startThread, startTurn } from "@/app/services/cli/turns";
 import { useRunProgress } from "@/app/services/cli/useRunProgress";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { useEnvironmentUi } from "@/app/state/environmentUi";
 import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
 import { workspaceNameFromPath } from "@/app/utils/workspace";
 
-type ComposerMode = "local" | "worktree" | "cloud";
 type EffortLevel = "medium" | "high" | "xhigh";
 
 const effortLabels: Record<EffortLevel, string> = {
@@ -28,6 +28,7 @@ const effortLabels: Record<EffortLevel, string> = {
   high: "High",
   xhigh: "Extra high",
 };
+const environmentModes = ["local", "worktree", "cloud"] as const;
 
 const modelOptions = ["GPT-5.2-Codex", "GPT-5", "o4-mini"] as const;
 const agentOptions = ["Default", "Review", "Docs"] as const;
@@ -91,12 +92,12 @@ export function ThreadComposer({
   const thread = threadId ? threadDetail : undefined;
   const runProgress = useRunProgress(threadId);
   const { setActiveModal } = useThreadUi();
+  const { environmentMode, setEnvironmentMode } = useEnvironmentUi();
   const { workspaces } = useWorkspaces();
   const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
     useWorkspaceUi();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [prompt, setPrompt] = useState(prefillPrompt ?? "");
-  const [mode, setMode] = useState<ComposerMode>(thread?.mode ?? "local");
   const [effort, setEffort] = useState<EffortLevel>("high");
   const [model, setModel] =
     useState<(typeof modelOptions)[number]>("GPT-5.2-Codex");
@@ -114,10 +115,9 @@ export function ThreadComposer({
   }, [prefillPrompt]);
 
   useEffect(() => {
-    if (thread?.mode) {
-      setMode(thread.mode);
-    }
-  }, [thread?.mode]);
+    if (!thread?.mode) return;
+    setEnvironmentMode(thread.mode);
+  }, [setEnvironmentMode, thread?.mode]);
   useEffect(() => {
     if (selectedWorkspace) return;
     if (!workspaces.length) return;
@@ -170,8 +170,8 @@ export function ThreadComposer({
     return filtered.slice(0, 6);
   }, [inlineMenu]);
 
-  const handleModeChange = (option: ComposerMode) => {
-    setMode(option);
+  const handleModeChange = (option: typeof environmentMode) => {
+    setEnvironmentMode(option);
     if (option === "worktree") {
       setActiveModal("worktree");
     }
@@ -300,7 +300,8 @@ export function ThreadComposer({
   const workspaceLabel = resolvedWorkspacePath
     ? workspaceNameFromPath(resolvedWorkspacePath)
     : "Add workspace";
-  const branchLabel = mode === "worktree" ? "From main" : "From main";
+  const branchLabel =
+    environmentMode === "worktree" ? "From main" : "From main";
 
   return (
     <div className="space-y-3">
@@ -525,15 +526,15 @@ export function ThreadComposer({
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-300">
         <div className="flex items-center gap-2">
-          {("local worktree cloud" as const).split(" ").map((option) => (
+          {environmentModes.map((option) => (
             <button
               key={option}
               className={`rounded-full border px-3 py-1 text-xs capitalize hover:border-flare-300 ${
-                mode === option
+                environmentMode === option
                   ? "border-flare-300 bg-flare-400/10 text-ink-50"
                   : "border-white/10 text-ink-300"
               }`}
-              onClick={() => handleModeChange(option as ComposerMode)}
+              onClick={() => handleModeChange(option)}
             >
               {option}
             </button>
@@ -569,7 +570,7 @@ export function ThreadComposer({
             </div>
           </div>
           <span className="max-w-[160px] truncate">
-            {mode === "worktree" ? "worktree/main" : "main"}
+            {environmentMode === "worktree" ? "worktree/main" : "main"}
           </span>
         </div>
       ) : null}
