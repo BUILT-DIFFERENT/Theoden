@@ -5,6 +5,7 @@ import {
   GitBranch,
   MoreHorizontal,
   Play,
+  Terminal,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -25,9 +26,16 @@ import { workspaceNameFromPath } from "@/app/utils/workspace";
 interface ThreadTopBarProps {
   thread?: ThreadDetail;
   isNewThread?: boolean;
+  isTerminalOpen: boolean;
+  onToggleTerminal: () => void;
 }
 
-export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
+export function ThreadTopBar({
+  thread,
+  isNewThread,
+  isTerminalOpen,
+  onToggleTerminal,
+}: ThreadTopBarProps) {
   const { reviewOpen, setActiveModal, setReviewOpen } = useThreadUi();
   const { selectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
@@ -324,6 +332,19 @@ export function ThreadTopBar({ thread, isNewThread }: ThreadTopBarProps) {
         </button>
         <button className="rounded-full border border-white/10 p-2 text-ink-300 hover:border-flare-300">
           <Copy className="h-3.5 w-3.5" />
+        </button>
+        <button
+          className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${
+            isTerminalOpen
+              ? "border-flare-300 bg-flare-400/10 text-ink-50"
+              : "border-white/10 text-ink-300 hover:border-flare-300"
+          }`}
+          onClick={onToggleTerminal}
+          title="Toggle terminal (Ctrl/Cmd+J)"
+        >
+          <Terminal className="h-3.5 w-3.5" />
+          Terminal
+          <span className="text-[0.65rem] text-ink-500">Ctrl/Cmd+J</span>
         </button>
       </div>
       {runModalOpen ? (

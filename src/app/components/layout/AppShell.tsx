@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ControlRoomSidebar } from "@/app/components/control-room/ControlRoomSidebar";
 import { DiffPanel } from "@/app/components/diff/DiffPanel";
 import { BottomBar } from "@/app/components/layout/BottomBar";
+import { TerminalDrawer } from "@/app/components/layout/TerminalDrawer";
 import { ThreadTopBar } from "@/app/components/threads/ThreadTopBar";
 import { WorkspaceModal } from "@/app/components/workspaces/WorkspaceModal";
 import {
@@ -26,6 +27,7 @@ export function AppShell() {
   const showThreadHeader = Boolean(threadMatch || newThreadMatch);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<ThreadModal>(null);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   useAppServerStream();
 
   useEffect(() => {
@@ -56,6 +58,18 @@ export function AppShell() {
     void bootstrap();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.key.toLowerCase() !== "j") return;
+      event.preventDefault();
+      setIsTerminalOpen((open) => !open);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const threadUi = useMemo(
     () => ({
       reviewOpen,
@@ -79,6 +93,8 @@ export function AppShell() {
                 <ThreadTopBar
                   thread={thread}
                   isNewThread={Boolean(newThreadMatch)}
+                  isTerminalOpen={isTerminalOpen}
+                  onToggleTerminal={() => setIsTerminalOpen((open) => !open)}
                 />
               ) : null}
               <div
@@ -97,6 +113,7 @@ export function AppShell() {
                   </aside>
                 ) : null}
               </div>
+              <TerminalDrawer isOpen={isTerminalOpen} />
               <BottomBar />
             </main>
           </div>

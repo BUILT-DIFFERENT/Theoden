@@ -1,6 +1,6 @@
 import { useParams } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ThreadComposer } from "@/app/components/threads/ThreadComposer";
 import { ThreadMessages } from "@/app/components/threads/ThreadMessages";
@@ -16,9 +16,11 @@ export function ThreadPage() {
   const { threadId } = useParams({ from: "/t/$threadId" });
   const { thread, messages } = useThreadDetail(threadId);
   const { setReviewOpen } = useThreadUi();
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<ThreadMessage[]>(
     [],
   );
+  const [stickToBottom, setStickToBottom] = useState(true);
   const detail = thread ?? mockThreadDetail;
   const liveDiffText = useThreadDiffText(threadId, detail.diffText ?? "");
   const hasLiveDiff = liveDiffText.trim().length > 0;
@@ -41,6 +43,7 @@ export function ThreadPage() {
 
   useEffect(() => {
     setOptimisticMessages([]);
+    setStickToBottom(true);
   }, [threadId]);
 
   useEffect(() => {
@@ -56,9 +59,33 @@ export function ThreadPage() {
     );
   }, [messages]);
 
+  useEffect(() => {
+    if (!stickToBottom) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [conversationMessages.length, stickToBottom]);
+
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    setStickToBottom(distanceFromBottom <= 48);
+  };
+
   return (
     <div className="flex min-h-[70vh] flex-col gap-4">
-      <div className="flex-1 overflow-auto">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-auto"
+        onScroll={handleMessagesScroll}
+      >
         <ThreadMessages messages={conversationMessages} />
       </div>
       <div className="sticky bottom-4 z-10 space-y-3">
