@@ -17,7 +17,6 @@ import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { createPullRequest, pushBranch } from "@/app/services/git/commits";
 import { useWorkspaceGitStatus } from "@/app/services/git/useWorkspaceGitStatus";
 import { checkoutBranch } from "@/app/services/git/worktrees";
-import { mockThreadDetail } from "@/app/state/mockData";
 import { useThreadMetadata } from "@/app/state/threadMetadata";
 import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
@@ -28,13 +27,27 @@ import { workspaceNameFromPath } from "@/app/utils/workspace";
 interface ThreadTopBarProps {
   thread?: ThreadDetail;
   isNewThread?: boolean;
+  title?: string;
   isTerminalOpen: boolean;
   onToggleTerminal: () => void;
+}
+
+function isLikelyWorkspacePath(value: string): boolean {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return false;
+  }
+  return (
+    /^[a-zA-Z]:[\\/]/.test(trimmedValue) ||
+    trimmedValue.startsWith("/") ||
+    trimmedValue.startsWith("\\\\")
+  );
 }
 
 export function ThreadTopBar({
   thread,
   isNewThread,
+  title,
   isTerminalOpen,
   onToggleTerminal,
 }: ThreadTopBarProps) {
@@ -46,14 +59,24 @@ export function ThreadTopBar({
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const { metadata } = useThreadMetadata(threadId);
-  const detail = thread ?? mockThreadDetail;
-  const liveDiffText = useThreadDiffText(threadId, detail.diffText ?? "");
+  const detail = thread;
+  const threadWorkspacePath =
+    detail?.subtitle && isLikelyWorkspacePath(detail.subtitle)
+      ? detail.subtitle
+      : null;
+  const fallbackWorkspace =
+    threadWorkspacePath ?? selectedWorkspace ?? workspaces[0]?.path ?? null;
+  const resolvedWorkspacePath = fallbackWorkspace;
+  const subtitle = resolvedWorkspacePath
+    ? workspaceNameFromPath(resolvedWorkspacePath)
+    : "Pick a workspace";
+  const liveDiffText = useThreadDiffText(threadId, detail?.diffText ?? "");
   const hasLiveDiff = liveDiffText.trim().length > 0;
   const liveStats = hasLiveDiff
     ? diffStatsFromText(liveDiffText)
     : {
-        additions: detail.diffSummary.additions,
-        deletions: detail.diffSummary.deletions,
+        additions: detail?.diffSummary.additions ?? 0,
+        deletions: detail?.diffSummary.deletions ?? 0,
       };
   const emptySummary = {
     filesChanged: 0,
@@ -64,25 +87,23 @@ export function ThreadTopBar({
   const summary = isNewThread
     ? emptySummary
     : {
-        ...detail.diffSummary,
+        ...(detail?.diffSummary ?? emptySummary),
         additions: liveStats.additions,
         deletions: liveStats.deletions,
       };
-  const hasChanges = !isNewThread && summary.filesChanged > 0;
-  const isWorktree = !isNewThread && detail.mode === "worktree";
-  const title = isNewThread ? "New thread" : detail.title;
-  const fallbackWorkspace = selectedWorkspace ?? workspaces[0]?.path ?? null;
-  const subtitle = isNewThread
-    ? fallbackWorkspace
-      ? workspaceNameFromPath(fallbackWorkspace)
-      : "Pick a workspace"
-    : detail.subtitle;
-  const resolvedWorkspacePath = isNewThread
-    ? fallbackWorkspace
-    : (detail.subtitle ?? fallbackWorkspace ?? null);
+  const hasThreadChanges = !isNewThread && summary.filesChanged > 0;
+  const isWorktree = !isNewThread && detail?.mode === "worktree";
+  const headerTitle = isNewThread
+    ? "New thread"
+    : (detail?.title ?? title ?? "Codex");
   const { status: gitStatus } = useWorkspaceGitStatus(resolvedWorkspacePath);
+  const hasWorkspaceChanges =
+    (gitStatus?.stagedPaths.length ?? 0) +
+      (gitStatus?.unstagedPaths.length ?? 0) >
+    0;
+  const hasChanges = hasWorkspaceChanges || hasThreadChanges;
   const gitBranch =
-    gitStatus?.branch ?? metadata.branch ?? detail.branch ?? "main";
+    gitStatus?.branch ?? metadata.branch ?? detail?.branch ?? "main";
   const aheadCount = gitStatus?.ahead ?? 0;
   const behindCount = gitStatus?.behind ?? 0;
 
@@ -133,11 +154,12 @@ export function ThreadTopBar({
   }, [gitMenuOpen]);
 
   const handleCheckoutLocal = async () => {
-    const branch = metadata.branch ?? detail.branch;
-    if (!detail.subtitle) return;
+    const branch = metadata.branch ?? detail?.branch;
+    const workspacePath = threadWorkspacePath ?? resolvedWorkspacePath;
+    if (!workspacePath) return;
     if (!branch) return;
     try {
-      await checkoutBranch(detail.subtitle, branch);
+      await checkoutBranch(workspacePath, branch);
     } catch (error) {
       console.warn("Failed to checkout branch", error);
     }
@@ -273,7 +295,7 @@ export function ThreadTopBar({
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-black/20 px-6 py-4 backdrop-blur-xl">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <h1 className="font-display text-lg text-ink-50">{title}</h1>
+          <h1 className="font-display text-lg text-ink-50">{headerTitle}</h1>
           <span className="text-xs text-ink-400">{subtitle}</span>
           <button className="rounded-full border border-white/10 p-1 text-ink-400 hover:border-flare-300">
             <MoreHorizontal className="h-4 w-4" />

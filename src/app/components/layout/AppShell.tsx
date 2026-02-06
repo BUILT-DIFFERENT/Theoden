@@ -22,9 +22,11 @@ export function AppShell() {
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const newThreadMatch = matchRoute({ to: "/" });
+  const automationsMatch = matchRoute({ to: "/automations" });
+  const skillsMatch = matchRoute({ to: "/skills" });
+  const settingsMatch = matchRoute({ to: "/settings/$section" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const { thread } = useThreadDetail(threadId);
-  const showThreadHeader = Boolean(threadMatch || newThreadMatch);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<ThreadModal>(null);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
@@ -80,7 +82,14 @@ export function AppShell() {
     [activeModal, reviewOpen],
   );
 
-  const showReviewPanel = showThreadHeader && reviewOpen;
+  const topBarTitle = automationsMatch
+    ? "Automations"
+    : skillsMatch
+      ? "Skills"
+      : settingsMatch
+        ? "Settings"
+        : "Codex";
+  const showReviewPanel = reviewOpen;
 
   return (
     <WorkspaceUiProvider>
@@ -89,14 +98,13 @@ export function AppShell() {
           <div className="flex min-h-screen">
             <ControlRoomSidebar />
             <main className="flex min-h-screen flex-1 flex-col">
-              {showThreadHeader ? (
-                <ThreadTopBar
-                  thread={thread}
-                  isNewThread={Boolean(newThreadMatch)}
-                  isTerminalOpen={isTerminalOpen}
-                  onToggleTerminal={() => setIsTerminalOpen((open) => !open)}
-                />
-              ) : null}
+              <ThreadTopBar
+                title={topBarTitle}
+                thread={threadMatch ? thread : undefined}
+                isNewThread={Boolean(newThreadMatch)}
+                isTerminalOpen={isTerminalOpen}
+                onToggleTerminal={() => setIsTerminalOpen((open) => !open)}
+              />
               <div
                 className={
                   showReviewPanel
@@ -109,7 +117,7 @@ export function AppShell() {
                 </section>
                 {showReviewPanel ? (
                   <aside className="hidden lg:block">
-                    <DiffPanel thread={thread} />
+                    <DiffPanel thread={threadMatch ? thread : undefined} />
                   </aside>
                 ) : null}
               </div>
