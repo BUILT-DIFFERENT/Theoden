@@ -490,7 +490,7 @@ fn main() {
             let automation_store = Arc::clone(app.state::<Arc<AutomationStore>>().inner());
             let app_server_bridge = Arc::clone(app.state::<Arc<AppServerBridge>>().inner());
             let scheduler_trigger = Arc::clone(app.state::<Arc<Notify>>().inner());
-            tokio::spawn(async move {
+            tauri::async_runtime::spawn(async move {
                 loop {
                     let due = match automation_store.due_automations(now_ts()).await {
                         Ok(items) => items,
