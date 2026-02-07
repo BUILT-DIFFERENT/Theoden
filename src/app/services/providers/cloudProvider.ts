@@ -3,7 +3,7 @@ import type { Provider, RunRequest } from "@/app/services/providers/types";
 
 export const CloudProvider: Provider = {
   id: "cloud",
-  status: "stub",
+  status: "unavailable",
   displayName: "Cloud Runner",
   async startRun(_request: RunRequest) {
     // Placeholder: run `codex cloud exec` and stream events into the thread.

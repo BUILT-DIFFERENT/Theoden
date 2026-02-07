@@ -113,14 +113,8 @@ export function useThreadDetail(threadId: string | undefined) {
     if (cachedDetail?.thread) {
       return cachedDetail.thread;
     }
-    return mockThreadDetail;
-  }, [
-    cachedDetail?.thread,
-    isDesktop,
-    mockThreadDetail,
-    remoteThread,
-    threadId,
-  ]);
+    return undefined;
+  }, [cachedDetail?.thread, isDesktop, remoteThread, threadId]);
   const messages = useMemo<ThreadMessage[]>(() => {
     if (!isDesktop || !threadId) {
       return fallbackMessages;
@@ -131,16 +125,12 @@ export function useThreadDetail(threadId: string | undefined) {
     if (cachedDetail) {
       return cachedDetail.messages;
     }
-    if (query.isError) {
-      return fallbackMessages;
-    }
     return [];
   }, [
     cachedDetail,
     fallbackMessages,
     isDesktop,
     query.data,
-    query.isError,
     remoteMessages,
     threadId,
   ]);

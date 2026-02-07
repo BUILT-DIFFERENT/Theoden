@@ -1,7 +1,14 @@
+import {
+  syncPersistedAtom,
+  updatePersistedAtom,
+} from "@/app/services/host/persistedState";
 import type { ThreadDetail, ThreadMessage, ThreadSummary } from "@/app/types";
+import { isTauri } from "@/app/utils/tauri";
 
 const THREAD_LIST_CACHE_KEY = "codex.thread.list.cache.v1";
 const THREAD_DETAIL_CACHE_KEY = "codex.thread.detail.cache.v1";
+const THREAD_LIST_ATOM_KEY = "thread.cache.list";
+const THREAD_DETAIL_ATOM_KEY = "thread.cache.detail";
 const MAX_CACHED_THREADS = 200;
 const MAX_CACHED_THREAD_DETAILS = 50;
 
@@ -37,6 +44,13 @@ function writeJson(key: string, value: unknown) {
   if (!canUseStorage()) return;
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
+    if (isTauri()) {
+      if (key === THREAD_LIST_CACHE_KEY) {
+        void updatePersistedAtom(THREAD_LIST_ATOM_KEY, value);
+      } else if (key === THREAD_DETAIL_CACHE_KEY) {
+        void updatePersistedAtom(THREAD_DETAIL_ATOM_KEY, value);
+      }
+    }
   } catch (error) {
     console.warn(`Failed to persist ${key}`, error);
   }
@@ -88,6 +102,17 @@ function toCachedThreadDetail(value: unknown): CachedThreadDetail | null {
 
 export function loadCachedThreadSummaries() {
   const parsed = readJson<unknown>(THREAD_LIST_CACHE_KEY);
+  if (isTauri()) {
+    void syncPersistedAtom<unknown>(THREAD_LIST_ATOM_KEY, parsed ?? []).then(
+      (hostValue) => {
+        if (!Array.isArray(hostValue)) return;
+        window.localStorage.setItem(
+          THREAD_LIST_CACHE_KEY,
+          JSON.stringify(hostValue),
+        );
+      },
+    );
+  }
   if (!Array.isArray(parsed)) {
     return [] as ThreadSummary[];
   }
@@ -109,6 +134,18 @@ export function storeCachedThreadSummaries(threads: ThreadSummary[]) {
 
 export function loadCachedThreadDetail(threadId: string) {
   const parsed = readJson<Record<string, unknown>>(THREAD_DETAIL_CACHE_KEY);
+  if (isTauri()) {
+    void syncPersistedAtom<Record<string, unknown>>(
+      THREAD_DETAIL_ATOM_KEY,
+      parsed ?? {},
+    ).then((hostValue) => {
+      if (!hostValue || typeof hostValue !== "object") return;
+      window.localStorage.setItem(
+        THREAD_DETAIL_CACHE_KEY,
+        JSON.stringify(hostValue),
+      );
+    });
+  }
   if (!parsed || !isRecord(parsed)) {
     return null;
   }

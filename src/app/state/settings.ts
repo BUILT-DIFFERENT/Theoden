@@ -1,6 +1,13 @@
+import {
+  syncPersistedAtom,
+  updatePersistedAtom,
+} from "@/app/services/host/persistedState";
+import { isTauri } from "@/app/utils/tauri";
+
 const SETTINGS_STORAGE_KEY = "codex.settings";
 const LEGACY_SETTINGS_STORAGE_KEY = "theoden.settings";
 const SETTINGS_UPDATED_EVENT_NAME = "codex:settings-updated";
+const SETTINGS_ATOM_KEY = "settings.snapshot";
 
 export interface StoredSettingsSnapshot {
   theme: "system" | "light" | "dark";
@@ -253,6 +260,33 @@ export function loadStoredSettings(
         fallback.autoArchiveCompleted,
       ),
     };
+    if (isTauri()) {
+      void syncPersistedAtom<StoredSettingsSnapshot>(
+        SETTINGS_ATOM_KEY,
+        settings,
+      )
+        .then((hostSettings) => {
+          const merged = {
+            ...settings,
+            ...hostSettings,
+          };
+          window.localStorage.setItem(
+            SETTINGS_STORAGE_KEY,
+            JSON.stringify(merged),
+          );
+          window.dispatchEvent(
+            new CustomEvent<StoredSettingsSnapshot>(
+              SETTINGS_UPDATED_EVENT_NAME,
+              {
+                detail: merged,
+              },
+            ),
+          );
+        })
+        .catch((error) => {
+          console.warn("Failed to sync settings from host", error);
+        });
+    }
     if (!window.localStorage.getItem(SETTINGS_STORAGE_KEY)) {
       window.localStorage.setItem(
         SETTINGS_STORAGE_KEY,
@@ -272,6 +306,7 @@ export function storeSettings(settings: StoredSettingsSnapshot) {
   }
   try {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    void updatePersistedAtom(SETTINGS_ATOM_KEY, settings);
     window.dispatchEvent(
       new CustomEvent<StoredSettingsSnapshot>(SETTINGS_UPDATED_EVENT_NAME, {
         detail: settings,

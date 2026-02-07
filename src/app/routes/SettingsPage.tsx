@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { execCommand } from "@/app/services/cli/commands";
 import {
+  loadAuthStatus,
   loadMergedConfig,
+  loadMcpServerStatuses,
   mcpServersFromConfig,
   providersFromConfig,
   validateConfig,
@@ -32,27 +34,6 @@ import {
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
 
-const fallbackMcpServers: MappedMcpServer[] = [
-  {
-    id: "filesystem",
-    name: "Filesystem",
-    endpoint: "mcp://filesystem",
-    status: "connected",
-  },
-  {
-    id: "github",
-    name: "GitHub",
-    endpoint: "https://mcp.github.local",
-    status: "connected",
-  },
-  {
-    id: "internal-jira",
-    name: "Jira",
-    endpoint: "https://mcp.jira.local",
-    status: "disabled",
-  },
-];
-
 const fallbackProviderStatuses: MappedProviderStatus[] = [
   {
     id: "local",
@@ -68,7 +49,7 @@ const fallbackProviderStatuses: MappedProviderStatus[] = [
   },
   {
     id: "cloud",
-    status: "stub",
+    status: "unavailable",
     detail: "Cloud execution not configured",
   },
 ];
@@ -183,8 +164,7 @@ export function SettingsPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [mcpServers, setMcpServers] =
-    useState<MappedMcpServer[]>(fallbackMcpServers);
+  const [mcpServers, setMcpServers] = useState<MappedMcpServer[]>([]);
   const [providerStatuses, setProviderStatuses] = useState<
     MappedProviderStatus[]
   >(fallbackProviderStatuses);
@@ -425,13 +405,56 @@ export function SettingsPage() {
   const refreshMcpServers = useCallback(async () => {
     setMcpLoading(true);
     try {
-      const config = await loadMergedConfig(resolvedWorkspace);
-      const parsedServers = mcpServersFromConfig(config);
-      setMcpServers(parsedServers.length ? parsedServers : fallbackMcpServers);
-      setProviderStatuses(providersFromConfig(config));
+      const [config, runtimeStatuses, authStatus] = await Promise.all([
+        loadMergedConfig(resolvedWorkspace),
+        loadMcpServerStatuses().catch(() => []),
+        loadAuthStatus().catch(() => ({
+          status: "unknown",
+          requiresOpenaiAuth: null,
+        })),
+      ]);
+      const runtimeStatusById = new Map(
+        runtimeStatuses.map((status) => [status.id, status.status]),
+      );
+      let parsedServers = mcpServersFromConfig(config).map((server) => {
+        const runtimeStatus = runtimeStatusById.get(server.id);
+        if (!runtimeStatus) {
+          return server;
+        }
+        return {
+          ...server,
+          status: runtimeStatus,
+        } satisfies MappedMcpServer;
+      });
+      if (!parsedServers.length && runtimeStatuses.length) {
+        parsedServers = runtimeStatuses.map((status) => ({
+          id: status.id,
+          name: status.id,
+          endpoint: "mcp://unknown",
+          status: status.status,
+        }));
+      }
+      setMcpServers(parsedServers);
+      const providers = providersFromConfig(config).map((provider) => {
+        if (provider.id !== "local") {
+          return provider;
+        }
+        const authLabel =
+          authStatus.status === "authenticated" ||
+          authStatus.status === "logged_in"
+            ? "Authenticated"
+            : authStatus.status === "unknown"
+              ? provider.detail
+              : `Auth: ${authStatus.status}`;
+        return {
+          ...provider,
+          detail: authLabel,
+        };
+      });
+      setProviderStatuses(providers);
       return parsedServers.length
         ? `Reloaded ${parsedServers.length} MCP server(s).`
-        : "No MCP servers found in config. Showing defaults.";
+        : "No MCP servers configured.";
     } finally {
       setMcpLoading(false);
     }

@@ -114,7 +114,7 @@ What this harness provides:
 - Built-in redaction for auth headers/tokens/cookies/API keys before NDJSON write
 - Local MCP fixture matrix (`stdio`, `http`, `failing`) for deterministic debugging
 - Audit checks for thread/turn/approval/MCP-auth signal coverage
-- Parity mapping doc at `third_party/CodexDesktop-Rebuild/docs/signal-parity-map.md`
+- Parity mapping doc at `third_party/CodexDesktop-Rebuild/signal-parity-map.md`
 
 Key submodule debug files:
 
@@ -129,12 +129,15 @@ Key submodule debug files:
 
 - Frontend service calls use app-server JSON-RPC methods (for example `thread/*`, `turn/*`, `config/*`, `skills/*`, `command/exec`).
 - `src-tauri/src/main.rs` owns process lifecycle for `codex app-server` and forwards notifications/requests into the webview.
+- Host-side persisted state, automations/inbox, and terminal command streaming are exposed through Tauri commands (`persisted_atom_*`, `automation_*`, `inbox_*`, `terminal_*`).
+- Automation persistence is stored under `$CODEX_HOME/sqlite/codex-dev.db` and TOML definitions under `$CODEX_HOME/automations/<id>/automation.toml`.
 - Workspace-aware UI state is centralized in React providers under `src/app/state`.
 - Git operations and diff/review actions are wired through `src/app/services/git`.
 
 ## Documentation
 
 - Parity and execution plan: `docs/custom/plan.md`
+- Backend parity matrix and deviations: `docs/custom/parity-backend-v1.md`
 - Product/experience specification: `docs/custom/codex-app.md`
 - Official desktop debug harness reference: `docs/custom/official-desktop-debugging.md`
 

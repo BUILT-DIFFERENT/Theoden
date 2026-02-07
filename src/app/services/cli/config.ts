@@ -13,6 +13,18 @@ interface ConfigReadResponse {
   config?: JsonObject;
 }
 
+interface McpServerStatusListResponse {
+  servers?: unknown[];
+  data?: unknown[];
+}
+
+interface AuthStatusResponse {
+  status?: string;
+  authStatus?: string;
+  requiresOpenaiAuth?: boolean;
+  [key: string]: unknown;
+}
+
 export interface MappedMcpServer {
   id: string;
   name: string;
@@ -69,6 +81,64 @@ export function mcpServersFromConfig(config: CodexConfig): MappedMcpServer[] {
       status: disabledValue ? "disabled" : "connected",
     } satisfies MappedMcpServer;
   });
+}
+
+export async function loadMcpServerStatuses() {
+  const result = await requestAppServer<McpServerStatusListResponse>({
+    method: "mcpServerStatus/list",
+    params: {},
+  });
+  const raw =
+    (Array.isArray(result?.servers) ? result?.servers : null) ??
+    (Array.isArray(result?.data) ? result?.data : null) ??
+    [];
+  return raw
+    .map((entry) => {
+      if (!isRecord(entry)) {
+        return null;
+      }
+      const id =
+        (typeof entry.id === "string" && entry.id) ||
+        (typeof entry.name === "string" && entry.name) ||
+        null;
+      if (!id) {
+        return null;
+      }
+      const statusValue =
+        (typeof entry.status === "string" && entry.status.toLowerCase()) ||
+        "connected";
+      const status: MappedMcpServer["status"] =
+        statusValue === "disabled" || statusValue === "offline"
+          ? "disabled"
+          : "connected";
+      return {
+        id,
+        status,
+      };
+    })
+    .filter(
+      (entry): entry is { id: string; status: MappedMcpServer["status"] } =>
+        Boolean(entry),
+    );
+}
+
+export async function loadAuthStatus() {
+  const result = await requestAppServer<AuthStatusResponse>({
+    method: "getAuthStatus",
+    params: {},
+  });
+  const status =
+    (typeof result?.status === "string" && result.status) ||
+    (typeof result?.authStatus === "string" && result.authStatus) ||
+    "unknown";
+  const requiresOpenaiAuth =
+    typeof result?.requiresOpenaiAuth === "boolean"
+      ? result.requiresOpenaiAuth
+      : null;
+  return {
+    status,
+    requiresOpenaiAuth,
+  };
 }
 
 function readString(record: Record<string, unknown>, ...keys: string[]) {
@@ -141,7 +211,7 @@ export function providersFromConfig(
     cloudEnabled || Boolean(cloudRegion) || Boolean(cloudEnvironment);
   const cloudStatus: MappedProviderStatus["status"] = cloudConfigured
     ? "ready"
-    : "stub";
+    : "unavailable";
   const cloudDetail = cloudConfigured
     ? cloudRegion
       ? `Region: ${cloudRegion}`

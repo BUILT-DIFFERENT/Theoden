@@ -149,18 +149,8 @@ export function useThreadList(options: ThreadListOptions = {}) {
     if (cachedThreads.length) {
       return cachedThreads;
     }
-    if (query.isError) {
-      return mockThreads;
-    }
     return [];
-  }, [
-    cachedThreads,
-    isDesktop,
-    mockThreads,
-    query.data,
-    query.isError,
-    remoteThreads,
-  ]);
+  }, [cachedThreads, isDesktop, mockThreads, query.data, remoteThreads]);
   const workspaceThreads = useMemo(() => {
     if (!normalizedWorkspace) return allThreads;
     return allThreads.filter((thread) => {
@@ -205,9 +195,7 @@ export function useThreadList(options: ThreadListOptions = {}) {
     () => (isDesktop ? mapThreadsToProjects(workspaceThreads) : mockProjects),
     [isDesktop, mockProjects, workspaceThreads],
   );
-  const isMockData =
-    !isDesktop ||
-    (isDesktop && !query.data && !cachedThreads.length && query.isError);
+  const isMockData = !isDesktop;
   return {
     threads,
     allThreads,

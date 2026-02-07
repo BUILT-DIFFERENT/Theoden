@@ -189,3 +189,56 @@ export interface ProviderStatus {
   status: "ready" | "unavailable" | "stub";
   detail: string;
 }
+
+export interface AutomationRecord {
+  id: string;
+  name: string;
+  prompt: string;
+  status: string;
+  nextRunAt: number | null;
+  lastRunAt: number | null;
+  cwds: string[];
+  rrule: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AutomationRunRecord {
+  id: string;
+  threadId: string;
+  automationId: string;
+  status: string;
+  readAt: number | null;
+  threadTitle: string | null;
+  sourceCwd: string | null;
+  inboxTitle: string | null;
+  inboxSummary: string | null;
+  createdAt: number;
+  updatedAt: number;
+  archivedUserMessage: string | null;
+  archivedAssistantMessage: string | null;
+  archivedReason: string | null;
+}
+
+export interface InboxItem {
+  id: string;
+  title: string;
+  description: string;
+  threadId: string;
+  readAt: number | null;
+  createdAt: number;
+}
+
+export interface TerminalSessionDescriptor {
+  sessionId: string;
+  threadId: string | null;
+  workspacePath: string | null;
+  cwd: string | null;
+  isRunning: boolean;
+  updatedAt: number;
+}
+
+export interface PersistedAtomPayload {
+  key: string;
+  value: unknown;
+}

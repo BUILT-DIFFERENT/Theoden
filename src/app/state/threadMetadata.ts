@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 
+import {
+  syncPersistedAtom,
+  updatePersistedAtom,
+} from "@/app/services/host/persistedState";
 import { isTauri } from "@/app/utils/tauri";
 
 export interface ThreadMetadata {
@@ -8,6 +12,7 @@ export interface ThreadMetadata {
 }
 
 const STORAGE_KEY = "theoden.thread.metadata";
+const THREAD_METADATA_ATOM_KEY = "thread.metadata";
 const metadataCache = new Map<string, ThreadMetadata>();
 const listeners = new Map<string, Set<() => void>>();
 let hasLoaded = false;
@@ -26,6 +31,23 @@ function loadFromStorage() {
         metadataCache.set(threadId, value);
       }
     });
+    void syncPersistedAtom<Record<string, ThreadMetadata>>(
+      THREAD_METADATA_ATOM_KEY,
+      parsed,
+    ).then((hostValue) => {
+      if (!hostValue || typeof hostValue !== "object") {
+        return;
+      }
+      const nextPayload = hostValue;
+      metadataCache.clear();
+      Object.entries(nextPayload).forEach(([threadId, value]) => {
+        if (value && typeof value === "object") {
+          metadataCache.set(threadId, value);
+        }
+      });
+      persistToStorage();
+      listeners.forEach((entry) => entry.forEach((listener) => listener()));
+    });
   } catch (error) {
     console.warn("Failed to load thread metadata", error);
   }
@@ -40,6 +62,7 @@ function persistToStorage() {
       payload[key] = value;
     });
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    void updatePersistedAtom(THREAD_METADATA_ATOM_KEY, payload);
   } catch (error) {
     console.warn("Failed to persist thread metadata", error);
   }

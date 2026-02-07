@@ -1,23 +1,31 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  recordAutomationRunFailure,
-  recordAutomationRunStart,
-} from "@/app/services/cli/automationRuns";
-import { startThread, startTurn } from "@/app/services/cli/turns";
-import { useAutomationRuns } from "@/app/services/cli/useAutomationRuns";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import {
+  createAutomation,
+  deleteAutomation,
+  listAutomationRuns,
+  listAutomations,
+  listInboxItems,
+  markInboxRead,
+  runAutomationNow,
+  subscribeAutomationStoreUpdates,
+  updateAutomation,
+  type HostAutomationRecord,
+  type HostAutomationRunRecord,
+} from "@/app/services/host/automations";
+import {
   automationRecurrenceOptions,
-  computeNextRunAt,
   createDefaultRecurrence,
   formatAutomationSchedule,
   formatAutomationTimestamp,
   isAutomationRecurrenceKind,
   loadStoredAutomations,
+  recurrenceFromRrule,
+  recurrenceToRrule,
   storeAutomations,
   weekdayLabelFromIndex,
-  type AutomationItem,
   type AutomationRecurrenceKind,
 } from "@/app/state/automations";
 import { isTauri } from "@/app/utils/tauri";
@@ -95,19 +103,113 @@ const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
 ];
 
 function runStatusClass(status: string) {
-  if (status === "done") return "border-emerald-400/40 text-emerald-300";
-  if (status === "failed") return "border-rose-400/40 text-rose-300";
-  if (status === "needs_review") return "border-amber-400/40 text-amber-300";
-  if (status === "running") return "border-sky-400/40 text-sky-300";
+  const normalized = status.toUpperCase();
+  if (normalized === "DONE" || normalized === "COMPLETED") {
+    return "border-emerald-400/40 text-emerald-300";
+  }
+  if (normalized === "FAILED") return "border-rose-400/40 text-rose-300";
+  if (
+    normalized === "PENDING_REVIEW" ||
+    normalized === "NEEDS_REVIEW" ||
+    normalized === "IN_REVIEW"
+  ) {
+    return "border-amber-400/40 text-amber-300";
+  }
+  if (normalized === "IN_PROGRESS" || normalized === "RUNNING") {
+    return "border-sky-400/40 text-sky-300";
+  }
   return "border-white/20 text-ink-400";
 }
 
+function enabledFromStatus(status: string) {
+  const normalized = status.toUpperCase();
+  return normalized !== "PAUSED" && normalized !== "DISABLED";
+}
+
+function recurringSummary(record: HostAutomationRecord) {
+  const recurrence = recurrenceFromRrule(record.rrule);
+  return formatAutomationSchedule(recurrence);
+}
+
 export function AutomationsPage() {
+  const queryClient = useQueryClient();
   const { workspaces } = useWorkspaces();
-  const allRuns = useAutomationRuns();
-  const [automations, setAutomations] = useState<AutomationItem[]>(() =>
-    loadStoredAutomations(),
-  );
+  const isDesktop = isTauri();
+  const migrationAttemptedRef = useRef(false);
+
+  const automationsQuery = useQuery({
+    queryKey: ["host", "automations"],
+    queryFn: listAutomations,
+    enabled: isDesktop,
+    refetchOnWindowFocus: isDesktop,
+  });
+  const runsQuery = useQuery({
+    queryKey: ["host", "automation-runs"],
+    queryFn: () => listAutomationRuns(),
+    enabled: isDesktop,
+    refetchOnWindowFocus: isDesktop,
+  });
+  const inboxQuery = useQuery({
+    queryKey: ["host", "inbox-items"],
+    queryFn: listInboxItems,
+    enabled: isDesktop,
+    refetchOnWindowFocus: isDesktop,
+  });
+
+  useEffect(() => {
+    if (!isDesktop) {
+      return;
+    }
+    let unlisten: (() => void) | null = null;
+    void subscribeAutomationStoreUpdates(() => {
+      void queryClient.invalidateQueries({ queryKey: ["host", "automations"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["host", "automation-runs"],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["host", "inbox-items"] });
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [isDesktop, queryClient]);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    if (migrationAttemptedRef.current) return;
+    if (automationsQuery.isLoading) return;
+    if ((automationsQuery.data ?? []).length > 0) {
+      migrationAttemptedRef.current = true;
+      return;
+    }
+    migrationAttemptedRef.current = true;
+    const legacy = loadStoredAutomations();
+    if (!legacy.length) {
+      return;
+    }
+    void (async () => {
+      for (const item of legacy) {
+        await createAutomation({
+          name: item.name,
+          prompt: item.prompt,
+          status: item.enabled ? "ACTIVE" : "PAUSED",
+          nextRunAt: item.nextRunAt,
+          lastRunAt: item.lastRunAt,
+          cwds: [item.workspacePath],
+          rrule: recurrenceToRrule(item.recurrence),
+        });
+      }
+      storeAutomations([]);
+      void queryClient.invalidateQueries({ queryKey: ["host", "automations"] });
+    })();
+  }, [
+    automationsQuery.data,
+    automationsQuery.isLoading,
+    isDesktop,
+    queryClient,
+  ]);
+
   const [sheetOpen, setSheetOpen] = useState(false);
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -129,36 +231,6 @@ export function AutomationsPage() {
   );
   const sheetRef = useRef<HTMLDivElement | null>(null);
 
-  const nameInputId = "automation-name";
-  const projectsInputId = "automation-projects";
-  const projectPickerInputId = "automation-project-picker";
-  const promptInputId = "automation-prompt";
-  const recurrenceInputId = "automation-recurrence";
-  const timeInputId = "automation-time";
-  const weekdayInputId = "automation-weekday";
-  const monthdayInputId = "automation-monthday";
-
-  useEffect(() => {
-    if (!sheetOpen) return;
-    if (selectedProjects.length) return;
-    if (!workspaces.length) return;
-    setSelectedProjects([workspaces[0].path]);
-  }, [selectedProjects.length, sheetOpen, workspaces]);
-
-  useEffect(() => {
-    storeAutomations(automations);
-  }, [automations]);
-
-  useEffect(() => {
-    if (!runMessage) {
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
-      setRunMessage(null);
-    }, 3000);
-    return () => window.clearTimeout(timeoutId);
-  }, [runMessage]);
-
   const workspaceOptions = useMemo(
     () =>
       workspaces.map((workspace) => ({
@@ -176,9 +248,12 @@ export function AutomationsPage() {
     [selectedProjects, workspaceOptions],
   );
 
+  const automations = automationsQuery.data ?? [];
+  const inboxItems = inboxQuery.data ?? [];
   const runsByAutomation = useMemo(() => {
-    const map = new Map<string, typeof allRuns>();
-    allRuns.forEach((run) => {
+    const runs = runsQuery.data ?? [];
+    const map = new Map<string, HostAutomationRunRecord[]>();
+    runs.forEach((run) => {
       const current = map.get(run.automationId);
       if (current) {
         current.push(run);
@@ -187,7 +262,7 @@ export function AutomationsPage() {
       }
     });
     return map;
-  }, [allRuns]);
+  }, [runsQuery.data]);
 
   const closeCreateSheet = useCallback(() => {
     setSheetOpen(false);
@@ -215,9 +290,7 @@ export function AutomationsPage() {
   );
 
   useEffect(() => {
-    if (!sheetOpen) {
-      return;
-    }
+    if (!sheetOpen) return;
     const previouslyFocused = document.activeElement;
     const frame = window.requestAnimationFrame(() => {
       const focusables =
@@ -263,29 +336,25 @@ export function AutomationsPage() {
     };
   }, [closeCreateSheet, sheetOpen]);
 
-  const addProject = (path: string) => {
-    if (!path || selectedProjects.includes(path)) {
+  useEffect(() => {
+    if (!runMessage) {
       return;
     }
-    setSelectedProjects((current) => [...current, path]);
-  };
+    const timeoutId = window.setTimeout(() => {
+      setRunMessage(null);
+    }, 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [runMessage]);
 
-  const removeProject = (path: string) => {
-    setSelectedProjects((current) =>
-      current.filter((projectPath) => projectPath !== path),
-    );
-  };
-
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const trimmedName = name.trim();
     const trimmedPrompt = prompt.trim();
-    const workspacePath = selectedProjects[0] ?? null;
-
+    const primaryWorkspacePath = selectedProjects[0] ?? null;
     if (!trimmedName) {
       setError("Name is required.");
       return;
     }
-    if (!workspacePath) {
+    if (!selectedProjects.length) {
       setError("Select at least one project.");
       return;
     }
@@ -293,8 +362,11 @@ export function AutomationsPage() {
       setError("Prompt is required.");
       return;
     }
+    if (!primaryWorkspacePath) {
+      setError("Select at least one project.");
+      return;
+    }
 
-    const createdAt = Date.now();
     const defaultRecurrence = createDefaultRecurrence();
     const recurrence = {
       kind: recurrenceKind,
@@ -303,19 +375,15 @@ export function AutomationsPage() {
       dayOfWeek: recurrenceKind === "weekly" ? dayOfWeek : null,
       dayOfMonth: recurrenceKind === "monthly" ? dayOfMonth : null,
     };
-    const automation: AutomationItem = {
-      id: `automation-${createdAt}`,
+    await createAutomation({
       name: trimmedName,
-      workspacePath,
       prompt: trimmedPrompt,
-      recurrence,
-      createdAt,
-      enabled: true,
+      status: "ACTIVE",
+      nextRunAt: null,
       lastRunAt: null,
-      nextRunAt: computeNextRunAt(recurrence, createdAt),
-    };
-
-    setAutomations((current) => [automation, ...current]);
+      cwds: selectedProjects,
+      rrule: recurrenceToRrule(recurrence),
+    });
     setName("");
     setPrompt("");
     setRecurrenceKind("daily");
@@ -327,73 +395,39 @@ export function AutomationsPage() {
     setError(null);
     setSheetOpen(false);
     setActiveTemplateId(null);
+    await queryClient.invalidateQueries({ queryKey: ["host", "automations"] });
   };
 
-  const toggleAutomation = (id: string) => {
-    setAutomations((current) =>
-      current.map((automation) =>
-        automation.id === id
-          ? { ...automation, enabled: !automation.enabled }
-          : automation,
-      ),
-    );
+  const toggleAutomation = async (automation: HostAutomationRecord) => {
+    await updateAutomation({
+      id: automation.id,
+      status: enabledFromStatus(automation.status) ? "PAUSED" : "ACTIVE",
+    });
+    await queryClient.invalidateQueries({ queryKey: ["host", "automations"] });
   };
 
-  const handleRunNow = async (automation: AutomationItem) => {
-    if (!isTauri()) {
+  const handleRunNow = async (automation: HostAutomationRecord) => {
+    if (!isDesktop) {
       setRunMessage("Run now is available in the desktop app.");
       return;
     }
-
-    setRunningAutomationIds((current) => {
-      const next = new Set(current);
-      next.add(automation.id);
-      return next;
-    });
-
+    setRunningAutomationIds((current) => new Set(current).add(automation.id));
     try {
-      const thread = await startThread({ cwd: automation.workspacePath });
-      const threadId = thread?.id;
-      if (!threadId) {
-        throw new Error("Unable to create run thread.");
-      }
-
-      const turn = await startTurn({
-        threadId,
-        input: automation.prompt,
-        cwd: automation.workspacePath,
-      });
-
-      recordAutomationRunStart({
-        automationId: automation.id,
-        threadId,
-        turnId: turn?.id ?? null,
-        prompt: automation.prompt,
-        workspacePath: automation.workspacePath,
-      });
-
-      setAutomations((current) =>
-        current.map((item) =>
-          item.id === automation.id
-            ? {
-                ...item,
-                lastRunAt: Date.now(),
-                nextRunAt: computeNextRunAt(item.recurrence),
-              }
-            : item,
-        ),
-      );
+      await runAutomationNow(automation.id);
       setRunMessage(`${automation.name} started.`);
-    } catch (runError) {
-      const errorMessage =
-        runError instanceof Error ? runError.message : "Run failed to start.";
-      recordAutomationRunFailure({
-        automationId: automation.id,
-        workspacePath: automation.workspacePath,
-        prompt: automation.prompt,
-        errorMessage,
+      await queryClient.invalidateQueries({
+        queryKey: ["host", "automation-runs"],
       });
-      setRunMessage(errorMessage);
+      await queryClient.invalidateQueries({
+        queryKey: ["host", "inbox-items"],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["host", "automations"],
+      });
+    } catch (runError) {
+      const message =
+        runError instanceof Error ? runError.message : "Run failed to start.";
+      setRunMessage(message);
     } finally {
       setRunningAutomationIds((current) => {
         const next = new Set(current);
@@ -413,6 +447,19 @@ export function AutomationsPage() {
       }
       return next;
     });
+  };
+
+  const addProject = (path: string) => {
+    if (!path || selectedProjects.includes(path)) {
+      return;
+    }
+    setSelectedProjects((current) => [...current, path]);
+  };
+
+  const removeProject = (path: string) => {
+    setSelectedProjects((current) =>
+      current.filter((projectPath) => projectPath !== path),
+    );
   };
 
   return (
@@ -453,7 +500,6 @@ export function AutomationsPage() {
             + Create automation
           </button>
         </div>
-
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {AUTOMATION_TEMPLATES.map((template) => {
             const isActive = activeTemplateId === template.id && sheetOpen;
@@ -474,12 +520,6 @@ export function AutomationsPage() {
                 <p className="mt-1 text-xs leading-relaxed text-ink-300">
                   {template.description}
                 </p>
-                <div className="mt-3 flex items-center justify-between text-[0.65rem]">
-                  <span className="rounded-full border border-white/15 px-2 py-0.5 uppercase tracking-[0.18em] text-ink-400">
-                    {template.recurrenceKind}
-                  </span>
-                  <span className="text-flare-200">Use template</span>
-                </div>
               </button>
             );
           })}
@@ -487,400 +527,324 @@ export function AutomationsPage() {
       </section>
 
       <section className="surface-panel p-5">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-          Scheduled threads
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+            Scheduled threads
+          </p>
+          <p className="text-xs text-ink-400">
+            Inbox pending: {inboxItems.filter((item) => !item.readAt).length}
+          </p>
+        </div>
         <div className="mt-4 space-y-3">
           {automations.length ? (
             automations.map((automation) => {
-              const runs = runsByAutomation.get(automation.id) ?? [];
-              const latestRun = runs[0];
-              const lastRunAt = latestRun?.startedAt ?? automation.lastRunAt;
-              const nextRunAt =
-                latestRun && latestRun.completedAt
-                  ? computeNextRunAt(
-                      automation.recurrence,
-                      latestRun.completedAt,
-                    )
-                  : automation.nextRunAt;
-              const runStatus = latestRun?.status ?? "queued";
+              const runHistory = runsByAutomation.get(automation.id) ?? [];
+              const latestRun = runHistory[0];
               const historyOpen = expandedHistory.has(automation.id);
+              const enabled = enabledFromStatus(automation.status);
               return (
                 <div key={automation.id} className="surface-card p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-sm text-ink-100">{automation.name}</p>
                       <p className="text-xs text-ink-500">
-                        {workspaceNameFromPath(automation.workspacePath)}
+                        {automation.cwds.length
+                          ? automation.cwds
+                              .map(workspaceNameFromPath)
+                              .join(", ")
+                          : "No project"}
                       </p>
                     </div>
                     <span
-                      className={`rounded-full border px-2 py-1 text-[0.65rem] ${runStatusClass(runStatus)}`}
+                      className={`rounded-full border px-2 py-1 text-[0.65rem] ${runStatusClass(latestRun?.status ?? "idle")}`}
                     >
-                      {automation.enabled
-                        ? latestRun
-                          ? latestRun.statusLabel
-                          : "Enabled"
-                        : "Paused"}
+                      {latestRun?.status ?? automation.status}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs text-ink-300">
-                    {automation.prompt}
+                  <p className="mt-3 text-xs text-ink-400">
+                    {recurringSummary(automation)}
                   </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-[0.7rem] text-ink-400">
-                    <span>
-                      Schedule:{" "}
-                      {formatAutomationSchedule(automation.recurrence)}
-                    </span>
-                    <span>
-                      Last run: {formatAutomationTimestamp(lastRunAt)}
-                    </span>
-                    <span>
-                      Next run: {formatAutomationTimestamp(nextRunAt)}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <p className="mt-1 text-xs text-ink-500">
+                    Last run:{" "}
+                    {formatAutomationTimestamp(
+                      latestRun?.createdAt ?? automation.lastRunAt ?? null,
+                    )}
+                  </p>
+                  <p className="text-xs text-ink-500">
+                    Next run: {formatAutomationTimestamp(automation.nextRunAt)}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                     <button
-                      className="btn-flat"
-                      onClick={() => toggleAutomation(automation.id)}
+                      className={`rounded-full border px-3 py-1 ${
+                        enabled
+                          ? "border-emerald-300/30 text-emerald-200 hover:border-emerald-200/50"
+                          : "border-white/10 text-ink-300 hover:border-flare-300"
+                      }`}
+                      onClick={() => {
+                        void toggleAutomation(automation);
+                      }}
                     >
-                      {automation.enabled ? "Pause" : "Enable"}
+                      {enabled ? "Disable" : "Enable"}
                     </button>
                     <button
-                      className="btn-flat"
+                      className="rounded-full border border-white/10 px-3 py-1 text-ink-300 hover:border-flare-300"
                       onClick={() => {
                         void handleRunNow(automation);
                       }}
                       disabled={runningAutomationIds.has(automation.id)}
                     >
                       {runningAutomationIds.has(automation.id)
-                        ? "Starting..."
+                        ? "Starting…"
                         : "Run now"}
                     </button>
                     <button
-                      className="btn-flat"
+                      className="rounded-full border border-white/10 px-3 py-1 text-ink-300 hover:border-flare-300"
                       onClick={() => toggleHistory(automation.id)}
                     >
-                      {historyOpen
-                        ? "Hide execution history"
-                        : `Execution history (${runs.length})`}
+                      {historyOpen ? "Hide history" : "Show history"}
+                    </button>
+                    <button
+                      className="rounded-full border border-white/10 px-3 py-1 text-rose-300 hover:border-rose-300/60"
+                      onClick={() => {
+                        void deleteAutomation(automation.id).then(() => {
+                          void queryClient.invalidateQueries({
+                            queryKey: ["host", "automations"],
+                          });
+                        });
+                      }}
+                    >
+                      Delete
                     </button>
                   </div>
                   {historyOpen ? (
-                    <div className="mt-3 rounded-xl border border-white/10 bg-black/15 p-3">
-                      {runs.length ? (
-                        <div className="space-y-3 text-xs">
-                          {runs.slice(0, 8).map((run) => (
-                            <div
-                              key={run.id}
-                              className="rounded-lg border border-white/10 bg-black/20 p-2"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="text-ink-200">
-                                  {formatAutomationTimestamp(run.startedAt)}
-                                </span>
-                                <span
-                                  className={`rounded-full border px-2 py-0.5 text-[0.65rem] ${runStatusClass(run.status)}`}
-                                >
-                                  {run.statusLabel}
-                                </span>
-                              </div>
-                              <p className="mt-1 text-[0.7rem] text-ink-400">
-                                Thread: {run.threadId}
+                    <div className="mt-3 space-y-2 rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
+                      {runHistory.length ? (
+                        runHistory.slice(0, 10).map((run) => (
+                          <div
+                            key={run.id}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <div>
+                              <p className="text-ink-200">{run.status}</p>
+                              <p className="text-ink-500">
+                                {formatAutomationTimestamp(run.createdAt)}
                               </p>
-                              <div className="mt-2 space-y-1">
-                                {run.events.slice(-3).map((event) => (
-                                  <p
-                                    key={event.id}
-                                    className="text-[0.65rem] text-ink-400"
-                                  >
-                                    {event.timestamp} . {event.label}
-                                    {event.detail ? ` . ${event.detail}` : ""}
-                                  </p>
-                                ))}
-                              </div>
                             </div>
-                          ))}
-                        </div>
+                            {run.readAt ? null : (
+                              <button
+                                className="rounded-full border border-white/10 px-2 py-1 text-[0.65rem] text-ink-300 hover:border-flare-300"
+                                onClick={() => {
+                                  if (!run.id) return;
+                                  const inboxItem = inboxItems.find(
+                                    (item) => item.threadId === run.threadId,
+                                  );
+                                  if (!inboxItem) return;
+                                  void markInboxRead(inboxItem.id).then(() => {
+                                    void queryClient.invalidateQueries({
+                                      queryKey: ["host", "inbox-items"],
+                                    });
+                                  });
+                                }}
+                              >
+                                Mark inbox read
+                              </button>
+                            )}
+                          </div>
+                        ))
                       ) : (
-                        <p className="text-[0.7rem] text-ink-500">
-                          No execution history yet.
-                        </p>
+                        <p className="text-ink-500">No run history yet.</p>
                       )}
                     </div>
                   ) : null}
                 </div>
               );
             })
+          ) : automationsQuery.isLoading ? (
+            <p className="text-sm text-ink-400">Loading automations…</p>
           ) : (
-            <div className="surface-card p-4 text-xs text-ink-400">
-              No automations yet.
-            </div>
+            <p className="text-sm text-ink-400">
+              No automations yet. Start from a template.
+            </p>
           )}
         </div>
-        {runMessage ? (
-          <p className="mt-3 text-xs text-ink-300">{runMessage}</p>
-        ) : null}
       </section>
 
+      {runMessage ? <p className="text-sm text-ink-300">{runMessage}</p> : null}
+
       {sheetOpen ? (
-        <>
-          <button
-            aria-label="Close automation sheet"
-            className="absolute inset-0 z-40 cursor-default bg-black/45"
-            onClick={closeCreateSheet}
-            type="button"
-          />
-          <aside className="absolute inset-y-0 right-0 z-50 w-full max-w-2xl pl-4">
-            <div
-              aria-label="Create automation"
-              aria-modal="true"
-              className="surface-panel flex h-full flex-col rounded-r-none border-r-0 p-5"
-              ref={sheetRef}
-              role="dialog"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
-                    Create automation
-                  </p>
-                  <h3 className="mt-1 font-display text-lg text-ink-50">
-                    Configure scheduled thread
-                  </h3>
-                </div>
-                <button className="btn-flat" onClick={closeCreateSheet}>
-                  Close
-                </button>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-rose-300/40 bg-rose-500/10 p-3 text-xs text-rose-100">
-                <p className="font-medium">
-                  Automation runs can execute shell commands.
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/50">
+          <div
+            ref={sheetRef}
+            className="surface-panel h-full w-full max-w-xl overflow-y-auto rounded-none border-l border-white/10 p-6"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+                  Create automation
                 </p>
-                <p className="mt-1 text-rose-200/90">
-                  Review sandbox{" "}
-                  <a
-                    className="text-rose-100 underline"
-                    href="https://developers.openai.com/codex/security/"
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    rules
-                  </a>{" "}
-                  and{" "}
-                  <a
-                    className="text-rose-100 underline"
-                    href="https://developers.openai.com/codex/config-reference"
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    settings
-                  </a>{" "}
-                  before enabling production schedules.
-                </p>
+                <h2 className="mt-2 font-display text-2xl text-ink-50">
+                  Scheduled thread
+                </h2>
               </div>
-
-              <div className="codex-scrollbar mt-4 flex-1 space-y-4 overflow-y-auto pr-1 text-sm text-ink-300">
-                <div className="space-y-2">
-                  <label
-                    className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                    htmlFor={nameInputId}
-                  >
-                    Name
-                  </label>
-                  <input
-                    id={nameInputId}
-                    className="input-base"
-                    placeholder="Daily release notes"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label
-                    className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                    htmlFor={projectsInputId}
-                  >
-                    Projects
-                  </label>
-                  <div
-                    className="rounded-xl border border-white/10 bg-black/25 p-2"
-                    id={projectsInputId}
-                  >
-                    {selectedProjects.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedProjects.map((projectPath) => (
-                          <span
-                            key={projectPath}
-                            className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/25 px-2 py-1 text-xs text-ink-200"
-                          >
-                            {workspaceNameFromPath(projectPath)}
-                            <button
-                              aria-label={`Remove ${workspaceNameFromPath(projectPath)}`}
-                              className="text-ink-400 transition hover:text-ink-100"
-                              onClick={() => removeProject(projectPath)}
-                              type="button"
-                            >
-                              x
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="px-1 py-1 text-xs text-ink-500">
-                        Select at least one workspace.
-                      </p>
-                    )}
-                  </div>
-                  <select
-                    className="input-base"
-                    id={projectPickerInputId}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      addProject(value);
+              <button
+                className="rounded-full border border-white/10 px-3 py-1 text-xs text-ink-300 hover:border-flare-300"
+                onClick={closeCreateSheet}
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-6 space-y-4">
+              <label className="block space-y-2">
+                <span className="text-xs uppercase tracking-[0.2em] text-ink-400">
+                  Name
+                </span>
+                <input
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-ink-100"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Daily release notes"
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-xs uppercase tracking-[0.2em] text-ink-400">
+                  Projects
+                </span>
+                <select
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-ink-100"
+                  value={projectPicker}
+                  onChange={(event) => {
+                    const selected = event.target.value;
+                    setProjectPicker(selected);
+                    if (selected) {
+                      addProject(selected);
                       setProjectPicker("");
+                    }
+                  }}
+                >
+                  <option value="">Select project</option>
+                  {availableWorkspaceOptions.map((workspace) => (
+                    <option key={workspace.path} value={workspace.path}>
+                      {workspace.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProjects.map((path) => (
+                    <button
+                      key={path}
+                      className="rounded-full border border-white/10 px-2 py-1 text-xs text-ink-200 hover:border-flare-300"
+                      onClick={() => removeProject(path)}
+                    >
+                      {workspaceNameFromPath(path)} ×
+                    </button>
+                  ))}
+                </div>
+              </label>
+              <label className="block space-y-2">
+                <span className="text-xs uppercase tracking-[0.2em] text-ink-400">
+                  Prompt
+                </span>
+                <textarea
+                  className="min-h-28 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-ink-100"
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-ink-400">
+                    Recurrence
+                  </span>
+                  <select
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-ink-100"
+                    value={recurrenceKind}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      if (!isAutomationRecurrenceKind(nextValue)) return;
+                      setRecurrenceKind(nextValue);
                     }}
-                    value={projectPicker}
                   >
-                    <option value="">Add project</option>
-                    {availableWorkspaceOptions.map((workspace) => (
-                      <option key={workspace.path} value={workspace.path}>
-                        {workspace.label}
+                    {automationRecurrenceOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
                       </option>
                     ))}
                   </select>
-                  <p className="text-[0.7rem] text-ink-500">
-                    The first selected project is used when starting this
-                    automation.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label
-                    className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                    htmlFor={promptInputId}
-                  >
-                    Prompt
-                  </label>
-                  <textarea
-                    id={promptInputId}
-                    className="textarea-base"
-                    placeholder="Summarize yesterday's changes and open a PR."
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
+                </label>
+                <label className="block space-y-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-ink-400">
+                    Time
+                  </span>
+                  <input
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-ink-100"
+                    type="time"
+                    value={runTime}
+                    onChange={(event) => setRunTime(event.target.value)}
                   />
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label
-                      className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                      htmlFor={recurrenceInputId}
-                    >
-                      Recurrence
-                    </label>
-                    <select
-                      id={recurrenceInputId}
-                      className="input-base"
-                      value={recurrenceKind}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        if (isAutomationRecurrenceKind(nextValue)) {
-                          setRecurrenceKind(nextValue);
-                        }
-                      }}
-                    >
-                      {automationRecurrenceOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option.charAt(0).toUpperCase() + option.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label
-                      className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                      htmlFor={timeInputId}
-                    >
-                      Time
-                    </label>
-                    <input
-                      id={timeInputId}
-                      type="time"
-                      className="input-base"
-                      value={runTime}
-                      onChange={(event) => setRunTime(event.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {recurrenceKind === "weekly" ? (
-                  <div className="space-y-2">
-                    <label
-                      className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                      htmlFor={weekdayInputId}
-                    >
-                      Day of week
-                    </label>
-                    <select
-                      id={weekdayInputId}
-                      className="input-base"
-                      value={dayOfWeek}
-                      onChange={(event) =>
-                        setDayOfWeek(Number.parseInt(event.target.value, 10))
-                      }
-                    >
-                      {WEEKDAY_OPTIONS.map((weekday) => (
-                        <option key={weekday} value={weekday}>
-                          {weekdayLabelFromIndex(weekday)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {recurrenceKind === "monthly" ? (
-                  <div className="space-y-2">
-                    <label
-                      className="text-xs uppercase tracking-[0.2em] text-ink-500"
-                      htmlFor={monthdayInputId}
-                    >
-                      Day of month
-                    </label>
-                    <select
-                      id={monthdayInputId}
-                      className="input-base"
-                      value={dayOfMonth}
-                      onChange={(event) =>
-                        setDayOfMonth(Number.parseInt(event.target.value, 10))
-                      }
-                    >
-                      {MONTH_DAY_OPTIONS.map((day) => (
-                        <option key={day} value={day}>
-                          {day}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {error ? (
-                  <p className="text-xs text-rose-300">{error}</p>
-                ) : null}
+                </label>
               </div>
-
-              <div className="mt-4 flex justify-end gap-2 border-t border-white/10 pt-4 text-xs">
-                <button className="btn-flat" onClick={closeCreateSheet}>
-                  Cancel
-                </button>
-                <button className="btn-primary" onClick={handleCreate}>
-                  Create
-                </button>
-              </div>
+              {recurrenceKind === "weekly" ? (
+                <label className="block space-y-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-ink-400">
+                    Day of week
+                  </span>
+                  <select
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-ink-100"
+                    value={dayOfWeek}
+                    onChange={(event) => {
+                      setDayOfWeek(Number.parseInt(event.target.value, 10));
+                    }}
+                  >
+                    {WEEKDAY_OPTIONS.map((day) => (
+                      <option key={day} value={day}>
+                        {weekdayLabelFromIndex(day)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {recurrenceKind === "monthly" ? (
+                <label className="block space-y-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-ink-400">
+                    Day of month
+                  </span>
+                  <select
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-ink-100"
+                    value={dayOfMonth}
+                    onChange={(event) => {
+                      setDayOfMonth(Number.parseInt(event.target.value, 10));
+                    }}
+                  >
+                    {MONTH_DAY_OPTIONS.map((day) => (
+                      <option key={day} value={day}>
+                        Day {day}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
-          </aside>
-        </>
+            {error ? (
+              <p className="mt-4 text-sm text-rose-300">{error}</p>
+            ) : null}
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                className="rounded-full border border-white/10 px-4 py-2 text-xs text-ink-300 hover:border-flare-300"
+                onClick={closeCreateSheet}
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-full border border-flare-300 bg-flare-400/10 px-4 py-2 text-xs text-ink-50 hover:bg-flare-400/20"
+                onClick={() => {
+                  void handleCreate();
+                }}
+              >
+                Create automation
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

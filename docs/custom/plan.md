@@ -9,6 +9,18 @@ This document lists **everything I can confirm from the two screen recordings**:
 
 ---
 
+## Backend parity milestone update (February 7, 2026)
+
+- [x] Added host-side persisted atom API (`persisted_atom_sync`, `persisted_atom_update`, `persisted_atom_reset`) and wired desktop state modules to mirror host persistence.
+- [x] Added host-side SQLite + TOML automation persistence and inbox records (`automations`, `automation_runs`, `inbox_items`) with Tauri automation/inbox commands.
+- [x] Added host terminal command channel with `terminal_create/attach/write/resize/close` and streaming events (`terminal-attached`, `terminal-data`, `terminal-error`, `terminal-exit`).
+- [x] Moved Automations page data authority from localStorage to host APIs, including one-time migration of legacy localStorage automations.
+- [x] Removed desktop mock fallback behavior in thread list/detail data hooks so desktop mode now uses real/cached backend data only.
+- [x] Added settings runtime reads for MCP/auth status via `mcpServerStatus/list` and `getAuthStatus`.
+- [x] Added parity contract doc: `docs/custom/parity-backend-v1.md`.
+
+---
+
 ## 0) Executive summary (P0 blockers)
 
 Platform scope: this Tauri app targets Windows and Linux only. macOS is out of scope.

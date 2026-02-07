@@ -346,3 +346,82 @@ export function storeAutomations(automations: AutomationItem[]) {
     console.warn("Failed to store automations", error);
   }
 }
+
+function weekdayToken(day: number | null) {
+  const tokens = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  if (day == null || day < 0 || day > 6) {
+    return "MO";
+  }
+  return tokens[day] ?? "MO";
+}
+
+function weekdayFromToken(token: string) {
+  const tokens = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  const index = tokens.indexOf(token.toUpperCase());
+  return index >= 0 ? index : 1;
+}
+
+export function recurrenceToRrule(recurrence: AutomationRecurrence) {
+  const timeParts = parseTimeParts(recurrence.time) ?? { hour: 9, minute: 0 };
+  if (recurrence.kind === "daily") {
+    return `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU;BYHOUR=${timeParts.hour};BYMINUTE=${timeParts.minute}`;
+  }
+  if (recurrence.kind === "weekly") {
+    return `FREQ=WEEKLY;BYDAY=${weekdayToken(
+      recurrence.dayOfWeek,
+    )};BYHOUR=${timeParts.hour};BYMINUTE=${timeParts.minute}`;
+  }
+  return `FREQ=HOURLY;INTERVAL=720`;
+}
+
+export function recurrenceFromRrule(
+  rrule: string,
+  timezone = localTimezone(),
+): AutomationRecurrence {
+  const parts = new Map(
+    rrule
+      .split(";")
+      .map((part) => {
+        const [key, value] = part.split("=");
+        return [key?.trim().toUpperCase(), value?.trim() ?? ""];
+      })
+      .filter(([key]) => Boolean(key)) as Array<[string, string]>,
+  );
+  const freq = parts.get("FREQ");
+  const byHour = Number.parseInt(parts.get("BYHOUR") ?? "9", 10);
+  const byMinute = Number.parseInt(parts.get("BYMINUTE") ?? "0", 10);
+  const hour = Number.isNaN(byHour) ? 9 : Math.min(Math.max(byHour, 0), 23);
+  const minute = Number.isNaN(byMinute)
+    ? 0
+    : Math.min(Math.max(byMinute, 0), 59);
+  const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+    2,
+    "0",
+  )}`;
+  if (freq === "WEEKLY") {
+    const byDay = (parts.get("BYDAY") ?? "MO").split(",")[0];
+    return {
+      kind: "weekly",
+      time,
+      timezone,
+      dayOfWeek: weekdayFromToken(byDay),
+      dayOfMonth: null,
+    };
+  }
+  if (freq === "HOURLY") {
+    return {
+      kind: "monthly",
+      time,
+      timezone,
+      dayOfWeek: null,
+      dayOfMonth: 1,
+    };
+  }
+  return {
+    kind: "daily",
+    time,
+    timezone,
+    dayOfWeek: null,
+    dayOfMonth: null,
+  };
+}

@@ -82,7 +82,7 @@ export function TerminalDrawer({ isOpen }: TerminalDrawerProps) {
   };
 
   const handleClear = () => {
-    clearTerminalSession(scope);
+    void clearTerminalSession(scope);
     setCommandError(null);
   };
 
