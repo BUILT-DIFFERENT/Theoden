@@ -1,0 +1,61 @@
+# Main Message Types
+
+Extracted from type:"..." payload objects in main bundle (signal-like subset).
+
+Count: 55
+
+- active-workspace-roots-updated
+- app-update-ready-changed
+- automation-runs-updated
+- client-discovery-request
+- client-discovery-response
+- codex-app-server-fatal-error
+- codex-app-server-initialized
+- custom-prompts-updated
+- desktop-notification-action
+- diff-too-large
+- electron-onboarding-skip-workspace-result
+- electron-window-focus-changed
+- fetch-response
+- fetch-stream-error
+- find-in-thread
+- ipc-broadcast
+- log-out
+- mcp-notification
+- mcp-request
+- mcp-response
+- navigate-back
+- navigate-forward
+- navigate-to-route
+- next-thread
+- open-command-menu
+- persisted-atom-sync
+- persisted-atom-updated
+- pinned-threads-updated
+- previous-thread
+- remote-workspace-root-requested
+- shared-object-updated
+- tasks-reload-requested
+- terminal-attached
+- terminal-data
+- terminal-error
+- terminal-exit
+- terminal-init-log
+- thread-overlay-proxy-interrupt-request
+- thread-overlay-proxy-interrupt-response
+- thread-overlay-proxy-start-turn-request
+- thread-overlay-proxy-start-turn-response
+- thread-stream-resume-request
+- thread-stream-snapshot-request
+- thread-title-updated
+- toggle-diff-panel
+- toggle-query-devtools
+- toggle-sidebar
+- toggle-terminal
+- trace-recording-state-changed
+- window-fullscreen-changed
+- worker-app-event
+- worker-request-cancel
+- worker-sentry-user-update
+- workspace-root-option-picked
+- workspace-root-options-updated

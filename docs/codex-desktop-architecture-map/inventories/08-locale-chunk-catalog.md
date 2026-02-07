@@ -1,0 +1,110 @@
+# Locale Chunk Catalog
+
+Count: 51
+
+| Language Code | Chunk Count |
+|---|---:|
+| bg | 1 |
+| bn | 1 |
+| bs | 1 |
+| ca | 1 |
+| cs | 1 |
+| da | 1 |
+| de | 1 |
+| el | 1 |
+| et | 1 |
+| fi | 1 |
+| fr | 2 |
+| hi | 1 |
+| hr | 1 |
+| hu | 1 |
+| hy | 1 |
+| id | 1 |
+| is | 1 |
+| it | 1 |
+| ja | 1 |
+| ka | 1 |
+| kn | 1 |
+| ko | 1 |
+| lv | 1 |
+| mk | 1 |
+| mr | 1 |
+| ms | 1 |
+| my | 1 |
+| nb | 1 |
+| nl | 1 |
+| pa | 1 |
+| pl | 1 |
+| pt | 2 |
+| ro | 1 |
+| ru | 1 |
+| sk | 1 |
+| sl | 1 |
+| so | 1 |
+| sq | 1 |
+| sr | 1 |
+| sv | 1 |
+| sw | 1 |
+| ta | 1 |
+| te | 1 |
+| th | 1 |
+| tr | 1 |
+| uk | 1 |
+| vi | 1 |
+| zh | 2 |
+
+## Files
+
+| Chunk | Bytes |
+|---|---:|
+| `bg-BG-BSKM3PNn.js` | 155509 |
+| `bn-BD-2tg82bxW.js` | 152190 |
+| `bs-BA-B0ZqN3Yj.js` | 97234 |
+| `ca-ES-CijHaX4j.js` | 123588 |
+| `cs-CZ-HsObnb5w.js` | 108223 |
+| `da-DK-auoEyHC4.js` | 95375 |
+| `de-DE-DvioHLIr.js` | 121255 |
+| `el-GR-CQPL9yYY.js` | 143186 |
+| `et-EE-DW6CwvK0.js` | 94713 |
+| `fi-FI-BIv0Gurt.js` | 89327 |
+| `fr-CA-C6ZjRQEO.js` | 113323 |
+| `fr-FR-CcItAjk3.js` | 112015 |
+| `hi-IN-CyX5PkQ2.js` | 159735 |
+| `hr-HR-C_VoUZXt.js` | 107263 |
+| `hu-HU-CFP2Bg0x.js` | 101693 |
+| `hy-AM-Dzc2KYlW.js` | 128524 |
+| `id-ID-DDzPzrar.js` | 94266 |
+| `is-IS-BzpCSHr_.js` | 97325 |
+| `it-IT-CqumUorb.js` | 99778 |
+| `ja-JP-DVHidDTb.js` | 120119 |
+| `ka-GE-DOXOPHnK.js` | 163013 |
+| `kn-IN-C9vqFr6M.js` | 171267 |
+| `ko-KR-FlTcokk0.js` | 122311 |
+| `lv-LV-DN9GEw1m.js` | 98564 |
+| `mk-MK-n6p_7YZJ.js` | 126450 |
+| `mr-IN-DBcNVzr7.js` | 144574 |
+| `ms-MY-Dr_N47ol.js` | 95850 |
+| `my-MM-DKy8m325.js` | 183531 |
+| `nb-NO-C4wbc8Xq.js` | 94081 |
+| `nl-NL-U933TZ2K.js` | 97164 |
+| `pa-nK-8pqDR.js` | 140764 |
+| `pl-PL-Cg91CTIZ.js` | 100802 |
+| `pt-BR-DJefvKar.js` | 106668 |
+| `pt-PT-DFrP0bdM.js` | 98733 |
+| `ro-RO-xu8axecZ.js` | 103194 |
+| `ru-RU-BVT30C0F.js` | 131942 |
+| `sk-SK-BhjR3Dro.js` | 91976 |
+| `sl-SI-CZIh_qsb.js` | 107409 |
+| `so-SO-Cf9mQpiY.js` | 98344 |
+| `sq-AL-CVjHFe3t.js` | 100762 |
+| `sr-RS-Wd1ub07i.js` | 124501 |
+| `sv-SE-27080UQv.js` | 96527 |
+| `sw-TZ-DLwU3dth.js` | 96457 |
+| `ta-IN-CVQuBYJU.js` | 164732 |
+| `te-IN-BKbRSTXE.js` | 142116 |
+| `th-TH-D5ooVEsu.js` | 143685 |
+| `tr-TR-DnfrYXmu.js` | 98952 |
+| `uk-UA-KwSmHKUh.js` | 131409 |
+| `vi-VN-Bw4Iax46.js` | 107387 |
+| `zh-CN-B4K5_9qj.js` | 90430 |
+| `zh-HK-Dy_SRBQx.js` | 90953 |

@@ -1,0 +1,60 @@
+# Main Message Switch Cases
+
+Extracted from the host switch(type) block handling renderer-origin messages.
+
+Count: 54
+
+- cancel-fetch
+- cancel-fetch-stream
+- codex-app-server-restart
+- desktop-notification-hide
+- desktop-notification-show
+- electron-add-new-workspace-root-option
+- electron-onboarding-skip-workspace
+- electron-pick-workspace-root-option
+- electron-rename-workspace-root-option
+- electron-set-active-workspace-root
+- electron-set-badge-count
+- electron-update-workspace-root-options
+- electron-window-focus-request
+- fetch
+- fetch-stream
+- install-app-update
+- install-wsl
+- log-message
+- mcp-notification
+- mcp-request
+- mcp-response
+- navigate-in-new-editor-tab
+- open-config-toml
+- open-debug-window
+- open-extension-settings
+- open-in-browser
+- open-keyboard-shortcuts
+- open-thread-overlay
+- open-vscode-command
+- persisted-atom-reset
+- persisted-atom-sync-request
+- persisted-atom-update
+- shared-object-set
+- shared-object-subscribe
+- shared-object-unsubscribe
+- show-diff
+- show-plan-summary
+- show-settings
+- terminal-attach
+- terminal-close
+- terminal-create
+- terminal-resize
+- terminal-write
+- thread-overlay-proxy-interrupt-request
+- thread-overlay-proxy-interrupt-response
+- thread-overlay-proxy-start-turn-request
+- thread-overlay-proxy-start-turn-response
+- thread-overlay-set-always-on-top
+- thread-stream-state-changed
+- thread-unarchived
+- update-diff-if-open
+- view-focused
+- worker-request
+- worker-request-cancel

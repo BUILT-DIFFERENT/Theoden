@@ -1,0 +1,66 @@
+# Renderer Dispatch Messages
+
+Extracted from dispatchMessage("...") calls in renderer bundle.
+
+Count: 60
+
+- archive-thread
+- cancel-fetch
+- cancel-fetch-stream
+- codex-app-server-restart
+- desktop-notification-hide
+- desktop-notification-show
+- electron-add-new-workspace-root-option
+- electron-add-ssh-host
+- electron-onboarding-skip-workspace
+- electron-pick-workspace-root-option
+- electron-rename-workspace-root-option
+- electron-request-microphone-permission
+- electron-set-active-workspace-root
+- electron-set-badge-count
+- electron-set-window-mode
+- electron-update-workspace-root-options
+- electron-window-focus-request
+- fetch
+- fetch-stream
+- inbox-item-set-read-state
+- inbox-items-create
+- install-app-update
+- log-message
+- mcp-request
+- mcp-response
+- navigate-in-new-editor-tab
+- open-config-toml
+- open-debug-window
+- open-extension-settings
+- open-in-browser
+- open-keyboard-shortcuts
+- open-thread-overlay
+- open-vscode-command
+- persisted-atom-sync-request
+- persisted-atom-update
+- power-save-blocker-set
+- ready
+- set-telemetry-user
+- shared-object-set
+- shared-object-subscribe
+- shared-object-unsubscribe
+- show-diff
+- show-plan-summary
+- show-settings
+- terminal-attach
+- terminal-close
+- terminal-create
+- terminal-resize
+- terminal-write
+- thread-archived
+- thread-overlay-proxy-interrupt-request
+- thread-overlay-proxy-interrupt-response
+- thread-overlay-proxy-start-turn-request
+- thread-overlay-proxy-start-turn-response
+- thread-overlay-set-always-on-top
+- thread-stream-state-changed
+- thread-unarchived
+- unarchive-thread
+- update-diff-if-open
+- view-focused
