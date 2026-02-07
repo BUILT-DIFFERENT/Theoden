@@ -3,6 +3,7 @@
   "private": true,
   "description": "Tools for repo-wide maintenance.",
   "scripts": {
+    "build": "tauri build",
     "format": "prettier --check *.json *.md docs/*.md .github/workflows/*.yml **/*.{js,cjs,mjs}",
     "format:fix": "prettier --write *.json *.md docs/*.md .github/workflows/*.yml **/*.{js,cjs,mjs}",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",

@@ -120,6 +120,12 @@ If tests fail, fix regressions instead of skipping.
 - Always use `pnpm` for dependency management and script execution in this repository.
 - Do not use `npm` commands (`npm install`, `npm run`, `npx`, etc.) unless a task explicitly requires validating npm-specific behavior.
 
+## 7.2) Build Command Mapping (Avoid Ambiguity)
+
+- If the request is "build the app" for desktop testing, run `pnpm build` (or `pnpm app:tauri build`).
+- `pnpm app:build` is frontend-only (`tsc -b && vite build`) and does not produce the desktop executable.
+- Desktop executable output path on Windows: `src-tauri/target/release/codex-desktop.exe`.
+
 ## 8) Rust Workspace Rules (`codex-rs`)
 
 When touching `codex-rs`, follow these requirements:
