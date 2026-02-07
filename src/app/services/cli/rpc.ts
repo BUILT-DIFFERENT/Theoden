@@ -1,10 +1,10 @@
 import { sendAppServerRequest } from "@/app/services/cli/appServer";
 
-let requestNonce = 0;
+let requestNonce = 1;
 
 export function nextAppServerRequestId() {
-  requestNonce += 1;
-  return Date.now() * 1000 + requestNonce;
+  requestNonce = requestNonce >= Number.MAX_SAFE_INTEGER ? 1 : requestNonce + 1;
+  return requestNonce;
 }
 
 export async function requestAppServer<TResult, TParams = unknown>(options: {

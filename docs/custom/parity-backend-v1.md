@@ -29,6 +29,17 @@ This document tracks backend-focused parity decisions for the Tauri desktop clon
 - Terminal host uses command-based streaming rather than full PTY emulation for V1.
 - Persisted atom synchronization is host-backed in desktop mode with non-desktop local fallback retained.
 
+## Runtime Remediation Update (2026-02-07)
+
+- App-server bridge now uses a queued stdin writer and wait-based child lifecycle handling (`tokio::select!`) instead of periodic `try_wait` polling.
+- App-server pending request cleanup is centralized on bridge teardown, and timeout events remain emitted per request.
+- Automation scheduler now supports wake-on-change signaling and next-due sleep windows instead of fixed 60-second polling cadence.
+- Automation run paths now use direct lookup helpers (`automation_by_id`, `run_by_id`) rather than list-and-filter retrieval.
+- Persisted atom writes now run in a blocking task with temp-file replacement to reduce async runtime blocking.
+- Frontend app-server event consumers now share a single listener hub, reducing duplicate `listen(...)` registrations.
+- Turn cancellation path is aligned to protocol-supported `turn/interrupt` only.
+- Terminal descriptors now expose explicit capability metadata (`interactive`, `supportsResize`, `mode`) while keeping stateless execution semantics for V1.
+
 ## Validation Checklist
 
 - `pnpm format:app:fix`
@@ -38,4 +49,3 @@ This document tracks backend-focused parity decisions for the Tauri desktop clon
 - `cargo fmt --manifest-path src-tauri/Cargo.toml`
 - `cargo check --manifest-path src-tauri/Cargo.toml`
 - Optional parity replay: official debug harness (`debug:fixtures:start`, `dev:debug`, `debug:audit --json`)
-

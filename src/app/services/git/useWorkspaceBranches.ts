@@ -9,7 +9,8 @@ export function useWorkspaceBranches(workspacePath?: string | null) {
     queryKey: ["git", "branches", workspacePath],
     queryFn: () => listWorkspaceBranches(workspacePath ?? ""),
     enabled: isDesktop && Boolean(workspacePath),
-    refetchInterval: isDesktop ? 15000 : false,
+    refetchInterval: isDesktop ? 30000 : false,
+    refetchIntervalInBackground: false,
   });
 
   return {

@@ -9,6 +9,9 @@ export interface HostTerminalSession {
   workspacePath: string | null;
   cwd: string | null;
   isRunning: boolean;
+  interactive: boolean;
+  supportsResize: boolean;
+  mode: "pty" | "stateless";
   updatedAt: number;
 }
 

@@ -1,4 +1,3 @@
-import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 
 import { registerActiveRunNotification } from "@/app/services/cli/activeRuns";
@@ -7,9 +6,9 @@ import {
   registerApprovalRequest,
 } from "@/app/services/cli/approvals";
 import {
-  parseAppServerNotification,
-  parseAppServerRequest,
-} from "@/app/services/cli/appServerPayload";
+  subscribeAppServerNotifications,
+  subscribeAppServerRequests,
+} from "@/app/services/cli/appServerEventHub";
 import { registerAutomationRunNotification } from "@/app/services/cli/automationRuns";
 import { registerDiffNotification } from "@/app/services/cli/diffUpdates";
 import { registerTerminalNotification } from "@/app/services/cli/terminalSessions";
@@ -18,64 +17,22 @@ import { isTauri } from "@/app/utils/tauri";
 export function useAppServerStream() {
   useEffect(() => {
     if (!isTauri()) return;
-    let unlistenNotification: (() => void) | null = null;
-    let unlistenRequest: (() => void) | null = null;
-    let active = true;
-
-    const notificationPromise = listen("app-server-notification", (event) => {
-      const notification = parseAppServerNotification(event.payload);
-      if (notification) {
+    const unlistenNotification = subscribeAppServerNotifications(
+      (notification) => {
         registerActiveRunNotification(notification);
         registerApprovalItem(notification);
         registerDiffNotification(notification);
         registerTerminalNotification(notification);
         registerAutomationRunNotification(notification);
-      }
-    })
-      .then((stop) => {
-        if (active) {
-          unlistenNotification = stop;
-          return;
-        }
-        stop();
-      })
-      .catch((error) => {
-        console.warn("Failed to subscribe to app-server-notification", error);
-      });
-
-    const requestPromise = listen("app-server-request", (event) => {
-      const request = parseAppServerRequest(event.payload);
-      if (!request) return;
+      },
+    );
+    const unlistenRequest = subscribeAppServerRequests((request) => {
       registerApprovalRequest(request);
-    })
-      .then((stop) => {
-        if (active) {
-          unlistenRequest = stop;
-          return;
-        }
-        stop();
-      })
-      .catch((error) => {
-        console.warn("Failed to subscribe to app-server-request", error);
-      });
-    void notificationPromise;
-    void requestPromise;
+    });
 
     return () => {
-      active = false;
-      if (unlistenNotification) unlistenNotification();
-      if (unlistenRequest) unlistenRequest();
+      unlistenNotification();
+      unlistenRequest();
     };
-  }, [
-    isTauri,
-    listen,
-    parseAppServerNotification,
-    parseAppServerRequest,
-    registerActiveRunNotification,
-    registerApprovalItem,
-    registerDiffNotification,
-    registerTerminalNotification,
-    registerAutomationRunNotification,
-    registerApprovalRequest,
-  ]);
+  }, []);
 }

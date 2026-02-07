@@ -272,7 +272,8 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     queryKey: ["git", "status", resolvedWorkspacePath],
     queryFn: () => getGitWorkspaceStatus(resolvedWorkspacePath ?? ""),
     enabled: isTauri() && Boolean(resolvedWorkspacePath),
-    refetchInterval: isTauri() ? 5000 : false,
+    refetchInterval: isTauri() ? 10000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const sections = useMemo(

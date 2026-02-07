@@ -41,20 +41,43 @@ impl StateStore {
     pub async fn update(&self, key: String, value: Value) -> Result<(), String> {
         let mut atoms = self.atoms.lock().await;
         atoms.insert(key, value);
-        self.persist(&atoms)
+        let snapshot = atoms.clone();
+        drop(atoms);
+        self.persist(snapshot).await
     }
 
     pub async fn reset(&self, key: String) -> Result<(), String> {
         let mut atoms = self.atoms.lock().await;
         atoms.remove(&key);
-        self.persist(&atoms)
+        let snapshot = atoms.clone();
+        drop(atoms);
+        self.persist(snapshot).await
     }
 
-    fn persist(&self, atoms: &HashMap<String, Value>) -> Result<(), String> {
-        let encoded = serde_json::to_string_pretty(atoms)
-            .map_err(|err| format!("failed to serialize persisted atoms: {err}"))?;
-        std::fs::write(&self.file_path, encoded)
-            .map_err(|err| format!("failed to write persisted atoms file: {err}"))?;
-        Ok(())
+    async fn persist(&self, atoms: HashMap<String, Value>) -> Result<(), String> {
+        let file_path = self.file_path.clone();
+        tokio::task::spawn_blocking(move || {
+            let encoded = serde_json::to_string_pretty(&atoms)
+                .map_err(|err| format!("failed to serialize persisted atoms: {err}"))?;
+            let temp_name = format!(
+                "{}.tmp-{}",
+                file_path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("persisted-atoms.json"),
+                std::process::id()
+            );
+            let temp_path = file_path.with_file_name(temp_name);
+            std::fs::write(&temp_path, encoded)
+                .map_err(|err| format!("failed to write persisted atoms temp file: {err}"))?;
+            if file_path.exists() {
+                let _ = std::fs::remove_file(&file_path);
+            }
+            std::fs::rename(&temp_path, &file_path)
+                .map_err(|err| format!("failed to replace persisted atoms file: {err}"))?;
+            Ok(())
+        })
+        .await
+        .map_err(|err| format!("failed to persist atoms task: {err}"))?
     }
 }

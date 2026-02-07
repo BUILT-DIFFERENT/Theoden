@@ -9,7 +9,8 @@ export function useWorkspaceGitStatus(workspacePath?: string | null) {
     queryKey: ["git", "status", workspacePath],
     queryFn: () => getGitWorkspaceStatus(workspacePath ?? ""),
     enabled: isDesktop && Boolean(workspacePath),
-    refetchInterval: isDesktop ? 5000 : false,
+    refetchInterval: isDesktop ? 10000 : false,
+    refetchIntervalInBackground: false,
   });
 
   return {

@@ -6,7 +6,7 @@ set -euo pipefail
 
 iterations=50
 codex_command="codex"
-ralph_prompt="Look through the plan in /docs/custom/plan.md Pick the most important task and complete it. If there are no and you have verified, find something to refactor or improve. When done create a commit and push. "
+ralph_prompt="Look through the plan in /docs/custom/plan.md and /docs/custom/codex-app.md Work to bring the app to completion. If the core is complete focus on verifying ui. If you have verified, find things to refactor or improve using your skills. When done create a commit and push. "
 
 if ! command -v "$codex_command" >/dev/null 2>&1; then
   echo "Could not find '$codex_command' in PATH." >&2

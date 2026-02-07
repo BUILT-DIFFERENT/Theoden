@@ -38,7 +38,8 @@ export function useWorkspaces() {
     queryFn: listWorkspaces,
     enabled: isDesktop,
     refetchOnWindowFocus: isDesktop,
-    refetchInterval: isDesktop ? 20000 : false,
+    refetchInterval: isDesktop ? 30000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const workspaces = useMemo(() => {

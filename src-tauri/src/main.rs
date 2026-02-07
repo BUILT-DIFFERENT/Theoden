@@ -30,6 +30,7 @@ use terminal_host::{
 };
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
+use tokio::sync::Notify;
 
 static REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 
@@ -233,10 +234,12 @@ async fn automation_list(
 async fn automation_create(
     app: AppHandle,
     store: tauri::State<'_, Arc<AutomationStore>>,
+    scheduler_trigger: tauri::State<'_, Arc<Notify>>,
     params: AutomationCreateParams,
 ) -> Result<AutomationRecord, String> {
     let automation = store.create_automation(params).await?;
     let _ = app.emit("automations-updated", serde_json::json!({}));
+    scheduler_trigger.notify_one();
     Ok(automation)
 }
 
@@ -244,10 +247,12 @@ async fn automation_create(
 async fn automation_update(
     app: AppHandle,
     store: tauri::State<'_, Arc<AutomationStore>>,
+    scheduler_trigger: tauri::State<'_, Arc<Notify>>,
     params: AutomationUpdateParams,
 ) -> Result<AutomationRecord, String> {
     let automation = store.update_automation(params).await?;
     let _ = app.emit("automations-updated", serde_json::json!({}));
+    scheduler_trigger.notify_one();
     Ok(automation)
 }
 
@@ -255,10 +260,12 @@ async fn automation_update(
 async fn automation_delete(
     app: AppHandle,
     store: tauri::State<'_, Arc<AutomationStore>>,
+    scheduler_trigger: tauri::State<'_, Arc<Notify>>,
     id: String,
 ) -> Result<(), String> {
     store.delete_automation(id).await?;
     let _ = app.emit("automations-updated", serde_json::json!({}));
+    scheduler_trigger.notify_one();
     Ok(())
 }
 
@@ -267,15 +274,18 @@ async fn automation_run_now(
     app: AppHandle,
     store: tauri::State<'_, Arc<AutomationStore>>,
     bridge: tauri::State<'_, Arc<AppServerBridge>>,
+    scheduler_trigger: tauri::State<'_, Arc<Notify>>,
     params: RunNowParams,
 ) -> Result<AutomationRunRecord, String> {
-    run_automation_by_id(
+    let run = run_automation_by_id(
         app,
         Arc::clone(store.inner()),
         Arc::clone(bridge.inner()),
         params.automation_id,
     )
-    .await
+    .await?;
+    scheduler_trigger.notify_one();
+    Ok(run)
 }
 
 #[tauri::command]
@@ -378,10 +388,8 @@ async fn run_automation_by_id(
     automation_id: String,
 ) -> Result<AutomationRunRecord, String> {
     let automation = store
-        .list_automations()
+        .automation_by_id(automation_id)
         .await?
-        .into_iter()
-        .find(|item| item.id == automation_id)
         .ok_or_else(|| "automation not found".to_string())?;
     run_automation_record(app, store, bridge, automation).await
 }
@@ -437,12 +445,7 @@ async fn run_automation_record(
         .await?;
     let _ = app.emit("automation-runs-updated", serde_json::json!({}));
     let _ = app.emit("inbox-items-updated", serde_json::json!({}));
-    let updated_run = store
-        .list_runs(None)
-        .await?
-        .into_iter()
-        .find(|item| item.id == run.id)
-        .unwrap_or(run);
+    let updated_run = store.run_by_id(run.id.clone()).await?.unwrap_or(run);
     Ok(updated_run)
 }
 
@@ -473,6 +476,7 @@ fn main() {
         .manage(Arc::new(
             AutomationStore::new().expect("failed to initialize automation store"),
         ))
+        .manage(Arc::new(Notify::new()))
         .manage(Arc::new(TerminalHost::new()))
         .setup(|app| {
             #[cfg(target_os = "windows")]
@@ -485,9 +489,9 @@ fn main() {
             let app_handle = app.handle().clone();
             let automation_store = Arc::clone(app.state::<Arc<AutomationStore>>().inner());
             let app_server_bridge = Arc::clone(app.state::<Arc<AppServerBridge>>().inner());
+            let scheduler_trigger = Arc::clone(app.state::<Arc<Notify>>().inner());
             tokio::spawn(async move {
                 loop {
-                    tokio::time::sleep(Duration::from_secs(60)).await;
                     let due = match automation_store.due_automations(now_ts()).await {
                         Ok(items) => items,
                         Err(error) => {
@@ -495,7 +499,7 @@ fn main() {
                                 "automation-runs-updated",
                                 serde_json::json!({ "error": error }),
                             );
-                            continue;
+                            Vec::new()
                         }
                     };
                     for automation in due {
@@ -506,6 +510,24 @@ fn main() {
                             automation,
                         )
                         .await;
+                    }
+
+                    let now = now_ts();
+                    let sleep_seconds = match automation_store.next_due_timestamp().await {
+                        Ok(Some(next_due)) if next_due > now => (next_due - now).min(300),
+                        Ok(Some(_)) => 1,
+                        Ok(None) => 60,
+                        Err(error) => {
+                            let _ = app_handle.emit(
+                                "automation-runs-updated",
+                                serde_json::json!({ "error": error }),
+                            );
+                            15
+                        }
+                    };
+                    tokio::select! {
+                        _ = tokio::time::sleep(Duration::from_secs(sleep_seconds as u64)) => {}
+                        _ = scheduler_trigger.notified() => {}
                     }
                 }
             });

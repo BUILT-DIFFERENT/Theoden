@@ -540,6 +540,30 @@ impl AutomationStore {
         .await
     }
 
+    pub async fn automation_by_id(&self, id: String) -> Result<Option<AutomationRecord>, String> {
+        self.get_automation(id).await
+    }
+
+    pub async fn run_by_id(&self, id: String) -> Result<Option<AutomationRunRecord>, String> {
+        self.get_run(id).await
+    }
+
+    pub async fn next_due_timestamp(&self) -> Result<Option<i64>, String> {
+        self.with_connection(|connection| {
+            let mut statement = connection.prepare(
+                r#"
+                SELECT MIN(next_run_at)
+                FROM automations
+                WHERE status = 'ACTIVE'
+                AND next_run_at IS NOT NULL
+                "#,
+            )?;
+            statement.query_row([], |row| row.get(0)).optional()
+        })
+        .await
+        .map(|value| value.flatten())
+    }
+
     async fn get_automation(&self, id: String) -> Result<Option<AutomationRecord>, String> {
         self.with_connection(|connection| {
             let mut statement = connection.prepare(

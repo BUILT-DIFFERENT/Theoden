@@ -2,12 +2,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{oneshot, Mutex};
+use tokio::process::Command;
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -24,9 +27,10 @@ pub struct CliRunResult {
 
 #[derive(Default)]
 pub struct AppServerBridge {
-    child: Arc<Mutex<Option<Child>>>,
-    stdin: Arc<Mutex<Option<ChildStdin>>>,
+    writer: Arc<Mutex<Option<mpsc::Sender<String>>>>,
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
+    kill_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    running: Arc<AtomicBool>,
 }
 
 pub struct CodexCliCommand {
@@ -45,13 +49,15 @@ impl AppServerBridge {
         args: Option<Vec<String>>,
         cwd: Option<String>,
     ) -> Result<(), String> {
-        let (stdout, stderr, stdin) = {
-            let codex_command = resolve_codex_cli_command()?;
-            let mut child_guard = self.child.lock().await;
-            if child_guard.is_some() {
-                return Ok(());
-            }
+        if self.running.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        if self.running.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
 
+        let mut child = match (|| -> Result<tokio::process::Child, String> {
+            let codex_command = resolve_codex_cli_command()?;
             let mut cmd = Command::new(codex_command.program);
             configure_command_for_desktop(&mut cmd);
             cmd.arg("app-server");
@@ -65,28 +71,43 @@ impl AppServerBridge {
             cmd.stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped());
-
-            let mut child = cmd
-                .spawn()
-                .map_err(|err| format!("failed to spawn codex app-server: {err}"))?;
-            let stdout = child
-                .stdout
-                .take()
-                .ok_or_else(|| "failed to capture app-server stdout".to_string())?;
-            let stderr = child
-                .stderr
-                .take()
-                .ok_or_else(|| "failed to capture app-server stderr".to_string())?;
-            let stdin = child
-                .stdin
-                .take()
-                .ok_or_else(|| "failed to capture app-server stdin".to_string())?;
-
-            *child_guard = Some(child);
-            (stdout, stderr, stdin)
+            cmd.spawn()
+                .map_err(|err| format!("failed to spawn codex app-server: {err}"))
+        })() {
+            Ok(child) => child,
+            Err(error) => {
+                self.running.store(false, Ordering::Release);
+                return Err(error);
+            }
         };
 
-        *self.stdin.lock().await = Some(stdin);
+        let stdout = match child.stdout.take() {
+            Some(stdout) => stdout,
+            None => {
+                self.running.store(false, Ordering::Release);
+                return Err("failed to capture app-server stdout".to_string());
+            }
+        };
+        let stderr = match child.stderr.take() {
+            Some(stderr) => stderr,
+            None => {
+                self.running.store(false, Ordering::Release);
+                return Err("failed to capture app-server stderr".to_string());
+            }
+        };
+        let mut stdin = match child.stdin.take() {
+            Some(stdin) => stdin,
+            None => {
+                self.running.store(false, Ordering::Release);
+                return Err("failed to capture app-server stdin".to_string());
+            }
+        };
+
+        let (writer_tx, mut writer_rx) = mpsc::channel::<String>(256);
+        *self.writer.lock().await = Some(writer_tx);
+
+        let (kill_tx, mut kill_rx) = oneshot::channel();
+        *self.kill_signal.lock().await = Some(kill_tx);
 
         let bridge = self.clone_for_tasks();
         let app_handle = app.clone();
@@ -132,44 +153,49 @@ impl AppServerBridge {
             }
         });
 
-        let bridge = self.clone_for_tasks();
         let app_handle = app.clone();
         tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_millis(500)).await;
-                let mut exit_payload: Option<serde_json::Value> = None;
-                {
-                    let mut child_guard = bridge.child.lock().await;
-                    let Some(child) = child_guard.as_mut() else {
-                        break;
-                    };
-                    match child.try_wait() {
-                        Ok(Some(status)) => {
-                            let payload = serde_json::json!({
-                                "code": status.code(),
-                                "success": status.success(),
-                            });
-                            *child_guard = None;
-                            exit_payload = Some(payload);
-                        }
-                        Ok(None) => {}
-                        Err(err) => {
-                            let payload = serde_json::json!({
-                                "error": format!("failed to observe app-server status: {err}"),
-                            });
-                            *child_guard = None;
-                            exit_payload = Some(payload);
-                        }
-                    }
+            while let Some(line) = writer_rx.recv().await {
+                if let Err(err) = stdin.write_all(line.as_bytes()).await {
+                    let _ = app_handle.emit(
+                        "app-server-stderr",
+                        serde_json::json!({ "stderr": format!("failed to write app-server stdin: {err}") }),
+                    );
+                    break;
                 }
-
-                if let Some(payload) = exit_payload {
-                    *bridge.stdin.lock().await = None;
-                    bridge.pending.lock().await.clear();
-                    let _ = app_handle.emit(APP_SERVER_EXIT_EVENT, payload);
+                if let Err(err) = stdin.write_all(b"\n").await {
+                    let _ = app_handle.emit(
+                        "app-server-stderr",
+                        serde_json::json!({ "stderr": format!("failed to terminate app-server stdin line: {err}") }),
+                    );
                     break;
                 }
             }
+        });
+
+        let bridge = self.clone_for_tasks();
+        let app_handle = app.clone();
+        tokio::spawn(async move {
+            let result = tokio::select! {
+                wait_result = child.wait() => wait_result,
+                _ = &mut kill_rx => {
+                    let _ = child.kill().await;
+                    child.wait().await
+                }
+            };
+
+            let payload = match result {
+                Ok(status) => serde_json::json!({
+                    "code": status.code(),
+                    "success": status.success(),
+                }),
+                Err(err) => serde_json::json!({
+                    "error": format!("failed to observe app-server status: {err}"),
+                }),
+            };
+
+            bridge.reset_runtime().await;
+            let _ = app_handle.emit(APP_SERVER_EXIT_EVENT, payload);
         });
 
         let app_handle = app.clone();
@@ -204,17 +230,9 @@ impl AppServerBridge {
         self.pending.lock().await.insert(id_value.clone(), tx);
 
         let payload = serde_json::to_string(&request).map_err(|err| err.to_string())?;
-        let mut stdin_guard = self.stdin.lock().await;
-        let stdin = stdin_guard
-            .as_mut()
-            .ok_or_else(|| "app-server stdin not available".to_string())?;
-        if let Err(err) = stdin.write_all(payload.as_bytes()).await {
+        if let Err(err) = self.send_line(payload).await {
             self.pending.lock().await.remove(&id_value);
-            return Err(err.to_string());
-        }
-        if let Err(err) = stdin.write_all(b"\n").await {
-            self.pending.lock().await.remove(&id_value);
-            return Err(err.to_string());
+            return Err(err);
         }
 
         match tokio::time::timeout(Duration::from_secs(60), rx).await {
@@ -262,44 +280,58 @@ impl AppServerBridge {
     }
 
     pub async fn stop(&self) -> Result<(), String> {
-        if let Some(mut child) = self.child.lock().await.take() {
-            let _ = child.kill().await;
+        if let Some(stop_tx) = self.kill_signal.lock().await.take() {
+            let _ = stop_tx.send(());
+        } else {
+            self.running.store(false, Ordering::Release);
         }
         self.pending.lock().await.clear();
-        *self.stdin.lock().await = None;
+        *self.writer.lock().await = None;
         Ok(())
     }
 
     async fn write_line(&self, payload: serde_json::Value) -> Result<(), String> {
         let line = serde_json::to_string(&payload).map_err(|err| err.to_string())?;
-        let mut stdin_guard = self.stdin.lock().await;
-        let stdin = stdin_guard
-            .as_mut()
+        self.send_line(line).await
+    }
+
+    async fn send_line(&self, line: String) -> Result<(), String> {
+        let sender = self
+            .writer
+            .lock()
+            .await
+            .clone()
             .ok_or_else(|| "app-server stdin not available".to_string())?;
-        stdin
-            .write_all(line.as_bytes())
+        sender
+            .send(line)
             .await
-            .map_err(|err| err.to_string())?;
-        stdin
-            .write_all(b"\n")
-            .await
-            .map_err(|err| err.to_string())?;
-        Ok(())
+            .map_err(|_| "app-server stdin not available".to_string())
     }
 
     fn clone_for_tasks(&self) -> AppServerBridgeTaskHandle {
         AppServerBridgeTaskHandle {
-            child: self.child.clone(),
-            stdin: self.stdin.clone(),
+            writer: self.writer.clone(),
             pending: self.pending.clone(),
+            kill_signal: self.kill_signal.clone(),
+            running: self.running.clone(),
         }
     }
 }
 
 struct AppServerBridgeTaskHandle {
-    child: Arc<Mutex<Option<Child>>>,
-    stdin: Arc<Mutex<Option<ChildStdin>>>,
+    writer: Arc<Mutex<Option<mpsc::Sender<String>>>>,
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
+    kill_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    running: Arc<AtomicBool>,
+}
+
+impl AppServerBridgeTaskHandle {
+    async fn reset_runtime(&self) {
+        *self.writer.lock().await = None;
+        *self.kill_signal.lock().await = None;
+        self.pending.lock().await.clear();
+        self.running.store(false, Ordering::Release);
+    }
 }
 
 fn normalize_path(path: &Path) -> PathBuf {

@@ -25,7 +25,8 @@ export function useThreadDetail(threadId: string | undefined) {
     queryFn: () => readThread(threadId ?? "", true),
     enabled: isDesktop && Boolean(threadId),
     refetchOnWindowFocus: isDesktop,
-    refetchInterval: isDesktop && threadId ? 5000 : false,
+    refetchInterval: isDesktop && threadId ? 10000 : false,
+    refetchIntervalInBackground: false,
   });
   const fallbackMessages = useMemo<ThreadMessage[]>(
     () => [

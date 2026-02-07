@@ -71,33 +71,14 @@ export async function cancelTurn(params: {
   threadId: string;
   turnId?: string | null;
 }) {
-  if (params.turnId) {
-    const interrupt = await requestAppServer<Record<string, never>>({
-      method: "turn/interrupt",
-      params: {
-        threadId: params.threadId,
-        turnId: params.turnId,
-      },
-    });
-    if (interrupt) {
-      return interrupt;
-    }
+  if (!params.turnId) {
+    throw new Error("Cannot interrupt turn without a turnId.");
   }
-
-  try {
-    return await requestAppServer<TurnCancelResponse>({
-      method: "turn/cancel",
-      params: {
-        threadId: params.threadId,
-      },
-    });
-  } catch {
-    const abortResult = await requestAppServer<TurnCancelResponse>({
-      method: "turn/abort",
-      params: {
-        threadId: params.threadId,
-      },
-    });
-    return abortResult;
-  }
+  return requestAppServer<TurnCancelResponse>({
+    method: "turn/interrupt",
+    params: {
+      threadId: params.threadId,
+      turnId: params.turnId,
+    },
+  });
 }

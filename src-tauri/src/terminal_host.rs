@@ -45,6 +45,9 @@ pub struct TerminalSessionDescriptor {
     pub workspace_path: Option<String>,
     pub cwd: Option<String>,
     pub is_running: bool,
+    pub interactive: bool,
+    pub supports_resize: bool,
+    pub mode: String,
     pub updated_at: i64,
 }
 
@@ -55,6 +58,9 @@ struct TerminalSession {
     workspace_path: Option<String>,
     cwd: Option<String>,
     is_running: bool,
+    interactive: bool,
+    supports_resize: bool,
+    mode: String,
     updated_at: i64,
 }
 
@@ -91,6 +97,9 @@ impl TerminalHost {
             workspace_path: params.workspace_path,
             cwd: params.cwd,
             is_running: false,
+            interactive: false,
+            supports_resize: false,
+            mode: "stateless".to_string(),
             updated_at: now_ts(),
         };
         let descriptor = to_descriptor(session.clone());
@@ -286,6 +295,9 @@ fn to_descriptor(session: TerminalSession) -> TerminalSessionDescriptor {
         workspace_path: session.workspace_path,
         cwd: session.cwd,
         is_running: session.is_running,
+        interactive: session.interactive,
+        supports_resize: session.supports_resize,
+        mode: session.mode,
         updated_at: session.updated_at,
     }
 }

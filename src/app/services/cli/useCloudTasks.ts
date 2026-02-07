@@ -11,7 +11,8 @@ export function useCloudTasks(params: { limit?: number } = {}) {
     queryFn: () => listCloudTasks({ limit }),
     enabled: isDesktop,
     refetchOnWindowFocus: isDesktop,
-    refetchInterval: isDesktop ? 30000 : false,
+    refetchInterval: isDesktop ? 45000 : false,
+    refetchIntervalInBackground: false,
   });
 
   return {

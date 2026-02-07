@@ -127,7 +127,8 @@ export function useThreadList(options: ThreadListOptions = {}) {
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: isDesktop,
     refetchOnWindowFocus: isDesktop,
-    refetchInterval: isDesktop ? 5000 : false,
+    refetchInterval: isDesktop ? 15000 : false,
+    refetchIntervalInBackground: false,
   });
   const remoteThreads = useMemo(() => {
     const pages = query.data?.pages ?? [];
