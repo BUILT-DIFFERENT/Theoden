@@ -61,27 +61,44 @@ The goal of this repository is to deliver a parity-focused Tauri implementation 
 
 ```bash
 pnpm install
-pnpm app:dev
+pnpm frontend:dev
 ```
 
 Run as desktop app:
 
 ```bash
-pnpm app:tauri dev
+pnpm desktop:dev
 ```
 
 Build frontend bundle:
 
 ```bash
-pnpm app:build
+pnpm frontend:build
+```
+
+Build desktop app:
+
+```bash
+pnpm build
 ```
 
 ## Common Commands
 
 - `pnpm format:app` / `pnpm format:app:fix`
 - `pnpm lint` / `pnpm lint:fix`
-- `pnpm app:test`
-- `pnpm app:build`
+- `pnpm frontend:test`
+- `pnpm frontend:build`
+- `pnpm desktop:build`
+
+## Command Map
+
+| Goal | Command |
+| --- | --- |
+| Web dev server | `pnpm frontend:dev` |
+| Desktop dev app | `pnpm desktop:dev` |
+| Frontend production bundle | `pnpm frontend:build` |
+| Desktop production build | `pnpm build` (or `pnpm desktop:build`) |
+| Frontend tests | `pnpm frontend:test` |
 
 ## Official Desktop Debug Harness (Submodule)
 

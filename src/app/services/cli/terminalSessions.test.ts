@@ -174,7 +174,7 @@ describe("terminalSessions service", () => {
         threadId: "thread-42",
         item: {
           type: "commandExecution",
-          command: "pnpm app:test",
+          command: "pnpm frontend:test",
         },
       },
     } satisfies AppServerNotification);
@@ -225,7 +225,7 @@ describe("terminalSessions service", () => {
 
     const session = mod.getTerminalSession({ threadId: "thread-42" });
     expect(session.entries.map((entry) => entry.text)).toEqual([
-      "$ pnpm app:test",
+      "$ pnpm frontend:test",
       "line-1line-2",
       "command completed (exit 0)",
       "first line",

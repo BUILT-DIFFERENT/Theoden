@@ -23,6 +23,12 @@ import { useAccount } from "@/app/services/cli/useAccount";
 import { useThreadList } from "@/app/services/cli/useThreads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useAppUi } from "@/app/state/appUi";
+import {
+  loadStoredSidebarUi,
+  storeSidebarUi,
+  type SidebarThreadSort,
+  type SidebarThreadVisibility,
+} from "@/app/state/sidebarUi";
 import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { ThreadSummary } from "@/app/types";
@@ -79,12 +85,25 @@ export function AppSidebar() {
     workspacePath: selectedWorkspace,
   });
   const { workspaces } = useWorkspaces();
+  const [initialSidebarState] = useState(() => loadStoredSidebarUi());
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<
     Record<string, boolean>
-  >({});
-  const [threadSort, setThreadSort] = useState<"updated" | "title">("updated");
-  const [threadVisibility, setThreadVisibility] = useState<"all" | "active">(
-    "all",
+  >(() =>
+    initialSidebarState.expandedWorkspaceKeys.reduce<Record<string, boolean>>(
+      (accumulator, key) => {
+        accumulator[key] = true;
+        return accumulator;
+      },
+      {},
+    ),
+  );
+  const [threadSort, setThreadSort] = useState<SidebarThreadSort>(
+    initialSidebarState.threadSort,
+  );
+  const [threadVisibility, setThreadVisibility] =
+    useState<SidebarThreadVisibility>(initialSidebarState.threadVisibility);
+  const [threadListScrollTop, setThreadListScrollTop] = useState(
+    initialSidebarState.scrollTop,
   );
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -100,6 +119,7 @@ export function AppSidebar() {
   const filterMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const threadListParentRef = useRef<HTMLDivElement | null>(null);
+  const restoredScrollRef = useRef(false);
 
   const workspaceEntries: Array<{ id: string; name: string; path: string }> =
     workspaces.length
@@ -184,6 +204,14 @@ export function AppSidebar() {
           workspace.threads.length > 0 || threadVisibility === "all",
       );
   }, [selectedThreadId, threadSort, threadVisibility, workspaceTree]);
+  const expandedWorkspaceKeys = useMemo(
+    () =>
+      Object.entries(expandedWorkspaces)
+        .filter(([, isExpanded]) => isExpanded)
+        .map(([key]) => key)
+        .sort(),
+    [expandedWorkspaces],
+  );
 
   const rowVirtualizer = useVirtualizer({
     count: visibleWorkspaceTree.length,
@@ -236,6 +264,37 @@ export function AppSidebar() {
   useEffect(() => {
     rowVirtualizer.measure();
   }, [expandedWorkspaces, rowVirtualizer, visibleWorkspaceTree]);
+
+  useEffect(() => {
+    if (restoredScrollRef.current) {
+      return;
+    }
+    if (!threadListScrollTop) {
+      restoredScrollRef.current = true;
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (threadListParentRef.current) {
+        threadListParentRef.current.scrollTop = threadListScrollTop;
+      }
+      restoredScrollRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [threadListScrollTop]);
+
+  useEffect(() => {
+    storeSidebarUi({
+      threadSort,
+      threadVisibility,
+      expandedWorkspaceKeys,
+      scrollTop: threadListScrollTop,
+    });
+  }, [
+    expandedWorkspaceKeys,
+    threadListScrollTop,
+    threadSort,
+    threadVisibility,
+  ]);
 
   const toggleWorkspaceExpanded = (workspacePath: string) => {
     const key = normalizeWorkspacePath(workspacePath).toLowerCase();
@@ -427,6 +486,9 @@ export function AppSidebar() {
         <div
           ref={threadListParentRef}
           className="codex-scrollbar mt-3 min-h-0 flex-1 overflow-auto"
+          onScroll={(event) =>
+            setThreadListScrollTop(event.currentTarget.scrollTop)
+          }
         >
           {visibleWorkspaceTree.length ? (
             <div
