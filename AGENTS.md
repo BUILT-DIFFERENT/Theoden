@@ -109,8 +109,8 @@ Run these after meaningful frontend changes:
 ```bash
 pnpm format:app:fix
 pnpm lint
-pnpm app:test
-pnpm app:build
+pnpm frontend:test
+pnpm frontend:build
 ```
 
 If tests fail, fix regressions instead of skipping.
@@ -122,8 +122,8 @@ If tests fail, fix regressions instead of skipping.
 
 ## 7.2) Build Command Mapping (Avoid Ambiguity)
 
-- If the request is "build the app" for desktop testing, run `pnpm build` (or `pnpm app:tauri build`).
-- `pnpm app:build` is frontend-only (`tsc -b && vite build`) and does not produce the desktop executable.
+- If the request is "build the app" for desktop testing, run `pnpm build` (or `pnpm desktop:build`).
+- `pnpm frontend:build` is frontend-only (`tsc -b && vite build`) and does not produce the desktop executable.
 - Desktop executable output path on Windows: `src-tauri/target/release/codex-desktop.exe`.
 
 ## 8) Rust Workspace Rules (`codex-rs`)
