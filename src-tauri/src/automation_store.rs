@@ -725,3 +725,163 @@ pub fn compute_next_run_at(rrule: &str, from_ts: i64) -> Option<i64> {
 
     Some(from_ts + 24 * 3600)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::OsString;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn with_temp_codex_home<T>(name: &str, test: impl FnOnce() -> T) -> T {
+        let _guard = env_lock().lock().expect("failed to lock test env");
+        let previous = std::env::var_os("CODEX_HOME");
+        let temp_home = std::env::temp_dir().join(format!(
+            "codex-desktop-{name}-{}",
+            Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&temp_home).expect("failed to create temp CODEX_HOME");
+        std::env::set_var("CODEX_HOME", &temp_home);
+        let result = test();
+        match previous {
+            Some(value) => std::env::set_var("CODEX_HOME", value),
+            None => std::env::remove_var("CODEX_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&temp_home);
+        result
+    }
+
+    fn read_automation_toml(home: &OsString, automation_id: &str) -> String {
+        std::fs::read_to_string(
+            PathBuf::from(home)
+                .join("automations")
+                .join(automation_id)
+                .join("automation.toml"),
+        )
+        .expect("failed to read automation TOML")
+    }
+
+    #[test]
+    fn computes_next_run_for_hourly_and_weekly_rules() {
+        let hourly = compute_next_run_at("FREQ=HOURLY;INTERVAL=6", 1_000_000);
+        assert_eq!(hourly, Some(1_021_600));
+
+        let weekly = compute_next_run_at("FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0", 1_704_069_600);
+        assert_eq!(weekly, Some(1_704_153_600));
+    }
+
+    #[test]
+    fn persists_automation_records_runs_and_inbox_rows() {
+        with_temp_codex_home("automation-store", || {
+            let codex_home = std::env::var_os("CODEX_HOME").expect("CODEX_HOME missing");
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("failed to create runtime");
+            runtime.block_on(async {
+                let store = AutomationStore::new().expect("failed to create store");
+                let created = store
+                    .create_automation(AutomationCreateParams {
+                        name: "Daily checks".to_string(),
+                        prompt: "Run tests and summarize failures.".to_string(),
+                        status: Some("ACTIVE".to_string()),
+                        next_run_at: Some(1_800_000_000),
+                        last_run_at: None,
+                        cwds: vec!["/repo/theoden".to_string()],
+                        rrule: "FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0".to_string(),
+                    })
+                    .await
+                    .expect("failed to create automation");
+                assert_eq!(created.status, "ACTIVE");
+
+                let listed = store
+                    .list_automations()
+                    .await
+                    .expect("failed to list automations");
+                assert_eq!(listed.len(), 1);
+                assert_eq!(listed[0].id, created.id);
+
+                let due = store
+                    .due_automations(1_800_000_010)
+                    .await
+                    .expect("failed to list due automations");
+                assert_eq!(due.len(), 1);
+                assert_eq!(due[0].id, created.id);
+
+                let automation_toml = read_automation_toml(&codex_home, &created.id);
+                assert!(automation_toml.contains("name = \"Daily checks\""));
+                assert!(automation_toml.contains("status = \"ACTIVE\""));
+
+                let run = store
+                    .create_run(
+                        &created,
+                        "thread-123".to_string(),
+                        "IN_PROGRESS".to_string(),
+                    )
+                    .await
+                    .expect("failed to create run");
+                assert_eq!(run.automation_id, created.id);
+
+                store
+                    .update_run_status(
+                        run.id.clone(),
+                        "DONE".to_string(),
+                        Some("Archived thread".to_string()),
+                    )
+                    .await
+                    .expect("failed to update run status");
+                let run_after_update = store
+                    .run_by_id(run.id.clone())
+                    .await
+                    .expect("failed to load run")
+                    .expect("run missing");
+                assert_eq!(run_after_update.status, "DONE");
+                assert_eq!(
+                    run_after_update.thread_title.as_deref(),
+                    Some("Archived thread")
+                );
+
+                store
+                    .create_inbox_item_for_run(&run_after_update)
+                    .await
+                    .expect("failed to create inbox item");
+                let inbox_items = store
+                    .list_inbox_items()
+                    .await
+                    .expect("failed to list inbox items");
+                assert_eq!(inbox_items.len(), 1);
+                assert_eq!(inbox_items[0].thread_id, "thread-123");
+
+                store
+                    .mark_inbox_read(inbox_items[0].id.clone())
+                    .await
+                    .expect("failed to mark inbox item read");
+                let inbox_after_read = store
+                    .list_inbox_items()
+                    .await
+                    .expect("failed to reload inbox items");
+                assert!(inbox_after_read[0].read_at.is_some());
+
+                store
+                    .touch_automation_run_times(
+                        created.id.clone(),
+                        1_810_000_000,
+                        created.rrule.clone(),
+                    )
+                    .await
+                    .expect("failed to update run times");
+                let updated = store
+                    .automation_by_id(created.id.clone())
+                    .await
+                    .expect("failed to read updated automation")
+                    .expect("updated automation missing");
+                assert_eq!(updated.last_run_at, Some(1_810_000_000));
+                assert!(updated.next_run_at.expect("missing next run") > 1_810_000_000);
+            });
+        });
+    }
+}

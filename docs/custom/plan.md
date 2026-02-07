@@ -18,6 +18,9 @@ This document lists **everything I can confirm from the two screen recordings**:
 - [x] Removed desktop mock fallback behavior in thread list/detail data hooks so desktop mode now uses real/cached backend data only.
 - [x] Added settings runtime reads for MCP/auth status via `mcpServerStatus/list` and `getAuthStatus`.
 - [x] Added parity contract doc: `docs/custom/parity-backend-v1.md`.
+- [x] Added persisted sidebar UI state for thread list controls (`sort/filter`), expanded workspace folders, and scroll restoration.
+- [x] Added archived-thread row restore actions in Settings and automation create-sheet safety parity details (warning callout + backdrop close).
+- [x] Added verification coverage for these parity areas in frontend + Rust tests.
 
 ---
 
@@ -200,8 +203,8 @@ The real app shows git-related UI in at least two ways:
   - [ ] Context actions on hover (pin, overflow, open diff) consistent with real affordances
 - [ ] Persist:
   - [ ] last selected workspace
-  - [ ] expanded workspace folders
-  - [ ] scroll position of thread list
+  - [x] expanded workspace folders
+  - [x] scroll position of thread list
 
 ---
 
@@ -381,7 +384,7 @@ The real app shows git-related UI in at least two ways:
 - [ ] Settings nav sections
 - [ ] Environment CRUD
 - [ ] Worktrees management
-- [ ] Archived threads management
+- [x] Archived threads management (list + per-thread restore; permanent delete remains unsupported by protocol)
 
 ### 4.4 UX polish
 - [ ] Keyboard shortcuts (match real; don’t show letter hints unless real does)
