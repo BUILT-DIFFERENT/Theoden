@@ -771,7 +771,7 @@ mod tests {
         assert_eq!(hourly, Some(1_021_600));
 
         let weekly = compute_next_run_at("FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0", 1_704_069_600);
-        assert_eq!(weekly, Some(1_704_153_600));
+        assert_eq!(weekly, Some(1_704_099_600));
     }
 
     #[test]

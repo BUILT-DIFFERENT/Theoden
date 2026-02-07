@@ -63,6 +63,29 @@ const actionButtonClass =
 const formInputClass =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none";
 
+function environmentProfilesMatch(
+  current: EnvironmentProfile[],
+  next: EnvironmentProfile[],
+) {
+  if (current === next) {
+    return true;
+  }
+  if (current.length !== next.length) {
+    return false;
+  }
+  return current.every((profile, index) => {
+    const candidate = next[index];
+    return (
+      profile.id === candidate.id &&
+      profile.name === candidate.name &&
+      profile.workspacePath === candidate.workspacePath &&
+      profile.executionMode === candidate.executionMode &&
+      profile.cloudRegion === candidate.cloudRegion &&
+      profile.autoCreateWorktrees === candidate.autoCreateWorktrees
+    );
+  });
+}
+
 export function SettingsPage() {
   const { selectedWorkspace, setSelectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
@@ -229,7 +252,7 @@ export function SettingsPage() {
       const currentById = new Map(
         current.map((profile) => [profile.id, profile]),
       );
-      return loadedEnvironmentProfiles.profiles.map((profile) => {
+      const nextProfiles = loadedEnvironmentProfiles.profiles.map((profile) => {
         const existing = currentById.get(profile.id);
         if (!existing) {
           return profile;
@@ -242,6 +265,9 @@ export function SettingsPage() {
           autoCreateWorktrees: existing.autoCreateWorktrees,
         };
       });
+      return environmentProfilesMatch(current, nextProfiles)
+        ? current
+        : nextProfiles;
     });
     setActiveEnvironmentProfileId((current) => {
       if (

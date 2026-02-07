@@ -171,3 +171,10 @@ For app-server API development:
 - Keep edits scoped to the requested task.
 - Prefer small, reviewable patches.
 - If new APIs/settings are added, update docs and validation coverage in the same change.
+
+## 12) Execution Loop Guard
+
+- Do not repeat a failing command/path more than 2 times without changing approach.
+- If the same failure repeats, stop and perform root-cause analysis (read the relevant code/tests/logs) before retrying.
+- After root-cause analysis, prefer a code/config fix over more retries of the same command.
+- If blocked after one revised attempt, summarize the blocker and propose 1-2 concrete alternatives instead of continuing to loop.
