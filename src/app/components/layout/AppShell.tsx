@@ -329,38 +329,55 @@ export function AppShell() {
       <EnvironmentUiProvider>
         <AppServerHealthProvider value={appServerHealth}>
           <ThreadUiProvider value={threadUi}>
-            <div className="flex min-h-screen flex-col text-ink-50">
-              {isDesktop ? (
-                <WindowTitlebar onCommand={handleMenuCommand} />
-              ) : null}
-              <div className="flex min-h-0 flex-1">
-                <AppSidebar />
-                <main className="flex min-h-0 flex-1 flex-col">
-                  <ThreadTopBar
-                    variant={topBarVariant}
-                    title={topBarTitle}
-                    thread={threadMatch ? thread : undefined}
-                    isNewThread={Boolean(newThreadMatch)}
-                  />
-                  <div
-                    className={
-                      showReviewPanel
-                        ? "grid flex-1 gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]"
-                        : "flex-1 px-6 py-6"
-                    }
-                  >
-                    <section className="min-h-[70vh]">
-                      <Outlet />
-                    </section>
-                    {showReviewPanel ? (
-                      <aside className="hidden lg:block">
-                        <DiffPanel thread={threadMatch ? thread : undefined} />
-                      </aside>
-                    ) : null}
-                  </div>
-                  <TerminalDrawer isOpen={isTerminalOpen} />
-                  <BottomBar />
-                </main>
+            <div className="relative min-h-screen p-3 text-ink-50 sm:p-4 lg:p-6">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_10%,rgba(150,183,255,0.4),transparent_45%),radial-gradient(circle_at_78%_14%,rgba(126,158,247,0.45),transparent_44%),radial-gradient(circle_at_60%_82%,rgba(38,70,155,0.35),transparent_56%)]" />
+              <div className="relative mx-auto flex min-h-[calc(100vh-1.5rem)] max-w-[1460px] flex-col overflow-hidden rounded-[20px] border border-white/10 bg-[#070d1a]/85 shadow-[0_40px_90px_rgba(4,8,20,0.7)] backdrop-blur-xl">
+                {isDesktop ? (
+                  <WindowTitlebar onCommand={handleMenuCommand} />
+                ) : (
+                  <header className="flex h-10 items-center justify-between border-b border-white/10 bg-[#121621]/80 px-3 text-xs text-ink-300">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+                    </div>
+                    <span className="font-medium text-ink-200">
+                      Codex Command Center
+                    </span>
+                    <div className="w-10" />
+                  </header>
+                )}
+                <div className="flex min-h-0 flex-1 overflow-hidden">
+                  <AppSidebar />
+                  <main className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[#0b1224]/82 via-[#0a0f1f]/76 to-[#090d1a]/85">
+                    <ThreadTopBar
+                      variant={topBarVariant}
+                      title={topBarTitle}
+                      thread={threadMatch ? thread : undefined}
+                      isNewThread={Boolean(newThreadMatch)}
+                    />
+                    <div
+                      className={
+                        showReviewPanel
+                          ? "grid flex-1 gap-6 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_380px]"
+                          : "flex-1 px-5 py-5"
+                      }
+                    >
+                      <section className="min-h-[70vh] min-w-0">
+                        <Outlet />
+                      </section>
+                      {showReviewPanel ? (
+                        <aside className="hidden lg:block">
+                          <DiffPanel
+                            thread={threadMatch ? thread : undefined}
+                          />
+                        </aside>
+                      ) : null}
+                    </div>
+                    <TerminalDrawer isOpen={isTerminalOpen} />
+                    <BottomBar />
+                  </main>
+                </div>
               </div>
             </div>
             <WorkspaceModal />

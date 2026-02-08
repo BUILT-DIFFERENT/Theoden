@@ -84,7 +84,7 @@ describe("messagesFromTurns", () => {
         items: [
           {
             type: "commandExecution",
-            command: "pnpm app:test",
+            command: "pnpm frontend:test",
             status: "failed",
             durationMs: 5000,
           },
@@ -101,7 +101,7 @@ describe("messagesFromTurns", () => {
           {
             id: "turn-2-activity-0",
             kind: "command",
-            label: "pnpm app:test",
+            label: "pnpm frontend:test",
             detail: undefined,
             status: "failed",
             durationMs: 5000,

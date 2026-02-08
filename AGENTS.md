@@ -109,8 +109,8 @@ Run these after meaningful frontend changes:
 ```bash
 pnpm format:app:fix
 pnpm lint
-pnpm app:test
-pnpm app:build
+pnpm frontend:test
+pnpm frontend:build
 ```
 
 If tests fail, fix regressions instead of skipping.
@@ -119,6 +119,12 @@ If tests fail, fix regressions instead of skipping.
 
 - Always use `pnpm` for dependency management and script execution in this repository.
 - Do not use `npm` commands (`npm install`, `npm run`, `npx`, etc.) unless a task explicitly requires validating npm-specific behavior.
+
+## 7.2) Build Command Mapping (Avoid Ambiguity)
+
+- If the request is "build the app" for desktop testing, run `pnpm build` (or `pnpm desktop:build`).
+- `pnpm frontend:build` is frontend-only (`tsc -b && vite build`) and does not produce the desktop executable.
+- Desktop executable output path on Windows: `src-tauri/target/release/codex-desktop.exe`.
 
 ## 8) Rust Workspace Rules (`codex-rs`)
 
@@ -171,3 +177,10 @@ For app-server API development:
 - Keep edits scoped to the requested task.
 - Prefer small, reviewable patches.
 - If new APIs/settings are added, update docs and validation coverage in the same change.
+
+## 12) Execution Loop Guard
+
+- Do not repeat a failing command/path more than 2 times without changing approach.
+- If the same failure repeats, stop and perform root-cause analysis (read the relevant code/tests/logs) before retrying.
+- After root-cause analysis, prefer a code/config fix over more retries of the same command.
+- If blocked after one revised attempt, summarize the blocker and propose 1-2 concrete alternatives instead of continuing to loop.

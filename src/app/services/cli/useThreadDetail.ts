@@ -51,7 +51,7 @@ export function useThreadDetail(threadId: string | undefined) {
           {
             id: "mock-activity-2",
             kind: "command",
-            label: "pnpm app:test",
+            label: "pnpm frontend:test",
             status: "completed",
             durationMs: 42000,
           },

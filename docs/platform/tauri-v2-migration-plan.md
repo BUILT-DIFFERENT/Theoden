@@ -15,14 +15,14 @@ This plan assumes **desktop-only** targets and **Tauri-only** dependency updates
 - [ ] Capture lint/build baseline
   - `pnpm lint`
   - `pnpm format:app`
-  - `pnpm app:build`
+  - `pnpm frontend:build`
 
 ## Stage 2 — Automated Migration (CLI)
 
 - [ ] Bump CLI to v2 in `package.json`
   - Example: `"@tauri-apps/cli": "^2"`
 - [ ] Run migration
-  - `pnpm app:tauri migrate`
+  - `pnpm desktop:cli migrate`
 - [ ] Commit resulting config changes (baseline)
 
 ## Stage 3 — Tauri Config (Manual Reshape)
@@ -34,8 +34,8 @@ Update `src-tauri/tauri.conf.json` from v1 → v2 shape.
 ```json
 {
   "build": {
-    "beforeBuildCommand": "pnpm build",
-    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm frontend:build",
+    "beforeDevCommand": "pnpm frontend:dev",
     "devPath": "http://localhost:1420",
     "distDir": "../dist"
   },
@@ -68,8 +68,8 @@ Update `src-tauri/tauri.conf.json` from v1 → v2 shape.
   "identifier": "com.example.codexcommandcenter",
   "mainBinaryName": "codex-command-center",
   "build": {
-    "beforeBuildCommand": "pnpm build",
-    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm frontend:build",
+    "beforeDevCommand": "pnpm frontend:dev",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
@@ -297,12 +297,12 @@ const ThreadPage = lazy(() => import("@/app/routes/ThreadPage"));
 - [ ] Frontend:
   - `pnpm lint`
   - `pnpm format:app`
-  - `pnpm app:build`
+  - `pnpm frontend:build`
 - [ ] Rust:
   - `cargo check` in `src-tauri`
 - [ ] Tauri:
-  - `pnpm app:tauri dev` (smoke test)
-  - `pnpm app:tauri build` (full build)
+  - `pnpm desktop:dev` (smoke test)
+  - `pnpm desktop:build` (full build)
 
 ## Stage 11 — Docs & Cleanup
 

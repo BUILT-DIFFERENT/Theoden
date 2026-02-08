@@ -16,9 +16,9 @@ export function NewThreadPage() {
   }, [setActiveModal, setComposerDraft]);
 
   return (
-    <div className="flex min-h-[70vh] flex-col justify-between gap-10">
+    <div className="flex min-h-[70vh] flex-col gap-4">
       <ThreadEmptyState />
-      <div className="sticky bottom-4 z-10 space-y-3">
+      <div className="mt-auto space-y-3">
         <ThreadComposer />
       </div>
       <ThreadModals />

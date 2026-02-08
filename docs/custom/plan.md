@@ -18,6 +18,24 @@ This document lists **everything I can confirm from the two screen recordings**:
 - [x] Removed desktop mock fallback behavior in thread list/detail data hooks so desktop mode now uses real/cached backend data only.
 - [x] Added settings runtime reads for MCP/auth status via `mcpServerStatus/list` and `getAuthStatus`.
 - [x] Added parity contract doc: `docs/custom/parity-backend-v1.md`.
+- [x] Added persisted sidebar UI state for thread list controls (`sort/filter`), expanded workspace folders, and scroll restoration.
+- [x] Added archived-thread row restore actions in Settings and automation create-sheet safety parity details (warning callout + backdrop close).
+- [x] Added verification coverage for these parity areas in frontend + Rust tests.
+
+---
+
+## Electron parity gaps still open (February 7, 2026)
+
+- [ ] **Cloud execution parity (still stubbed):** Implement full cloud orchestration so selecting cloud mode starts real runs, emits `thread/start` + `turn/start` lifecycle, and supports environment/branch/attempt options without throwing a placeholder error. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39601`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:22342`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39627`.
+- [ ] **Thread history/lifecycle RPC parity:** Replace local placeholders/stubs for listing/resuming threads with real app-server-backed `thread/list`, `thread/resume`, `thread/read`, archive/unarchive wiring and pagination/filter semantics matching Electron behavior. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39601`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:12`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:14`.
+- [ ] **Terminal PTY parity (interactive shell):** Upgrade terminal host from stateless command streaming to true PTY-backed interactive sessions with resize support, long-lived shell state, and terminal capability parity with Electron. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:42041`.
+- [ ] **Settings information architecture parity:** Add missing settings sections and behavior parity for Account, Data controls, Usage & Analytics, and external/browser-open settings paths so navigation and section scope matches Electron. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2525`, `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2845`.
+- [ ] **MCP settings persistence parity:** Replace session-only MCP add/edit behavior with persisted config-backed mutation flows (create/update/delete, reconnect, validation, and status refresh) so changes survive restart like official app behavior. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:181`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:26`.
+- [ ] **Config validation parity:** Implement real validation against merged config schema and runtime constraints (not always-valid placeholders), including actionable per-key errors shown in Configuration settings. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2525`.
+- [ ] **Worktrees management parity (row-level operations):** Add full worktree inventory rows with delete actions, linked conversation visibility, explicit empty/error states, and row-scoped actions that match official settings behavior. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/worktrees-settings-page-Bx5YHGa_.js:1`.
+- [ ] **Sidebar interaction parity and polish:** Implement pinned threads, rename/archive thread actions, group-by workspace/recency parity, and automations inbox route affordance; remove truncating behavior that limits visible threads per workspace. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:1624`.
+- [ ] **Automation schedule semantics parity:** Expand recurrence handling beyond current hourly/weekly shortcuts and fallback scheduling so recurrence parsing/execution behavior aligns with official automation scheduling expectations. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:15069`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:18360`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:21906`, `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2824`.
+- [ ] **Protocol parity map closure:** Resolve remaining `TBD` items in signal mapping (thread/turn/approval/auth surfaces), and close documented OAuth parity deferrals with implemented v2-compatible flows and audits. Electron reference: `third_party/CodexDesktop-Rebuild/signal-parity-map.md:12`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:32`, `third_party/CodexDesktop-Rebuild/README.md:131`.
 
 ---
 
@@ -200,8 +218,8 @@ The real app shows git-related UI in at least two ways:
   - [ ] Context actions on hover (pin, overflow, open diff) consistent with real affordances
 - [ ] Persist:
   - [ ] last selected workspace
-  - [ ] expanded workspace folders
-  - [ ] scroll position of thread list
+  - [x] expanded workspace folders
+  - [x] scroll position of thread list
 
 ---
 
@@ -381,7 +399,7 @@ The real app shows git-related UI in at least two ways:
 - [ ] Settings nav sections
 - [ ] Environment CRUD
 - [ ] Worktrees management
-- [ ] Archived threads management
+- [x] Archived threads management (list + per-thread restore; permanent delete remains unsupported by protocol)
 
 ### 4.4 UX polish
 - [ ] Keyboard shortcuts (match real; don’t show letter hints unless real does)

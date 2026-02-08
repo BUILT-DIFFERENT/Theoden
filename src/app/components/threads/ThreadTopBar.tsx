@@ -1,5 +1,5 @@
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal } from "lucide-react";
+import { ChevronDown, Copy, MoreHorizontal, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
@@ -55,6 +55,11 @@ export function ThreadTopBar({
   const showThreadHeader = resolvedVariant === "thread";
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
+  const changeSummary = thread?.diffSummary;
+  const hasChanges = Boolean(
+    changeSummary &&
+      (changeSummary.additions > 0 || changeSummary.deletions > 0),
+  );
 
   useEffect(() => {
     if (!headerMenuOpen) return;
@@ -83,7 +88,7 @@ export function ThreadTopBar({
   };
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-ink-900/70 px-6 py-4">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#0d111a]/88 px-5 py-3.5">
       <div className="flex items-center gap-2">
         <h1 className="font-display text-lg text-ink-50">{headerTitle}</h1>
         {showThreadHeader ? (
@@ -91,48 +96,77 @@ export function ThreadTopBar({
         ) : null}
       </div>
       {showThreadHeader ? (
-        <div className="relative" ref={headerMenuRef}>
-          <button
-            className="btn-flat px-2 text-ink-400"
-            onClick={() => setHeaderMenuOpen((open) => !open)}
-            aria-label="Thread options"
-          >
-            <MoreHorizontal className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <button className="btn-flat inline-flex items-center gap-1.5 px-3 text-ink-100">
+            <Play className="h-3.5 w-3.5" />
+            Run
+            <ChevronDown className="h-3 w-3" />
           </button>
-          {headerMenuOpen ? (
-            <div className="surface-panel absolute right-0 top-8 z-20 w-52 p-2 text-[0.7rem] text-ink-200">
-              <button
-                className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
-                onClick={() => {
-                  setHeaderMenuOpen(false);
-                  void handleCopyContext();
-                }}
-              >
-                {threadId ? "Copy thread link" : "Copy workspace path"}
-              </button>
-              <button
-                className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
-                onClick={() => {
-                  setHeaderMenuOpen(false);
-                  void navigate({
-                    to: "/settings/$section",
-                    params: { section: "general" },
-                  });
-                }}
-              >
-                Open settings
-              </button>
-              <button
-                className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
-                onClick={() => {
-                  setHeaderMenuOpen(false);
-                  setReviewOpen(!reviewOpen);
-                }}
-              >
-                {reviewOpen ? "Hide review panel" : "Show review panel"}
-              </button>
-            </div>
+          <button className="btn-flat inline-flex items-center gap-1.5 px-3 text-ink-200">
+            Open
+            <ChevronDown className="h-3 w-3" />
+          </button>
+          <button className="btn-flat inline-flex items-center gap-1.5 px-3 text-ink-200">
+            Commit
+            <ChevronDown className="h-3 w-3" />
+          </button>
+          {hasChanges ? (
+            <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[0.68rem] text-ink-300">
+              +{changeSummary?.additions ?? 0} -{changeSummary?.deletions ?? 0}
+            </span>
           ) : null}
+          <button
+            className="btn-flat px-2 text-ink-300"
+            onClick={() => {
+              void handleCopyContext();
+            }}
+            aria-label="Copy thread context"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+          <div className="relative" ref={headerMenuRef}>
+            <button
+              className="btn-flat px-2 text-ink-400"
+              onClick={() => setHeaderMenuOpen((open) => !open)}
+              aria-label="Thread options"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {headerMenuOpen ? (
+              <div className="surface-panel absolute right-0 top-8 z-20 w-52 p-2 text-[0.7rem] text-ink-200">
+                <button
+                  className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    void handleCopyContext();
+                  }}
+                >
+                  {threadId ? "Copy thread link" : "Copy workspace path"}
+                </button>
+                <button
+                  className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    void navigate({
+                      to: "/settings/$section",
+                      params: { section: "general" },
+                    });
+                  }}
+                >
+                  Open settings
+                </button>
+                <button
+                  className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    setReviewOpen(!reviewOpen);
+                  }}
+                >
+                  {reviewOpen ? "Hide review panel" : "Show review panel"}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </header>

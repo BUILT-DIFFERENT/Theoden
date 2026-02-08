@@ -673,9 +673,17 @@ export function AutomationsPage() {
 
       {sheetOpen ? (
         <div className="fixed inset-0 z-40 flex justify-end bg-black/50">
+          <button
+            type="button"
+            aria-label="Close create automation sheet"
+            className="absolute inset-0 cursor-default bg-transparent"
+            onClick={closeCreateSheet}
+          />
           <div
             ref={sheetRef}
-            className="surface-panel h-full w-full max-w-xl overflow-y-auto rounded-none border-l border-white/10 p-6"
+            role="dialog"
+            aria-modal="true"
+            className="surface-panel relative z-10 h-full w-full max-w-xl overflow-y-auto rounded-none border-l border-white/10 p-6"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -692,6 +700,32 @@ export function AutomationsPage() {
               >
                 Close
               </button>
+            </div>
+            <div className="mt-6 rounded-xl border border-rose-400/40 bg-rose-500/10 p-3 text-xs text-rose-100">
+              <p className="font-medium">
+                Automations can run commands unattended in your projects.
+              </p>
+              <p className="mt-1 text-rose-200/90">
+                Review your sandbox and approvals before enabling schedules. See{" "}
+                <a
+                  className="underline decoration-rose-200/70 underline-offset-2 transition hover:text-rose-100"
+                  href="https://developers.openai.com/codex/security/"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  rules
+                </a>{" "}
+                and{" "}
+                <a
+                  className="underline decoration-rose-200/70 underline-offset-2 transition hover:text-rose-100"
+                  href="https://developers.openai.com/codex/"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  settings guidance
+                </a>
+                .
+              </p>
             </div>
             <div className="mt-6 space-y-4">
               <label className="block space-y-2">
@@ -739,6 +773,11 @@ export function AutomationsPage() {
                     </button>
                   ))}
                 </div>
+                {!workspaceOptions.length ? (
+                  <p className="text-xs text-ink-500">
+                    No projects detected yet. Add a workspace to schedule runs.
+                  </p>
+                ) : null}
               </label>
               <label className="block space-y-2">
                 <span className="text-xs uppercase tracking-[0.2em] text-ink-400">

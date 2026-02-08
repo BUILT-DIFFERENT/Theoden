@@ -5,8 +5,8 @@
   "version": "0.1.0",
   "identifier": "com.openai.codex.desktop",
   "build": {
-    "beforeBuildCommand": "pnpm app:build",
-    "beforeDevCommand": "pnpm app:dev",
+    "beforeBuildCommand": "pnpm frontend:build",
+    "beforeDevCommand": "pnpm frontend:dev",
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420"
   },

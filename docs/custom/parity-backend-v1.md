@@ -44,8 +44,8 @@ This document tracks backend-focused parity decisions for the Tauri desktop clon
 
 - `pnpm format:app:fix`
 - `pnpm lint`
-- `pnpm app:test`
-- `pnpm app:build`
+- `pnpm frontend:test`
+- `pnpm frontend:build`
 - `cargo fmt --manifest-path src-tauri/Cargo.toml`
 - `cargo check --manifest-path src-tauri/Cargo.toml`
 - Optional parity replay: official debug harness (`debug:fixtures:start`, `dev:debug`, `debug:audit --json`)

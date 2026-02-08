@@ -87,7 +87,7 @@ export function WindowTitlebar({ onCommand }: WindowTitlebarProps) {
 
   return (
     <header
-      className="relative z-50 flex h-10 items-stretch border-b border-white/10 bg-ink-950/80 px-2 text-xs text-ink-200 backdrop-blur select-none"
+      className="relative z-50 flex h-10 items-stretch border-b border-white/10 bg-[#121621]/84 px-2 text-xs text-ink-200 backdrop-blur select-none"
       ref={titlebarRef}
     >
       <div className="flex items-stretch gap-1">

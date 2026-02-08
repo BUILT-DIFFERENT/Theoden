@@ -136,7 +136,7 @@ export function BottomBar() {
   };
 
   return (
-    <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-ink-900/70 px-6 py-3 text-xs text-ink-300">
+    <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-[#0a101e]/80 px-5 py-3 text-xs text-ink-300">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative" ref={continueMenuRef}>
           <button

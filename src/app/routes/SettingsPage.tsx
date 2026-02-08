@@ -63,6 +63,29 @@ const actionButtonClass =
 const formInputClass =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none";
 
+function environmentProfilesMatch(
+  current: EnvironmentProfile[],
+  next: EnvironmentProfile[],
+) {
+  if (current === next) {
+    return true;
+  }
+  if (current.length !== next.length) {
+    return false;
+  }
+  return current.every((profile, index) => {
+    const candidate = next[index];
+    return (
+      profile.id === candidate.id &&
+      profile.name === candidate.name &&
+      profile.workspacePath === candidate.workspacePath &&
+      profile.executionMode === candidate.executionMode &&
+      profile.cloudRegion === candidate.cloudRegion &&
+      profile.autoCreateWorktrees === candidate.autoCreateWorktrees
+    );
+  });
+}
+
 export function SettingsPage() {
   const { selectedWorkspace, setSelectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
@@ -173,6 +196,9 @@ export function SettingsPage() {
     Array<{ id: string; preview: string; updatedAt: number }>
   >([]);
   const [archivedThreadsLoading, setArchivedThreadsLoading] = useState(false);
+  const [restoringArchivedThreadIds, setRestoringArchivedThreadIds] = useState<
+    Set<string>
+  >(() => new Set());
   const environmentProfileFallback = useMemo(
     () => ({
       executionMode: initialSettings.defaultEnvironment,
@@ -226,7 +252,7 @@ export function SettingsPage() {
       const currentById = new Map(
         current.map((profile) => [profile.id, profile]),
       );
-      return loadedEnvironmentProfiles.profiles.map((profile) => {
+      const nextProfiles = loadedEnvironmentProfiles.profiles.map((profile) => {
         const existing = currentById.get(profile.id);
         if (!existing) {
           return profile;
@@ -239,6 +265,9 @@ export function SettingsPage() {
           autoCreateWorktrees: existing.autoCreateWorktrees,
         };
       });
+      return environmentProfilesMatch(current, nextProfiles)
+        ? current
+        : nextProfiles;
     });
     setActiveEnvironmentProfileId((current) => {
       if (
@@ -573,6 +602,26 @@ export function SettingsPage() {
         setArchivedThreadsLoading(false);
       }
     }, "Failed to restore archived threads.");
+
+  const handleRestoreArchivedThread = (threadId: string) =>
+    runAction(async () => {
+      setRestoringArchivedThreadIds((current) =>
+        new Set(current).add(threadId),
+      );
+      try {
+        await unarchiveThread(threadId);
+        setArchivedThreads((current) =>
+          current.filter((thread) => thread.id !== threadId),
+        );
+        return "Archived thread restored.";
+      } finally {
+        setRestoringArchivedThreadIds((current) => {
+          const next = new Set(current);
+          next.delete(threadId);
+          return next;
+        });
+      }
+    }, "Failed to restore archived thread.");
 
   useEffect(() => {
     if (
@@ -1357,10 +1406,23 @@ export function SettingsPage() {
                       key={thread.id}
                       className="flex items-center justify-between gap-2"
                     >
-                      <span className="truncate">{thread.preview}</span>
-                      <span className="shrink-0 text-ink-500">
-                        {new Date(thread.updatedAt * 1000).toLocaleString()}
-                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate">{thread.preview}</p>
+                        <p className="text-[0.65rem] text-ink-500">
+                          {new Date(thread.updatedAt * 1000).toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        className={actionButtonClass}
+                        onClick={() => {
+                          void handleRestoreArchivedThread(thread.id);
+                        }}
+                        disabled={restoringArchivedThreadIds.has(thread.id)}
+                      >
+                        {restoringArchivedThreadIds.has(thread.id)
+                          ? "Restoring…"
+                          : "Restore"}
+                      </button>
                     </div>
                   ))}
                 </div>
