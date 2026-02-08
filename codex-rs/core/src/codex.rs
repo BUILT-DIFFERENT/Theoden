@@ -38,6 +38,7 @@ use crate::stream_events_utils::last_assistant_message_from_item;
 use crate::terminal;
 use crate::truncate::TruncationPolicy;
 use crate::turn_metadata::build_turn_metadata_header;
+use crate::turn_metadata::resolve_turn_metadata_header_with_timeout;
 use crate::util::error_or_panic;
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -557,28 +558,29 @@ impl TurnContext {
     }
 
     async fn build_turn_metadata_header(&self) -> Option<String> {
+        let cwd = self.cwd.clone();
         self.turn_metadata_header
-            .get_or_init(|| async { build_turn_metadata_header(self.cwd.as_path()).await })
+            .get_or_init(|| async { build_turn_metadata_header(cwd).await })
             .await
             .clone()
     }
 
+    /// Resolves the per-turn metadata header under a shared timeout policy.
+    ///
+    /// This uses the same timeout helper as websocket startup preconnect so both turn execution
+    /// and background preconnect observe identical "timeout means best-effort fallback" behavior.
     pub async fn resolve_turn_metadata_header(&self) -> Option<String> {
-        const TURN_METADATA_HEADER_TIMEOUT_MS: u64 = 250;
-        match tokio::time::timeout(
-            std::time::Duration::from_millis(TURN_METADATA_HEADER_TIMEOUT_MS),
+        resolve_turn_metadata_header_with_timeout(
             self.build_turn_metadata_header(),
+            self.turn_metadata_header.get().cloned().flatten(),
         )
         .await
-        {
-            Ok(header) => header,
-            Err(_) => {
-                warn!("timed out after 250ms while building turn metadata header");
-                self.turn_metadata_header.get().cloned().flatten()
-            }
-        }
     }
 
+    /// Starts best-effort background computation of turn metadata.
+    ///
+    /// This warms the cached value used by [`TurnContext::resolve_turn_metadata_header`] so turns
+    /// and websocket preconnect are less likely to pay metadata construction latency on demand.
     pub fn spawn_turn_metadata_header_task(self: &Arc<Self>) {
         let context = Arc::clone(self);
         tokio::spawn(async move {
@@ -732,10 +734,22 @@ impl Session {
             session_configuration.collaboration_mode.reasoning_effort();
         per_turn_config.model_reasoning_summary = session_configuration.model_reasoning_summary;
         per_turn_config.personality = session_configuration.personality;
-        per_turn_config.web_search_mode = Some(resolve_web_search_mode_for_turn(
-            per_turn_config.web_search_mode,
+        let resolved_web_search_mode = resolve_web_search_mode_for_turn(
+            &per_turn_config.web_search_mode,
             session_configuration.sandbox_policy.get(),
-        ));
+        );
+        if let Err(err) = per_turn_config
+            .web_search_mode
+            .set(resolved_web_search_mode)
+        {
+            let fallback_value = per_turn_config.web_search_mode.value();
+            tracing::warn!(
+                error = %err,
+                ?resolved_web_search_mode,
+                ?fallback_value,
+                "resolved web_search_mode is disallowed by requirements; keeping constrained value"
+            );
+        }
         per_turn_config.features = config.features.clone();
         per_turn_config
     }
@@ -793,7 +807,7 @@ impl Session {
         let tools_config = ToolsConfig::new(&ToolsConfigParams {
             model_info: &model_info,
             features: &per_turn_config.features,
-            web_search_mode: per_turn_config.web_search_mode,
+            web_search_mode: Some(per_turn_config.web_search_mode.value()),
         });
 
         let cwd = session_configuration.cwd.clone();
@@ -980,6 +994,7 @@ impl Session {
             auth.and_then(CodexAuth::get_account_id),
             auth.and_then(CodexAuth::get_account_email),
             auth_mode,
+            crate::default_client::originator().value,
             config.otel.log_user_prompt,
             terminal::user_agent(),
             session_configuration.session_source.clone(),
@@ -1059,7 +1074,9 @@ impl Session {
                 session_configuration.provider.clone(),
                 session_configuration.session_source.clone(),
                 config.model_verbosity,
-                config.features.enabled(Feature::ResponsesWebsockets),
+                config.features.enabled(Feature::ResponsesWebsockets)
+                    || config.features.enabled(Feature::ResponsesWebsocketsV2),
+                config.features.enabled(Feature::ResponsesWebsocketsV2),
                 config.features.enabled(Feature::EnableRequestCompression),
                 config.features.enabled(Feature::RuntimeMetrics),
                 Self::build_model_client_beta_features_header(config.as_ref()),
@@ -1077,6 +1094,18 @@ impl Session {
             services,
             next_internal_sub_id: AtomicU64::new(0),
         });
+
+        // Warm a websocket in the background so the first turn can reuse it.
+        // This performs only connection setup; user input is still sent later via response.create
+        // when submit_turn() runs.
+        sess.services.model_client.pre_establish_connection(
+            sess.services.otel_manager.clone(),
+            resolve_turn_metadata_header_with_timeout(
+                build_turn_metadata_header(session_configuration.cwd.clone()),
+                None,
+            )
+            .boxed(),
+        );
 
         // Dispatch the SessionConfiguredEvent first and then report any errors.
         // If resuming, include converted initial messages in the payload so UIs can render them immediately.
@@ -2014,6 +2043,15 @@ impl Session {
             }
         }
         history.raw_items().to_vec()
+    }
+
+    pub(crate) async fn process_compacted_history(
+        &self,
+        turn_context: &TurnContext,
+        compacted_history: Vec<ResponseItem>,
+    ) -> Vec<ResponseItem> {
+        let initial_context = self.build_initial_context(turn_context).await;
+        compact::process_compacted_history(compacted_history, &initial_context)
     }
 
     /// Append ResponseItems to the in-memory conversation history only.
@@ -3503,7 +3541,15 @@ async fn spawn_review_thread(
     let mut per_turn_config = (*config).clone();
     per_turn_config.model = Some(model.clone());
     per_turn_config.features = review_features.clone();
-    per_turn_config.web_search_mode = Some(review_web_search_mode);
+    if let Err(err) = per_turn_config.web_search_mode.set(review_web_search_mode) {
+        let fallback_value = per_turn_config.web_search_mode.value();
+        tracing::warn!(
+            error = %err,
+            ?review_web_search_mode,
+            ?fallback_value,
+            "review web_search_mode is disallowed by requirements; keeping constrained value"
+        );
+    }
 
     let otel_manager = parent_turn_context
         .otel_manager
@@ -3654,8 +3700,10 @@ pub(crate) async fn run_turn(
         collaboration_mode_kind: turn_context.collaboration_mode.mode,
     });
     sess.send_event(&turn_context, event).await;
-    if total_usage_tokens >= auto_compact_limit {
-        run_auto_compact(&sess, &turn_context).await;
+    if total_usage_tokens >= auto_compact_limit
+        && run_auto_compact(&sess, &turn_context).await.is_err()
+    {
+        return None;
     }
 
     let skills_outcome = Some(
@@ -3837,7 +3885,9 @@ pub(crate) async fn run_turn(
 
                 // as long as compaction works well in getting us way below the token limit, we shouldn't worry about being in an infinite loop.
                 if token_limit_reached && needs_follow_up {
-                    run_auto_compact(&sess, &turn_context).await;
+                    if run_auto_compact(&sess, &turn_context).await.is_err() {
+                        return None;
+                    }
                     continue;
                 }
 
@@ -3895,12 +3945,13 @@ pub(crate) async fn run_turn(
     last_agent_message
 }
 
-async fn run_auto_compact(sess: &Arc<Session>, turn_context: &Arc<TurnContext>) {
+async fn run_auto_compact(sess: &Arc<Session>, turn_context: &Arc<TurnContext>) -> CodexResult<()> {
     if should_use_remote_compact_task(&turn_context.provider) {
-        run_inline_remote_auto_compact_task(Arc::clone(sess), Arc::clone(turn_context)).await;
+        run_inline_remote_auto_compact_task(Arc::clone(sess), Arc::clone(turn_context)).await?;
     } else {
-        run_inline_auto_compact_task(Arc::clone(sess), Arc::clone(turn_context)).await;
+        run_inline_auto_compact_task(Arc::clone(sess), Arc::clone(turn_context)).await?;
     }
+    Ok(())
 }
 
 fn filter_connectors_for_input(
@@ -4457,6 +4508,7 @@ async fn emit_agent_message_in_plan_mode(
                 TurnItem::AgentMessage(codex_protocol::items::AgentMessageItem {
                     id: agent_message_id.clone(),
                     content: Vec::new(),
+                    phase: None,
                 })
             });
         sess.emit_turn_item_started(turn_context, &start_item).await;
@@ -5063,6 +5115,42 @@ mod tests {
             .await;
 
         assert_eq!(expected, reconstructed);
+    }
+
+    #[tokio::test]
+    async fn reconstruct_history_uses_replacement_history_verbatim() {
+        let (session, turn_context) = make_session_and_context().await;
+        let summary_item = ResponseItem::Message {
+            id: None,
+            role: "user".to_string(),
+            content: vec![ContentItem::InputText {
+                text: "summary".to_string(),
+            }],
+            end_turn: None,
+            phase: None,
+        };
+        let replacement_history = vec![
+            summary_item.clone(),
+            ResponseItem::Message {
+                id: None,
+                role: "developer".to_string(),
+                content: vec![ContentItem::InputText {
+                    text: "stale developer instructions".to_string(),
+                }],
+                end_turn: None,
+                phase: None,
+            },
+        ];
+        let rollout_items = vec![RolloutItem::Compacted(CompactedItem {
+            message: String::new(),
+            replacement_history: Some(replacement_history.clone()),
+        })];
+
+        let reconstructed = session
+            .reconstruct_history_from_rollout(&turn_context, &rollout_items)
+            .await;
+
+        assert_eq!(reconstructed, replacement_history);
     }
 
     #[tokio::test]
@@ -5714,6 +5802,7 @@ mod tests {
             None,
             Some("test@test.com".to_string()),
             Some(TelemetryAuthMode::Chatgpt),
+            "test_originator".to_string(),
             false,
             "test".to_string(),
             session_source,
@@ -5812,7 +5901,9 @@ mod tests {
                 session_configuration.provider.clone(),
                 session_configuration.session_source.clone(),
                 config.model_verbosity,
-                config.features.enabled(Feature::ResponsesWebsockets),
+                config.features.enabled(Feature::ResponsesWebsockets)
+                    || config.features.enabled(Feature::ResponsesWebsocketsV2),
+                config.features.enabled(Feature::ResponsesWebsocketsV2),
                 config.features.enabled(Feature::EnableRequestCompression),
                 config.features.enabled(Feature::RuntimeMetrics),
                 Session::build_model_client_beta_features_header(config.as_ref()),
@@ -5942,7 +6033,9 @@ mod tests {
                 session_configuration.provider.clone(),
                 session_configuration.session_source.clone(),
                 config.model_verbosity,
-                config.features.enabled(Feature::ResponsesWebsockets),
+                config.features.enabled(Feature::ResponsesWebsockets)
+                    || config.features.enabled(Feature::ResponsesWebsocketsV2),
+                config.features.enabled(Feature::ResponsesWebsocketsV2),
                 config.features.enabled(Feature::EnableRequestCompression),
                 config.features.enabled(Feature::RuntimeMetrics),
                 Session::build_model_client_beta_features_header(config.as_ref()),
