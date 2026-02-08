@@ -121,18 +121,23 @@ export function AppSidebar() {
   const threadListParentRef = useRef<HTMLDivElement | null>(null);
   const restoredScrollRef = useRef(false);
 
-  const workspaceEntries: Array<{ id: string; name: string; path: string }> =
-    workspaces.length
-      ? workspaces.map((workspace) => ({
-          id: workspace.path,
-          name: workspace.name,
-          path: workspace.path,
-        }))
-      : projects.map((project) => ({
-          id: project.id,
-          name: project.name,
-          path: project.path,
-        }));
+  const workspaceEntries = useMemo<
+    Array<{ id: string; name: string; path: string }>
+  >(
+    () =>
+      workspaces.length
+        ? workspaces.map((workspace) => ({
+            id: workspace.path,
+            name: workspace.name,
+            path: workspace.path,
+          }))
+        : projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            path: project.path,
+          })),
+    [projects, workspaces],
+  );
   const workspaceThreadsMap = useMemo<Map<string, ThreadSummary[]>>(() => {
     const map = new Map<string, ThreadSummary[]>();
     allThreads.forEach((thread) => {
@@ -212,6 +217,7 @@ export function AppSidebar() {
         .sort(),
     [expandedWorkspaces],
   );
+  const visibleWorkspaceCount = visibleWorkspaceTree.length;
 
   const rowVirtualizer = useVirtualizer({
     count: visibleWorkspaceTree.length,
@@ -262,8 +268,11 @@ export function AppSidebar() {
   }, [accountMenuOpen]);
 
   useEffect(() => {
-    rowVirtualizer.measure();
-  }, [expandedWorkspaces, rowVirtualizer, visibleWorkspaceTree]);
+    const frame = window.requestAnimationFrame(() => {
+      rowVirtualizer.measure();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [expandedWorkspaceKeys, rowVirtualizer, visibleWorkspaceCount]);
 
   useEffect(() => {
     if (restoredScrollRef.current) {
@@ -359,14 +368,14 @@ export function AppSidebar() {
   const accountAvatar = accountEmail.slice(0, 1).toUpperCase() || "?";
 
   return (
-    <aside className="flex min-h-screen w-72 flex-col border-r border-white/10 bg-ink-900/70 px-4 py-6">
+    <aside className="flex min-h-0 w-[240px] flex-col border-r border-white/10 bg-[#1a2649]/72 px-3 py-4 backdrop-blur-xl">
       <nav className="space-y-1 text-[0.85rem]">
         <Link
           to="/"
-          className={`flex items-center gap-3 rounded-xl px-3 py-2 transition ${
+          className={`flex items-center gap-3 rounded-lg px-3 py-2 transition ${
             newThreadMatch
-              ? "bg-white/10 text-ink-50"
-              : "text-ink-200 hover:bg-white/5 hover:text-ink-50"
+              ? "bg-white/14 text-ink-50"
+              : "text-ink-200 hover:bg-white/8 hover:text-ink-50"
           }`}
           onClick={() => {
             setComposerDraft("");
@@ -379,10 +388,10 @@ export function AppSidebar() {
         </Link>
         <Link
           to="/automations"
-          className={`flex items-center gap-3 rounded-xl px-3 py-2 transition ${
+          className={`flex items-center gap-3 rounded-lg px-3 py-2 transition ${
             automationsMatch
-              ? "bg-white/10 text-ink-50"
-              : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
+              ? "bg-white/14 text-ink-50"
+              : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
           }`}
         >
           <Workflow className="h-4 w-4 text-ink-400" />
@@ -390,10 +399,10 @@ export function AppSidebar() {
         </Link>
         <Link
           to="/skills"
-          className={`flex items-center gap-3 rounded-xl px-3 py-2 transition ${
+          className={`flex items-center gap-3 rounded-lg px-3 py-2 transition ${
             skillsMatch
-              ? "bg-white/10 text-ink-50"
-              : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
+              ? "bg-white/14 text-ink-50"
+              : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
           }`}
         >
           <WandSparkles className="h-4 w-4 text-ink-400" />
@@ -522,8 +531,8 @@ export function AppSidebar() {
                     <div
                       className={`mb-2 rounded-xl border text-ink-300 transition ${
                         isSelected
-                          ? "border-white/15 bg-white/10"
-                          : "border-white/5 bg-black/10"
+                          ? "border-white/18 bg-white/10"
+                          : "border-white/10 bg-black/12"
                       }`}
                     >
                       <div className="flex items-center justify-between px-3 py-2">
@@ -583,8 +592,8 @@ export function AppSidebar() {
                                   params={{ threadId: thread.id }}
                                   className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[0.7rem] transition ${
                                     isThreadSelected
-                                      ? "bg-flare-400/15 text-ink-50"
-                                      : "text-ink-300 hover:bg-white/5 hover:text-ink-50"
+                                      ? "bg-flare-400/20 text-ink-50"
+                                      : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
                                   }`}
                                   onClick={() =>
                                     setSelectedWorkspace(workspace.path)

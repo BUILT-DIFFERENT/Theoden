@@ -572,13 +572,13 @@ export function ThreadComposer({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-[24px] bg-ink-900/70 p-4 ring-1 ring-white/10">
+      <div className="rounded-[24px] border border-white/10 bg-[#090f1d]/88 p-4 shadow-[0_12px_34px_rgba(2,6,18,0.45)]">
         {selectedAttachments.length ? (
           <div className="mb-3 flex flex-wrap gap-2">
             {selectedAttachments.map((attachment) => (
               <button
                 key={attachment}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-200 hover:border-flare-300"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-3 py-1 text-xs text-ink-200 hover:border-flare-300"
                 onClick={() => removeAttachment(attachment)}
                 title={`Remove ${attachment}`}
               >
@@ -591,7 +591,7 @@ export function ThreadComposer({
         ) : null}
         <textarea
           ref={composerRef}
-          className={`w-full resize-none bg-transparent p-2 text-base text-ink-100 placeholder:text-ink-500 focus:outline-none ${
+          className={`w-full resize-none bg-transparent p-2 text-base text-ink-100 placeholder:text-ink-500/80 focus:outline-none ${
             isCompactComposer ? "h-20" : "h-28"
           }`}
           placeholder={
@@ -737,8 +737,8 @@ export function ThreadComposer({
             <button
               className={`rounded-full border p-2 transition ${
                 attachmentsDrawerOpen
-                  ? "border-flare-300 bg-flare-400/10 text-ink-50"
-                  : "border-white/10 hover:border-flare-300"
+                  ? "border-flare-300 bg-flare-400/14 text-ink-50"
+                  : "border-white/10 bg-black/25 hover:border-flare-300"
               }`}
               onClick={() => setAttachmentsDrawerOpen((open) => !open)}
               aria-label={
@@ -750,7 +750,7 @@ export function ThreadComposer({
               <Plus className="h-3.5 w-3.5" />
             </button>
             <select
-              className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
+              className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-xs text-ink-100"
               value={activeModel}
               onChange={(event) => setActiveModel(event.target.value)}
             >
@@ -761,7 +761,7 @@ export function ThreadComposer({
               ))}
             </select>
             <select
-              className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-ink-100"
+              className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-xs text-ink-100"
               value={qualityPreset}
               onChange={(event) =>
                 setQualityPreset(event.target.value as QualityPreset)
@@ -779,7 +779,7 @@ export function ThreadComposer({
               className={`rounded-full border p-2 transition ${
                 isContextLocked
                   ? "border-flare-300 bg-flare-400/10 text-ink-50"
-                  : "border-white/10 text-ink-300 hover:border-flare-300"
+                  : "border-white/10 bg-black/25 text-ink-300 hover:border-flare-300"
               }`}
               onClick={() => {
                 setIsContextLocked((locked) => !locked);
@@ -799,7 +799,7 @@ export function ThreadComposer({
               <Lock className="h-3.5 w-3.5" />
             </button>
             <button
-              className={`flex items-center justify-center rounded-full border border-flare-300 bg-flare-400/20 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-black/20 disabled:text-ink-400 ${
+              className={`flex items-center justify-center rounded-full border border-flare-300 bg-flare-400/20 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-black/25 disabled:text-ink-400 ${
                 isCompactComposer ? "h-9 w-9" : "h-10 w-10"
               }`}
               onClick={() => {
@@ -820,7 +820,7 @@ export function ThreadComposer({
           </div>
         </div>
         {attachmentsDrawerOpen ? (
-          <div className="mt-3 rounded-2xl border border-white/10 bg-black/30 p-3">
+          <div className="mt-3 rounded-2xl border border-white/10 bg-black/35 p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
                 Attachment picker
