@@ -20,8 +20,9 @@ This document tracks backend-focused parity decisions for the Tauri desktop clon
 | Automation scheduler | Desktop periodic due-run pickup | Scheduler task in `src-tauri/src/main.rs` | Due automation rows trigger `thread/start` + `turn/start` and produce run/inbox updates |
 | Terminal host channel | Host-managed terminal stream contract | `src-tauri/src/terminal_host.rs` + `terminal_*` commands/events | Terminal create/attach/write/resize/close commands and `terminal-*` events working |
 | Persisted atom state | Host-synchronized persisted atoms | `src-tauri/src/state_store.rs` + `persisted_atom_*` commands | Workspace/settings/thread cache metadata writes mirrored to host store |
-| Settings runtime parity | `config/read`, `mcpServerStatus/list`, `getAuthStatus` | `src/app/services/cli/config.ts`, `src/app/routes/SettingsPage.tsx` | MCP and auth status sourced from runtime APIs instead of static fallbacks |
+| Settings runtime parity | `config/read`, `mcpServerStatus/list`, `account/read` | `src/app/services/cli/config.ts`, `src/app/routes/SettingsPage.tsx` | MCP and auth status sourced from runtime APIs instead of static fallbacks |
 | Skills/account parity | `skills/*`, `account/*` app-server methods | existing CLI service layer | Existing flows continue to pass lint/tests/build after backend changes |
+| Server-request handling | `item/*/requestApproval`, `item/tool/requestUserInput`, `account/chatgptAuthTokens/refresh` | `src/app/services/cli/serverRequests.ts` | Server-initiated requests are either fulfilled or explicitly rejected without timeout loops |
 
 ## Intentional Deviations
 

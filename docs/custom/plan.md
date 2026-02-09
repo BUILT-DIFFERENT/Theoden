@@ -16,7 +16,7 @@ This document lists **everything I can confirm from the two screen recordings**:
 - [x] Added host terminal command channel with `terminal_create/attach/write/resize/close` and streaming events (`terminal-attached`, `terminal-data`, `terminal-error`, `terminal-exit`).
 - [x] Moved Automations page data authority from localStorage to host APIs, including one-time migration of legacy localStorage automations.
 - [x] Removed desktop mock fallback behavior in thread list/detail data hooks so desktop mode now uses real/cached backend data only.
-- [x] Added settings runtime reads for MCP/auth status via `mcpServerStatus/list` and `getAuthStatus`.
+- [x] Added settings runtime reads for MCP/auth status via `mcpServerStatus/list` and `account/read`.
 - [x] Added parity contract doc: `docs/custom/parity-backend-v1.md`.
 - [x] Added persisted sidebar UI state for thread list controls (`sort/filter`), expanded workspace folders, and scroll restoration.
 - [x] Added archived-thread row restore actions in Settings and automation create-sheet safety parity details (warning callout + backdrop close).
