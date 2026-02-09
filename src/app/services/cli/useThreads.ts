@@ -24,14 +24,17 @@ function projectNameFromCwd(cwd: string) {
   return parts[parts.length - 1] ?? cwd;
 }
 
-function mapThreadToSummary(thread: {
-  id: string;
-  preview: string;
-  cwd: string;
-  updatedAt: number;
-  modelProvider?: string;
-  source?: unknown;
-}) {
+function mapThreadToSummary(
+  thread: {
+    id: string;
+    preview: string;
+    cwd: string;
+    updatedAt: number;
+    modelProvider?: string;
+    source?: unknown;
+  },
+  archived = false,
+) {
   const title = thread.preview?.trim().length
     ? thread.preview
     : "Untitled thread";
@@ -40,6 +43,7 @@ function mapThreadToSummary(thread: {
     title,
     subtitle: thread.cwd,
     status: "done",
+    archived,
     projectId: projectKeyFromCwd(thread.cwd),
     lastUpdated: formatRelativeTimeFromSeconds(thread.updatedAt),
     modelProvider: thread.modelProvider,
@@ -68,7 +72,7 @@ function mapThreadsToProjects(threads: ThreadSummary[]): Project[] {
   });
   return Array.from(grouped.values(), (project) => ({
     ...project,
-    recentThreads: project.recentThreads.slice(0, 5),
+    recentThreads: project.recentThreads,
     lastThreadId: project.recentThreads[0]?.id ?? project.lastThreadId,
   }));
 }
@@ -130,10 +134,28 @@ export function useThreadList(options: ThreadListOptions = {}) {
     refetchInterval: isDesktop ? 15000 : false,
     refetchIntervalInBackground: false,
   });
+
+  useEffect(() => {
+    if (!isDesktop) {
+      return;
+    }
+    if (query.isPending || query.isFetchingNextPage || !query.hasNextPage) {
+      return;
+    }
+    void query.fetchNextPage();
+  }, [
+    isDesktop,
+    query.fetchNextPage,
+    query.hasNextPage,
+    query.isFetchingNextPage,
+    query.isPending,
+  ]);
   const remoteThreads = useMemo(() => {
     const pages = query.data?.pages ?? [];
-    return pages.flatMap((page) => page.data).map(mapThreadToSummary);
-  }, [query.data]);
+    return pages
+      .flatMap((page) => page.data)
+      .map((thread) => mapThreadToSummary(thread, archived));
+  }, [archived, query.data]);
 
   useEffect(() => {
     if (!isDesktop || !canUsePrimaryCache || !query.data) {

@@ -1,12 +1,14 @@
-use crate::app_server_bridge::configure_command_for_desktop;
+use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize, SlavePty};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, VecDeque};
+use std::io::{Read, Write};
+use std::path::Path;
+use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{AppHandle, Emitter};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
+
+const EXIT_MARKER_PREFIX: &str = "__CODEX_EXIT__";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,21 +54,51 @@ pub struct TerminalSessionDescriptor {
 }
 
 #[derive(Debug, Clone)]
+struct TerminalSessionState {
+    is_running: bool,
+    pending_markers: VecDeque<String>,
+    updated_at: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShellKind {
+    #[cfg(target_os = "windows")]
+    Cmd,
+    #[cfg(target_os = "windows")]
+    Pwsh,
+    #[cfg(not(target_os = "windows"))]
+    Posix,
+}
+
+#[derive(Debug, Clone)]
+struct ShellLaunch {
+    program: String,
+    args: Vec<String>,
+    kind: ShellKind,
+}
+
 struct TerminalSession {
     session_id: String,
     thread_id: Option<String>,
     workspace_path: Option<String>,
     cwd: Option<String>,
-    is_running: bool,
     interactive: bool,
     supports_resize: bool,
     mode: String,
-    updated_at: i64,
+    state: Arc<StdMutex<TerminalSessionState>>,
+    writer_tx: mpsc::UnboundedSender<Vec<u8>>,
+    master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
+    killer: Arc<StdMutex<Box<dyn ChildKiller + Send + Sync>>>,
+    _slave: Arc<StdMutex<Option<Box<dyn SlavePty + Send>>>>,
+    reader_task: tokio::task::JoinHandle<()>,
+    writer_task: tokio::task::JoinHandle<()>,
+    wait_task: tokio::task::JoinHandle<()>,
+    shell_kind: ShellKind,
 }
 
 #[derive(Default)]
 pub struct TerminalHost {
-    sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
+    sessions: Arc<Mutex<HashMap<String, Arc<TerminalSession>>>>,
 }
 
 impl TerminalHost {
@@ -78,8 +110,7 @@ impl TerminalHost {
         let sessions = self.sessions.lock().await;
         let mut output = sessions
             .values()
-            .cloned()
-            .map(to_descriptor)
+            .map(|session| to_descriptor(session))
             .collect::<Vec<_>>();
         output.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         output
@@ -91,22 +122,12 @@ impl TerminalHost {
         params: TerminalCreateParams,
     ) -> Result<TerminalSessionDescriptor, String> {
         let session_id = format!("terminal-{}", Uuid::new_v4());
-        let session = TerminalSession {
-            session_id: session_id.clone(),
-            thread_id: params.thread_id,
-            workspace_path: params.workspace_path,
-            cwd: params.cwd,
-            is_running: false,
-            interactive: false,
-            supports_resize: false,
-            mode: "stateless".to_string(),
-            updated_at: now_ts(),
-        };
-        let descriptor = to_descriptor(session.clone());
+        let session = spawn_terminal_session(app.clone(), session_id, params)?;
+        let descriptor = to_descriptor(&session);
         self.sessions
             .lock()
             .await
-            .insert(session_id.clone(), session);
+            .insert(session.session_id.clone(), session);
         let _ = app.emit("terminal-attached", &descriptor);
         Ok(descriptor)
     }
@@ -119,186 +140,415 @@ impl TerminalHost {
         let sessions = self.sessions.lock().await;
         let session = sessions
             .get(&session_id)
-            .cloned()
             .ok_or_else(|| "terminal session not found".to_string())?;
         let descriptor = to_descriptor(session);
         let _ = app.emit("terminal-attached", &descriptor);
         Ok(descriptor)
     }
 
-    pub async fn write(&self, app: AppHandle, params: TerminalWriteParams) -> Result<(), String> {
-        let (cwd, session_id) = {
-            let mut sessions = self.sessions.lock().await;
-            let session = sessions
-                .get_mut(&params.session_id)
-                .ok_or_else(|| "terminal session not found".to_string())?;
-            if session.is_running {
-                return Err("terminal session is already running a command".to_string());
-            }
-            session.is_running = true;
-            session.updated_at = now_ts();
-            (session.cwd.clone(), session.session_id.clone())
+    pub async fn write(&self, _app: AppHandle, params: TerminalWriteParams) -> Result<(), String> {
+        let session = {
+            let sessions = self.sessions.lock().await;
+            sessions
+                .get(&params.session_id)
+                .cloned()
+                .ok_or_else(|| "terminal session not found".to_string())?
         };
 
-        let _ = app.emit(
-            "terminal-data",
-            serde_json::json!({
-                "sessionId": session_id,
-                "stream": "stdin",
-                "data": format!("$ {}", params.input.trim())
-            }),
-        );
+        if params.input.trim().is_empty() {
+            return Err("command input was empty".to_string());
+        }
 
-        let app_handle = app.clone();
-        let sessions = self.sessions.clone();
-        tokio::spawn(async move {
-            let command_text = params.input.trim().to_string();
-            if command_text.is_empty() {
-                let _ = app_handle.emit(
-                    "terminal-error",
-                    serde_json::json!({
-                        "sessionId": session_id,
-                        "error": "command input was empty"
-                    }),
-                );
-                mark_session_idle(&sessions, &session_id).await;
-                return;
-            }
+        let marker = Uuid::new_v4().to_string();
+        if let Ok(mut state) = session.state.lock() {
+            state.pending_markers.push_back(marker.clone());
+            state.is_running = true;
+            state.updated_at = now_ts();
+        }
 
-            let mut command = if cfg!(windows) {
-                let mut cmd = Command::new("cmd");
-                configure_command_for_desktop(&mut cmd);
-                cmd.arg("/C").arg(command_text);
-                cmd
-            } else {
-                let mut cmd = Command::new("sh");
-                cmd.arg("-lc").arg(command_text);
-                cmd
-            };
-
-            if let Some(cwd) = cwd {
-                command.current_dir(cwd);
-            }
-            command
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped());
-            let mut child = match command.spawn() {
-                Ok(child) => child,
-                Err(err) => {
-                    let _ = app_handle.emit(
-                        "terminal-error",
-                        serde_json::json!({
-                            "sessionId": session_id,
-                            "error": format!("failed to start terminal command: {err}")
-                        }),
-                    );
-                    mark_session_idle(&sessions, &session_id).await;
-                    return;
-                }
-            };
-
-            let stdout = child.stdout.take();
-            let stderr = child.stderr.take();
-            let stdout_app = app_handle.clone();
-            let stderr_app = app_handle.clone();
-            let stdout_session = session_id.clone();
-            let stderr_session = session_id.clone();
-            let stdout_task = tokio::spawn(async move {
-                if let Some(stdout) = stdout {
-                    let mut lines = BufReader::new(stdout).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        let _ = stdout_app.emit(
-                            "terminal-data",
-                            serde_json::json!({
-                                "sessionId": stdout_session,
-                                "stream": "stdout",
-                                "data": line
-                            }),
-                        );
-                    }
-                }
-            });
-            let stderr_task = tokio::spawn(async move {
-                if let Some(stderr) = stderr {
-                    let mut lines = BufReader::new(stderr).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        let _ = stderr_app.emit(
-                            "terminal-data",
-                            serde_json::json!({
-                                "sessionId": stderr_session,
-                                "stream": "stderr",
-                                "data": line
-                            }),
-                        );
-                    }
-                }
-            });
-
-            let code = match child.wait().await {
-                Ok(status) => status.code().unwrap_or(-1),
-                Err(err) => {
-                    let _ = app_handle.emit(
-                        "terminal-error",
-                        serde_json::json!({
-                            "sessionId": session_id,
-                            "error": format!("terminal command failed: {err}")
-                        }),
-                    );
-                    -1
-                }
-            };
-            let _ = stdout_task.await;
-            let _ = stderr_task.await;
-            mark_session_idle(&sessions, &session_id).await;
-            let _ = app_handle.emit(
-                "terminal-exit",
-                serde_json::json!({
-                    "sessionId": session_id,
-                    "code": code
-                }),
-            );
-        });
-
+        let payload = build_write_payload(&params.input, session.shell_kind, &marker);
+        session
+            .writer_tx
+            .send(payload)
+            .map_err(|_| "terminal session writer is closed".to_string())?;
         Ok(())
     }
 
     pub async fn resize(&self, params: TerminalResizeParams) -> Result<(), String> {
-        let _ = (params.cols, params.rows);
-        let sessions = self.sessions.lock().await;
-        if !sessions.contains_key(&params.session_id) {
-            return Err("terminal session not found".to_string());
+        let session = {
+            let sessions = self.sessions.lock().await;
+            sessions
+                .get(&params.session_id)
+                .cloned()
+                .ok_or_else(|| "terminal session not found".to_string())?
+        };
+
+        {
+            let master = session
+                .master
+                .lock()
+                .map_err(|_| "terminal session mutex poisoned".to_string())?;
+            master
+                .resize(PtySize {
+                    rows: params.rows.max(1),
+                    cols: params.cols.max(1),
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|err| format!("failed to resize terminal: {err}"))?;
+        }
+        if let Ok(mut state) = session.state.lock() {
+            state.updated_at = now_ts();
         }
         Ok(())
     }
 
     pub async fn close(&self, params: TerminalCloseParams) -> Result<(), String> {
-        self.sessions.lock().await.remove(&params.session_id);
+        let session = self.sessions.lock().await.remove(&params.session_id);
+        if let Some(session) = session {
+            terminate_session(&session);
+        }
         Ok(())
     }
 }
 
-async fn mark_session_idle(
-    sessions: &Arc<Mutex<HashMap<String, TerminalSession>>>,
-    session_id: &str,
-) {
-    if let Some(session) = sessions.lock().await.get_mut(session_id) {
-        session.is_running = false;
-        session.updated_at = now_ts();
+fn spawn_terminal_session(
+    app: AppHandle,
+    session_id: String,
+    params: TerminalCreateParams,
+) -> Result<Arc<TerminalSession>, String> {
+    let shell = resolve_shell()?;
+    let mut command = CommandBuilder::new(shell.program.clone());
+    for arg in &shell.args {
+        command.arg(arg);
+    }
+
+    let cwd = params.cwd.or(params.workspace_path.clone());
+    if let Some(cwd_path) = &cwd {
+        command.cwd(Path::new(cwd_path));
+    }
+
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|err| format!("failed to open PTY: {err}"))?;
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .map_err(|err| format!("failed to start terminal shell: {err}"))?;
+
+    let killer = child.clone_killer();
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|err| format!("failed to clone PTY reader: {err}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|err| format!("failed to acquire PTY writer: {err}"))?;
+    let master = pair.master;
+    let slave = pair.slave;
+
+    let state = Arc::new(StdMutex::new(TerminalSessionState {
+        is_running: false,
+        pending_markers: VecDeque::new(),
+        updated_at: now_ts(),
+    }));
+    let writer = Arc::new(StdMutex::new(writer));
+    let (writer_tx, mut writer_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+
+    let writer_task = tokio::spawn({
+        let writer = Arc::clone(&writer);
+        async move {
+            while let Some(bytes) = writer_rx.recv().await {
+                if let Ok(mut guard) = writer.lock() {
+                    let _ = guard.write_all(&bytes);
+                    let _ = guard.flush();
+                } else {
+                    return;
+                }
+            }
+        }
+    });
+
+    let reader_state = Arc::clone(&state);
+    let reader_app = app.clone();
+    let reader_session_id = session_id.clone();
+    let reader_task = tokio::task::spawn_blocking(move || {
+        let mut buffer = [0_u8; 8192];
+        let mut line_buffer = String::new();
+        loop {
+            let read = match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(size) => size,
+                Err(_) => break,
+            };
+            let chunk = String::from_utf8_lossy(&buffer[..read]);
+            line_buffer.push_str(&chunk);
+
+            while let Some(newline_index) = line_buffer.find('\n') {
+                let line = line_buffer[..newline_index]
+                    .trim_end_matches('\r')
+                    .to_string();
+                line_buffer.drain(..=newline_index);
+
+                if let Some((token, code)) = parse_exit_marker(&line) {
+                    if consume_pending_marker(&reader_state, &token) {
+                        let _ = reader_app.emit(
+                            "terminal-exit",
+                            serde_json::json!({
+                                "sessionId": reader_session_id,
+                                "code": code
+                            }),
+                        );
+                        continue;
+                    }
+                }
+
+                let _ = reader_app.emit(
+                    "terminal-data",
+                    serde_json::json!({
+                        "sessionId": reader_session_id,
+                        "stream": "stdout",
+                        "data": line
+                    }),
+                );
+            }
+        }
+
+        let leftover = line_buffer.trim_end_matches('\r').to_string();
+        if !leftover.is_empty() {
+            if let Some((token, code)) = parse_exit_marker(&leftover) {
+                if consume_pending_marker(&reader_state, &token) {
+                    let _ = reader_app.emit(
+                        "terminal-exit",
+                        serde_json::json!({
+                            "sessionId": reader_session_id,
+                            "code": code
+                        }),
+                    );
+                    return;
+                }
+            }
+            let _ = reader_app.emit(
+                "terminal-data",
+                serde_json::json!({
+                    "sessionId": reader_session_id,
+                    "stream": "stdout",
+                    "data": leftover
+                }),
+            );
+        }
+    });
+
+    let wait_state = Arc::clone(&state);
+    let wait_app = app.clone();
+    let wait_session_id = session_id.clone();
+    let wait_task = tokio::task::spawn_blocking(move || {
+        let code = match child.wait() {
+            Ok(status) => status.exit_code() as i32,
+            Err(_) => -1,
+        };
+        if let Ok(mut session_state) = wait_state.lock() {
+            session_state.is_running = false;
+            session_state.pending_markers.clear();
+            session_state.updated_at = now_ts();
+        }
+        let _ = wait_app.emit(
+            "terminal-exit",
+            serde_json::json!({
+                "sessionId": wait_session_id,
+                "code": code
+            }),
+        );
+    });
+
+    Ok(Arc::new(TerminalSession {
+        session_id,
+        thread_id: params.thread_id,
+        workspace_path: params.workspace_path,
+        cwd,
+        interactive: true,
+        supports_resize: true,
+        mode: "pty".to_string(),
+        state,
+        writer_tx,
+        master: Arc::new(StdMutex::new(master)),
+        killer: Arc::new(StdMutex::new(killer)),
+        _slave: Arc::new(StdMutex::new(Some(slave))),
+        reader_task,
+        writer_task,
+        wait_task,
+        shell_kind: shell.kind,
+    }))
+}
+
+fn resolve_shell() -> Result<ShellLaunch, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if which::which("pwsh").is_ok() {
+            return Ok(ShellLaunch {
+                program: "pwsh".to_string(),
+                args: vec!["-NoLogo".to_string()],
+                kind: ShellKind::Pwsh,
+            });
+        }
+        Ok(ShellLaunch {
+            program: "cmd.exe".to_string(),
+            args: Vec::new(),
+            kind: ShellKind::Cmd,
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(shell) = std::env::var("SHELL") {
+            let trimmed = shell.trim();
+            if !trimmed.is_empty() && (Path::new(trimmed).exists() || which::which(trimmed).is_ok())
+            {
+                return Ok(ShellLaunch {
+                    program: trimmed.to_string(),
+                    args: vec!["-l".to_string()],
+                    kind: ShellKind::Posix,
+                });
+            }
+        }
+        if Path::new("/bin/bash").exists() {
+            return Ok(ShellLaunch {
+                program: "/bin/bash".to_string(),
+                args: vec!["-l".to_string()],
+                kind: ShellKind::Posix,
+            });
+        }
+        if Path::new("/bin/sh").exists() {
+            return Ok(ShellLaunch {
+                program: "/bin/sh".to_string(),
+                args: vec!["-l".to_string()],
+                kind: ShellKind::Posix,
+            });
+        }
+        Err("failed to resolve a compatible terminal shell".to_string())
     }
 }
 
-fn to_descriptor(session: TerminalSession) -> TerminalSessionDescriptor {
+fn build_write_payload(input: &str, shell_kind: ShellKind, marker: &str) -> Vec<u8> {
+    let newline = if cfg!(windows) { "\r\n" } else { "\n" };
+    let mut payload = String::new();
+    payload.push_str(input);
+    if !(input.ends_with('\n') || input.ends_with('\r')) {
+        payload.push_str(newline);
+    }
+    payload.push_str(&marker_command(shell_kind, marker));
+    payload.push_str(newline);
+    payload.into_bytes()
+}
+
+fn marker_command(shell_kind: ShellKind, marker: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        match shell_kind {
+            ShellKind::Cmd => format!("echo {EXIT_MARKER_PREFIX}{marker}:%errorlevel%"),
+            ShellKind::Pwsh => format!(
+                "$__codexExit = if ($LASTEXITCODE -is [int]) {{ $LASTEXITCODE }} elseif ($?) {{ 0 }} else {{ 1 }}; Write-Output \"{EXIT_MARKER_PREFIX}{marker}:$__codexExit\""
+            ),
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        match shell_kind {
+            ShellKind::Posix => {
+                format!("printf '{EXIT_MARKER_PREFIX}{marker}:%s\\n' \"$?\"")
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_exit_marker, EXIT_MARKER_PREFIX};
+
+    #[test]
+    fn parses_exit_markers_with_prefix() {
+        let marker = format!("{EXIT_MARKER_PREFIX}abc123:17");
+        let parsed = parse_exit_marker(&marker);
+        assert_eq!(parsed, Some(("abc123".to_string(), 17)));
+    }
+
+    #[test]
+    fn ignores_invalid_marker_payloads() {
+        assert_eq!(parse_exit_marker("hello"), None);
+        assert_eq!(
+            parse_exit_marker(&format!("{EXIT_MARKER_PREFIX}abc:not-a-number")),
+            None
+        );
+    }
+}
+
+fn parse_exit_marker(line: &str) -> Option<(String, i32)> {
+    let marker_index = line.find(EXIT_MARKER_PREFIX)?;
+    let payload = &line[marker_index + EXIT_MARKER_PREFIX.len()..];
+    let mut parts = payload.splitn(2, ':');
+    let token = parts.next()?.trim();
+    if token.is_empty() {
+        return None;
+    }
+    let code_text = parts.next()?.trim();
+    let numeric = code_text
+        .chars()
+        .take_while(|char| *char == '-' || char.is_ascii_digit())
+        .collect::<String>();
+    if numeric.is_empty() {
+        return None;
+    }
+    let code = numeric.parse::<i32>().ok()?;
+    Some((token.to_string(), code))
+}
+
+fn consume_pending_marker(state: &Arc<StdMutex<TerminalSessionState>>, token: &str) -> bool {
+    if let Ok(mut session_state) = state.lock() {
+        if let Some(position) = session_state
+            .pending_markers
+            .iter()
+            .position(|entry| entry == token)
+        {
+            session_state.pending_markers.remove(position);
+            session_state.is_running = !session_state.pending_markers.is_empty();
+            session_state.updated_at = now_ts();
+            return true;
+        }
+    }
+    false
+}
+
+fn terminate_session(session: &TerminalSession) {
+    if let Ok(mut killer) = session.killer.lock() {
+        let _ = killer.kill();
+    }
+    session.reader_task.abort();
+    session.writer_task.abort();
+    session.wait_task.abort();
+}
+
+fn to_descriptor(session: &TerminalSession) -> TerminalSessionDescriptor {
+    let (is_running, updated_at) = if let Ok(state) = session.state.lock() {
+        (state.is_running, state.updated_at)
+    } else {
+        (false, now_ts())
+    };
     TerminalSessionDescriptor {
-        session_id: session.session_id,
-        thread_id: session.thread_id,
-        workspace_path: session.workspace_path,
-        cwd: session.cwd,
-        is_running: session.is_running,
+        session_id: session.session_id.clone(),
+        thread_id: session.thread_id.clone(),
+        workspace_path: session.workspace_path.clone(),
+        cwd: session.cwd.clone(),
+        is_running,
         interactive: session.interactive,
         supports_resize: session.supports_resize,
-        mode: session.mode,
-        updated_at: session.updated_at,
+        mode: session.mode.clone(),
+        updated_at,
     }
 }
 

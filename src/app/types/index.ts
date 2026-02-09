@@ -29,6 +29,7 @@ export interface ThreadSummary {
   title: string;
   subtitle: string;
   status: RunStatus;
+  archived?: boolean;
   projectId: string;
   lastUpdated: string;
   changeSummary?: {
@@ -186,7 +187,7 @@ export interface CloudTaskSummary {
 
 export interface ProviderStatus {
   id: "local" | "worktree" | "cloud";
-  status: "ready" | "unavailable" | "stub";
+  status: "ready" | "unavailable";
   detail: string;
 }
 
