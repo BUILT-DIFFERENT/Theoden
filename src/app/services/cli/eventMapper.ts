@@ -23,7 +23,18 @@ const METHOD_LABELS: Record<string, string> = {
   "item/fileChange/outputDelta": "File change output",
   "item/fileChange/requestApproval": "Approve file change",
   "item/commandExecution/requestApproval": "Approve command",
+  "item/tool/requestUserInput": "Tool input requested",
+  "tool/requestUserInput": "Tool input requested",
   "item/agentMessage/delta": "Agent message",
+  "item/plan/delta": "Plan delta",
+  "item/reasoning/summaryTextDelta": "Reasoning summary",
+  "item/reasoning/summaryPartAdded": "Reasoning summary part",
+  "item/reasoning/textDelta": "Reasoning text",
+  "thread/tokenUsage/updated": "Token usage",
+  "account/updated": "Account updated",
+  "account/login/completed": "Login completed",
+  "account/rateLimits/updated": "Rate limits updated",
+  "mcpServer/oauthLogin/completed": "MCP OAuth completed",
 };
 
 function statusFromMethod(method: string, params?: JsonObject): RunStatus {
@@ -65,6 +76,13 @@ function itemLabel(item: JsonObject) {
   if (type === "mcpToolCall") {
     const tool = getString(item, "tool");
     return `Tool: ${tool ?? "mcp"}`;
+  }
+  if (type === "collabToolCall" || type === "collabAgentToolCall") {
+    const tool = getString(item, "tool");
+    return `Collab: ${tool ?? "tool"}`;
+  }
+  if (type === "contextCompaction") {
+    return "Context compacted";
   }
   return type ?? "Item";
 }

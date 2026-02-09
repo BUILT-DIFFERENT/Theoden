@@ -61,6 +61,10 @@ interface ApprovalItemContext {
 const approvals = new Map<string, ApprovalRequest>();
 const approvalItems = new Map<string, ApprovalItemContext>();
 const listeners = new Set<() => void>();
+const APPROVAL_METHODS = new Set<string>([
+  "item/commandExecution/requestApproval",
+  "item/fileChange/requestApproval",
+]);
 
 function emit() {
   listeners.forEach((listener) => listener());
@@ -80,15 +84,18 @@ export function getApprovals(threadId?: string) {
 }
 
 export function registerApprovalRequest(request: AppServerRequest) {
+  if (!APPROVAL_METHODS.has(request.method)) {
+    return false;
+  }
   const params = request.params;
-  if (!params) return;
+  if (!params) return false;
 
   const threadId = getString(params, "threadId");
   const turnId = getString(params, "turnId");
   const item = getObject(params, "item");
   const itemId =
     getString(params, "itemId") ?? (item ? getString(item, "id") : undefined);
-  if (!threadId || !turnId || !itemId) return;
+  if (!threadId || !turnId || !itemId) return false;
 
   const kind: ApprovalKind = request.method.includes("commandExecution")
     ? "command"
@@ -127,6 +134,7 @@ export function registerApprovalRequest(request: AppServerRequest) {
     durationMs: context?.durationMs,
   });
   emit();
+  return true;
 }
 
 export function registerApprovalItem(notification: AppServerNotification) {

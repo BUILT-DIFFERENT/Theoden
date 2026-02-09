@@ -45,6 +45,25 @@ type WorkspaceGroup = {
   threads: ThreadSummary[];
 };
 
+function isAccountInfo(value: unknown): value is {
+  isAuthenticated: boolean;
+  email: string | null;
+  organizationName: string | null;
+  authMethod: string | null;
+} {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.isAuthenticated === "boolean" &&
+    (typeof record.email === "string" || record.email === null) &&
+    (typeof record.organizationName === "string" ||
+      record.organizationName === null) &&
+    (typeof record.authMethod === "string" || record.authMethod === null)
+  );
+}
+
 function readLoginUrl(result: unknown) {
   if (!result || typeof result !== "object") {
     return null;
@@ -359,12 +378,13 @@ export function AppSidebar() {
     }
   };
 
-  const isAuthenticated = account?.isAuthenticated ?? false;
+  const accountInfo = isAccountInfo(account) ? account : null;
+  const isAuthenticated = accountInfo?.isAuthenticated ?? false;
   const accountEmail =
-    account?.email ?? (isAuthenticated ? "Signed in" : "Not signed in");
+    accountInfo?.email ?? (isAuthenticated ? "Signed in" : "Not signed in");
   const accountOrganization =
-    account?.organizationName ??
-    (account?.authMethod === "apiKey" ? "API key" : "Personal workspace");
+    accountInfo?.organizationName ??
+    (accountInfo?.authMethod === "apiKey" ? "API key" : "Personal workspace");
   const accountAvatar = accountEmail.slice(0, 1).toUpperCase() || "?";
 
   return (

@@ -1,11 +1,19 @@
 import { isRecord, type JsonObject } from "@/app/services/cli/appServerPayload";
 import { requestAppServer } from "@/app/services/cli/rpc";
 
+export type AccountLoginMode = "chatgpt" | "apiKey" | "chatgptAuthTokens";
+
+export interface ChatgptAuthTokens {
+  idToken: string;
+  accessToken: string;
+}
+
 export interface AccountInfo {
   isAuthenticated: boolean;
   email: string | null;
   organizationName: string | null;
   authMethod: string | null;
+  requiresOpenaiAuth: boolean;
 }
 
 interface AccountReadResponse {
@@ -20,6 +28,29 @@ interface AccountLoginStartResponse {
   authUrl?: string;
   [key: string]: unknown;
 }
+
+interface AccountRateLimitWindow {
+  usedPercent?: number;
+  windowDurationMins?: number;
+  resetsAt?: number;
+  [key: string]: unknown;
+}
+
+interface AccountRateLimitSnapshot {
+  primary?: AccountRateLimitWindow | null;
+  secondary?: AccountRateLimitWindow | null;
+  [key: string]: unknown;
+}
+
+interface AccountRateLimitsResponse {
+  rateLimits?: AccountRateLimitSnapshot | null;
+}
+
+interface AccountCancelLoginResponse {
+  status?: "canceled" | "notFound";
+}
+
+let cachedExternalChatgptTokens: ChatgptAuthTokens | null = null;
 
 function readString(record: JsonObject, keys: string[]) {
   for (const key of keys) {
@@ -43,12 +74,14 @@ function readBoolean(record: JsonObject, keys: string[]) {
 
 function parseAccountInfo(response: AccountReadResponse): AccountInfo {
   const source = isRecord(response.account) ? response.account : null;
+  const requiresOpenaiAuth = Boolean(response.requiresOpenaiAuth);
   if (!source) {
     return {
       isAuthenticated: false,
       email: null,
       organizationName: null,
       authMethod: null,
+      requiresOpenaiAuth,
     };
   }
 
@@ -82,35 +115,78 @@ function parseAccountInfo(response: AccountReadResponse): AccountInfo {
     email,
     organizationName,
     authMethod,
+    requiresOpenaiAuth,
   };
 }
 
-export async function readAccount() {
+export async function readAccount(options?: { refreshToken?: boolean }) {
   const result = await requestAppServer<AccountReadResponse>({
     method: "account/read",
     params: {
-      refreshToken: false,
+      refreshToken: options?.refreshToken ?? false,
     },
   });
   return parseAccountInfo(result ?? {});
 }
 
-export async function startAccountLogin(
-  mode: "chatgpt" | "apiKey",
-  apiKey?: string,
+export function getCachedExternalChatgptTokens() {
+  return cachedExternalChatgptTokens;
+}
+
+export function clearCachedExternalChatgptTokens() {
+  cachedExternalChatgptTokens = null;
+}
+
+function normalizeLoginParams(
+  mode: AccountLoginMode,
+  value?: string | ChatgptAuthTokens,
 ) {
-  const params =
-    mode === "apiKey"
+  if (mode === "apiKey") {
+    const apiKey = typeof value === "string" ? value.trim() : "";
+    if (!apiKey) {
+      throw new Error("API key is required.");
+    }
+    return {
+      type: "apiKey" as const,
+      apiKey,
+    };
+  }
+
+  if (mode === "chatgptAuthTokens") {
+    const tokens = isRecord(value)
       ? {
-          type: "apiKey" as const,
-          apiKey: apiKey?.trim() ?? "",
+          idToken:
+            typeof value.idToken === "string" ? value.idToken.trim() : "",
+          accessToken:
+            typeof value.accessToken === "string"
+              ? value.accessToken.trim()
+              : "",
         }
       : {
-          type: "chatgpt" as const,
+          idToken: "",
+          accessToken: "",
         };
-  if (mode === "apiKey" && !params.apiKey) {
-    throw new Error("API key is required.");
+    if (!tokens.idToken || !tokens.accessToken) {
+      throw new Error("Both idToken and accessToken are required.");
+    }
+    cachedExternalChatgptTokens = tokens;
+    return {
+      type: "chatgptAuthTokens" as const,
+      idToken: tokens.idToken,
+      accessToken: tokens.accessToken,
+    };
   }
+
+  return {
+    type: "chatgpt" as const,
+  };
+}
+
+export async function startAccountLogin(
+  mode: AccountLoginMode,
+  value?: string | ChatgptAuthTokens,
+) {
+  const params = normalizeLoginParams(mode, value);
 
   const result = await requestAppServer<AccountLoginStartResponse>({
     method: "account/login/start",
@@ -119,10 +195,33 @@ export async function startAccountLogin(
   return result ?? {};
 }
 
+export async function cancelAccountLogin(loginId: string) {
+  const trimmedLoginId = loginId.trim();
+  if (!trimmedLoginId) {
+    throw new Error("loginId is required.");
+  }
+  const result = await requestAppServer<AccountCancelLoginResponse>({
+    method: "account/login/cancel",
+    params: {
+      loginId: trimmedLoginId,
+    },
+  });
+  return result?.status ?? "notFound";
+}
+
 export async function logoutAccount() {
   const result = await requestAppServer({
     method: "account/logout",
     params: {},
   });
+  clearCachedExternalChatgptTokens();
   return result;
+}
+
+export async function readAccountRateLimits() {
+  const result = await requestAppServer<AccountRateLimitsResponse>({
+    method: "account/rateLimits/read",
+    params: {},
+  });
+  return result?.rateLimits ?? null;
 }

@@ -14,15 +14,32 @@ interface ConfigReadResponse {
 }
 
 interface McpServerStatusListResponse {
-  servers?: unknown[];
   data?: unknown[];
+  nextCursor?: string | null;
 }
 
-interface AuthStatusResponse {
-  status?: string;
-  authStatus?: string;
+interface AccountReadResponse {
+  account?: JsonObject | null;
   requiresOpenaiAuth?: boolean;
   [key: string]: unknown;
+}
+
+interface ConfigWriteResponse {
+  status: "ok" | "okOverridden";
+  version: string;
+  filePath: string;
+  overriddenMetadata?: {
+    effectiveValue?: unknown;
+    message?: string;
+  } | null;
+}
+
+interface ConfigRequirementsReadResponse {
+  requirements?: JsonObject | null;
+}
+
+interface McpServerOauthLoginResponse {
+  authorizationUrl: string;
 }
 
 export interface MappedMcpServer {
@@ -86,12 +103,12 @@ export function mcpServersFromConfig(config: CodexConfig): MappedMcpServer[] {
 export async function loadMcpServerStatuses() {
   const result = await requestAppServer<McpServerStatusListResponse>({
     method: "mcpServerStatus/list",
-    params: {},
+    params: {
+      cursor: null,
+      limit: 100,
+    },
   });
-  const raw =
-    (Array.isArray(result?.servers) ? result?.servers : null) ??
-    (Array.isArray(result?.data) ? result?.data : null) ??
-    [];
+  const raw = (Array.isArray(result?.data) ? result?.data : null) ?? [];
   return raw
     .map((entry) => {
       if (!isRecord(entry)) {
@@ -123,14 +140,16 @@ export async function loadMcpServerStatuses() {
 }
 
 export async function loadAuthStatus() {
-  const result = await requestAppServer<AuthStatusResponse>({
-    method: "getAuthStatus",
-    params: {},
+  const result = await requestAppServer<AccountReadResponse>({
+    method: "account/read",
+    params: {
+      refreshToken: false,
+    },
   });
-  const status =
-    (typeof result?.status === "string" && result.status) ||
-    (typeof result?.authStatus === "string" && result.authStatus) ||
-    "unknown";
+  const account = isRecord(result?.account) ? result.account : null;
+  const authMode =
+    (account && typeof account.type === "string" ? account.type : null) ?? null;
+  const status = authMode ? "authenticated" : "unauthenticated";
   const requiresOpenaiAuth =
     typeof result?.requiresOpenaiAuth === "boolean"
       ? result.requiresOpenaiAuth
@@ -138,7 +157,95 @@ export async function loadAuthStatus() {
   return {
     status,
     requiresOpenaiAuth,
+    authMode,
   };
+}
+
+export async function writeConfigValue(params: {
+  keyPath: string;
+  value: unknown;
+  mergeStrategy: "replace" | "upsert";
+  filePath?: string | null;
+  expectedVersion?: string | null;
+}) {
+  const result = await requestAppServer<ConfigWriteResponse>({
+    method: "config/value/write",
+    params: {
+      keyPath: params.keyPath,
+      value: params.value,
+      mergeStrategy: params.mergeStrategy,
+      filePath: params.filePath ?? null,
+      expectedVersion: params.expectedVersion ?? null,
+    },
+  });
+  if (!result) {
+    throw new Error("config/value/write returned no result");
+  }
+  return result;
+}
+
+export async function batchWriteConfig(params: {
+  edits: Array<{
+    keyPath: string;
+    value: unknown;
+    mergeStrategy: "replace" | "upsert";
+  }>;
+  filePath?: string | null;
+  expectedVersion?: string | null;
+}) {
+  if (!params.edits.length) {
+    throw new Error("At least one config edit is required.");
+  }
+  const result = await requestAppServer<ConfigWriteResponse>({
+    method: "config/batchWrite",
+    params: {
+      edits: params.edits,
+      filePath: params.filePath ?? null,
+      expectedVersion: params.expectedVersion ?? null,
+    },
+  });
+  if (!result) {
+    throw new Error("config/batchWrite returned no result");
+  }
+  return result;
+}
+
+export async function readConfigRequirements() {
+  const result = await requestAppServer<ConfigRequirementsReadResponse>({
+    method: "configRequirements/read",
+    params: {},
+  });
+  return isRecord(result?.requirements) ? result.requirements : null;
+}
+
+export async function reloadMcpServerConfig() {
+  return requestAppServer({
+    method: "config/mcpServer/reload",
+    params: null,
+  });
+}
+
+export async function startMcpServerOauthLogin(params: {
+  name: string;
+  scopes?: string[] | null;
+  challenge?: string | null;
+  redirectUrl?: string | null;
+  port?: number | null;
+}) {
+  const result = await requestAppServer<McpServerOauthLoginResponse>({
+    method: "mcpServer/oauth/login",
+    params: {
+      name: params.name,
+      scopes: params.scopes ?? null,
+      challenge: params.challenge ?? null,
+      redirectUrl: params.redirectUrl ?? null,
+      port: params.port ?? null,
+    },
+  });
+  if (!result) {
+    throw new Error("mcpServer/oauth/login returned no result");
+  }
+  return result;
 }
 
 function readString(record: Record<string, unknown>, ...keys: string[]) {

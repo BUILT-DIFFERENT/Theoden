@@ -11,6 +11,8 @@ export interface TurnStartResponse {
 
 export type TurnInputItem =
   | { type: "text"; text: string }
+  | { type: "image"; url: string }
+  | { type: "localImage"; path: string }
   | { type: "skill"; name: string; path: string }
   | { type: "mention"; name: string; path: string };
 
@@ -19,26 +21,52 @@ interface TurnCancelResponse {
   [key: string]: unknown;
 }
 
-export async function startThread(params: {
+interface StartThreadParams {
   cwd?: string | null;
   model?: string | null;
-}) {
+  approvalPolicy?: string | null;
+  sandbox?: string | null;
+  personality?: "none" | "friendly" | "pragmatic" | null;
+  dynamicTools?: unknown[] | null;
+}
+
+interface ResumeThreadParams {
+  threadId: string;
+  cwd?: string | null;
+  model?: string | null;
+  approvalPolicy?: string | null;
+  sandbox?: string | null;
+  personality?: "none" | "friendly" | "pragmatic" | null;
+  dynamicTools?: unknown[] | null;
+}
+
+export async function startThread(params: StartThreadParams = {}) {
   const result = await requestAppServer<ThreadStartResponse>({
     method: "thread/start",
     params: {
       cwd: params.cwd ?? null,
       model: params.model ?? null,
+      approvalPolicy: params.approvalPolicy ?? null,
+      sandbox: params.sandbox ?? null,
+      personality: params.personality ?? null,
+      dynamicTools: params.dynamicTools ?? null,
       experimentalRawEvents: false,
     },
   });
   return result?.thread;
 }
 
-export async function resumeThread(params: { threadId: string }) {
+export async function resumeThread(params: ResumeThreadParams) {
   const result = await requestAppServer<ThreadStartResponse>({
     method: "thread/resume",
     params: {
       threadId: params.threadId,
+      cwd: params.cwd ?? null,
+      model: params.model ?? null,
+      approvalPolicy: params.approvalPolicy ?? null,
+      sandbox: params.sandbox ?? null,
+      personality: params.personality ?? null,
+      dynamicTools: params.dynamicTools ?? null,
     },
   });
   return result?.thread;
@@ -48,7 +76,13 @@ export async function startTurn(params: {
   threadId: string;
   input: string;
   cwd?: string | null;
-  effort?: "medium" | "high" | "xhigh" | null;
+  approvalPolicy?: string | null;
+  sandboxPolicy?: unknown;
+  model?: string | null;
+  effort?: "low" | "medium" | "high" | "extra_high" | "xhigh" | null;
+  summary?: "none" | "auto" | "concise" | "detailed" | null;
+  personality?: "none" | "friendly" | "pragmatic" | null;
+  outputSchema?: unknown;
   inputItems?: TurnInputItem[] | null;
 }) {
   const inputItems =
@@ -61,7 +95,13 @@ export async function startTurn(params: {
       threadId: params.threadId,
       input: inputItems,
       cwd: params.cwd ?? null,
+      approvalPolicy: params.approvalPolicy ?? null,
+      sandboxPolicy: params.sandboxPolicy ?? null,
+      model: params.model ?? null,
       effort: params.effort ?? null,
+      summary: params.summary ?? null,
+      personality: params.personality ?? null,
+      outputSchema: params.outputSchema ?? null,
     },
   });
   return result?.turn;

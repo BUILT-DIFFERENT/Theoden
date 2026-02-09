@@ -6,13 +6,13 @@ export interface AppServerStartRequest extends Record<string, unknown> {
 }
 
 export interface AppServerRequest extends Record<string, unknown> {
-  id: number;
+  id: string | number;
   method: string;
   params?: unknown;
 }
 
 export interface AppServerResponse<T = unknown> {
-  id: number;
+  id: string | number;
   result?: T;
   error?: { message: string };
 }

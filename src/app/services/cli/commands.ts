@@ -20,6 +20,9 @@ export interface CommandExecResult {
 export async function execCommand(
   params: CommandExecParams,
 ): Promise<CommandExecResult> {
+  if (!params.command.length) {
+    throw new Error("command/exec requires at least one argv element.");
+  }
   const sandboxPolicy =
     params.sandboxPolicy ??
     sandboxPolicyForProfile(getCommandPermissionProfile());

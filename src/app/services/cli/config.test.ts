@@ -85,17 +85,34 @@ describe("config service", () => {
       { id: "buildkite", status: "disabled" },
       { id: "github", status: "connected" },
     ]);
+    expect(requestMock).toHaveBeenCalledWith({
+      method: "mcpServerStatus/list",
+      params: {
+        cursor: null,
+        limit: 100,
+      },
+    });
   });
 
   it("maps auth status and provider readiness from config variants", async () => {
     const requestMock = vi.mocked(requestAppServer);
     requestMock.mockResolvedValueOnce({
-      authStatus: "authenticated",
+      account: {
+        type: "chatgpt",
+      },
+      requiresOpenaiAuth: true,
     });
 
     await expect(loadAuthStatus()).resolves.toEqual({
       status: "authenticated",
-      requiresOpenaiAuth: null,
+      requiresOpenaiAuth: true,
+      authMode: "chatgpt",
+    });
+    expect(requestMock).toHaveBeenCalledWith({
+      method: "account/read",
+      params: {
+        refreshToken: false,
+      },
     });
 
     expect(
