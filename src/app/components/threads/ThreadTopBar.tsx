@@ -1,5 +1,5 @@
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Copy, MoreHorizontal, Play } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
@@ -71,20 +71,30 @@ export function ThreadTopBar({
     return () => window.removeEventListener("mousedown", handleClick);
   }, [headerMenuOpen]);
 
-  const handleCopyContext = async () => {
-    const threadLink = threadId
-      ? new URL(`/t/${threadId}`, window.location.origin).toString()
-      : null;
-    const fallbackPath = resolvedWorkspacePath;
-    const copyValue = threadLink ?? fallbackPath;
-    if (!copyValue) {
+  const handleCopyValue = async (value: string | null | undefined) => {
+    if (!value) {
       return;
     }
     try {
-      await navigator.clipboard.writeText(copyValue);
+      await navigator.clipboard.writeText(value);
     } catch (error) {
-      console.warn("Failed to copy context", error);
+      console.warn("Failed to copy value", error);
     }
+  };
+
+  const handleCopyWorkingDirectory = async () => {
+    await handleCopyValue(resolvedWorkspacePath);
+  };
+
+  const handleCopySessionId = async () => {
+    await handleCopyValue(threadId ?? null);
+  };
+
+  const handleCopyAppLink = async () => {
+    const threadLink = threadId
+      ? new URL(`/t/${threadId}`, window.location.origin).toString()
+      : new URL("/", window.location.origin).toString();
+    await handleCopyValue(threadLink);
   };
 
   return (
@@ -97,33 +107,11 @@ export function ThreadTopBar({
       </div>
       {showThreadHeader ? (
         <div className="flex items-center gap-2">
-          <button className="btn-flat inline-flex items-center gap-1.5 px-3 text-ink-100">
-            <Play className="h-3.5 w-3.5" />
-            Run
-            <ChevronDown className="h-3 w-3" />
-          </button>
-          <button className="btn-flat inline-flex items-center gap-1.5 px-3 text-ink-200">
-            Open
-            <ChevronDown className="h-3 w-3" />
-          </button>
-          <button className="btn-flat inline-flex items-center gap-1.5 px-3 text-ink-200">
-            Commit
-            <ChevronDown className="h-3 w-3" />
-          </button>
           {hasChanges ? (
             <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[0.68rem] text-ink-300">
               +{changeSummary?.additions ?? 0} -{changeSummary?.deletions ?? 0}
             </span>
           ) : null}
-          <button
-            className="btn-flat px-2 text-ink-300"
-            onClick={() => {
-              void handleCopyContext();
-            }}
-            aria-label="Copy thread context"
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </button>
           <div className="relative" ref={headerMenuRef}>
             <button
               className="btn-flat px-2 text-ink-400"
@@ -138,10 +126,28 @@ export function ThreadTopBar({
                   className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
                   onClick={() => {
                     setHeaderMenuOpen(false);
-                    void handleCopyContext();
+                    void handleCopyWorkingDirectory();
                   }}
                 >
-                  {threadId ? "Copy thread link" : "Copy workspace path"}
+                  Copy working directory
+                </button>
+                <button
+                  className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    void handleCopySessionId();
+                  }}
+                >
+                  Copy session ID
+                </button>
+                <button
+                  className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                  onClick={() => {
+                    setHeaderMenuOpen(false);
+                    void handleCopyAppLink();
+                  }}
+                >
+                  Copy app link
                 </button>
                 <button
                   className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"

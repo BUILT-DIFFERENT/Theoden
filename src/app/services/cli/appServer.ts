@@ -14,7 +14,11 @@ export interface AppServerRequest extends Record<string, unknown> {
 export interface AppServerResponse<T = unknown> {
   id: string | number;
   result?: T;
-  error?: { message: string };
+  error?: {
+    code?: number;
+    message: string;
+    data?: unknown;
+  };
 }
 
 export async function startAppServer(request: AppServerStartRequest) {

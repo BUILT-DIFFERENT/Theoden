@@ -303,6 +303,15 @@ describe("workspace switching propagation", () => {
 
     const header = screen.getByRole("banner");
     expect(within(header).getByText("alpha")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^run$/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^open$/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^commit$/i }),
+    ).not.toBeInTheDocument();
 
     const bravoWorkspaceButton = screen.getByRole("button", {
       name: /^bravo$/i,
@@ -315,6 +324,22 @@ describe("workspace switching propagation", () => {
         screen.getAllByRole("button", { name: /bravo/i }).length,
       ).toBeGreaterThanOrEqual(2);
     });
+  });
+
+  it("keeps thread overflow actions available", async () => {
+    renderWithProviders();
+
+    fireEvent.click(screen.getByRole("button", { name: "Thread options" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Copy working directory" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copy session ID" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copy app link" }),
+    ).toBeInTheDocument();
   });
 });
 
