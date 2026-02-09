@@ -15,6 +15,7 @@ use automation_store::{
     AutomationUpdateParams, RunArchiveParams, RunNowParams,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use state_store::StateStore;
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -416,6 +417,9 @@ async fn run_automation_record(
     let run = store
         .create_run(&automation, thread_id.clone(), "IN_PROGRESS".to_string())
         .await?;
+    store
+        .set_automation_next_run_at(automation.id.clone(), None)
+        .await?;
     let _ = app.emit("automation-runs-updated", serde_json::json!({}));
 
     let turn_start_request = serde_json::json!({
@@ -430,23 +434,29 @@ async fn run_automation_record(
     });
     if let Err(error) = bridge.request(app.clone(), turn_start_request).await {
         store
-            .update_run_status(run.id.clone(), "FAILED".to_string(), None)
+            .update_run_status(
+                run.id.clone(),
+                "FAILED".to_string(),
+                None,
+                Some(format!("Automation: {}", automation.name)),
+                Some("Automation run failed before completion.".to_string()),
+            )
+            .await?;
+        let failed_run = store
+            .run_by_id(run.id.clone())
+            .await?
+            .unwrap_or(run.clone());
+        store.create_inbox_item_for_run(&failed_run).await?;
+        store
+            .touch_automation_run_times(automation.id.clone(), now_ts(), automation.rrule.clone())
             .await?;
         let _ = app.emit("automation-runs-updated", serde_json::json!({}));
+        let _ = app.emit("inbox-items-updated", serde_json::json!({}));
         return Err(error);
     }
 
-    store
-        .update_run_status(run.id.clone(), "PENDING_REVIEW".to_string(), None)
-        .await?;
-    store.create_inbox_item_for_run(&run).await?;
-    store
-        .touch_automation_run_times(automation.id.clone(), now_ts(), automation.rrule.clone())
-        .await?;
     let _ = app.emit("automation-runs-updated", serde_json::json!({}));
-    let _ = app.emit("inbox-items-updated", serde_json::json!({}));
-    let updated_run = store.run_by_id(run.id.clone()).await?.unwrap_or(run);
-    Ok(updated_run)
+    Ok(run)
 }
 
 fn read_thread_id(response: &serde_json::Value) -> Option<String> {
@@ -463,6 +473,81 @@ fn read_thread_id(response: &serde_json::Value) -> Option<String> {
                 .and_then(|value| value.as_str())
                 .map(|value| value.to_string())
         })
+}
+
+fn completed_run_status(notification: &Value) -> Option<(String, String)> {
+    let method = notification.get("method")?.as_str()?;
+    if method != "turn/completed" {
+        return None;
+    }
+    let params = notification.get("params")?;
+    let thread_id = params
+        .get("threadId")
+        .or_else(|| params.get("thread_id"))?
+        .as_str()?
+        .to_string();
+    let turn_status = params
+        .get("turn")
+        .and_then(|turn| turn.get("status"))
+        .and_then(Value::as_str)
+        .map(|value| value.to_ascii_lowercase())?;
+    let run_status = match turn_status.as_str() {
+        "completed" => "PENDING_REVIEW",
+        "failed" => "FAILED",
+        "interrupted" => "INTERRUPTED",
+        _ => return None,
+    };
+    Some((thread_id, run_status.to_string()))
+}
+
+fn inbox_summary_for_run_status(status: &str) -> String {
+    match status {
+        "PENDING_REVIEW" => "Automation run completed and ready for review.".to_string(),
+        "FAILED" => "Automation run failed. Open the thread for details.".to_string(),
+        "INTERRUPTED" => "Automation run was interrupted before completion.".to_string(),
+        _ => "New automation output is ready for review.".to_string(),
+    }
+}
+
+async fn reconcile_automation_run_completion(
+    app: AppHandle,
+    store: Arc<AutomationStore>,
+    notification: Value,
+) -> Result<(), String> {
+    let Some((thread_id, next_status)) = completed_run_status(&notification) else {
+        return Ok(());
+    };
+    let Some(run) = store.run_by_thread_id(thread_id).await? else {
+        return Ok(());
+    };
+    if !run.status.eq_ignore_ascii_case("IN_PROGRESS") {
+        return Ok(());
+    }
+    let automation = store.automation_by_id(run.automation_id.clone()).await?;
+    let inbox_title = automation
+        .as_ref()
+        .map(|record| format!("Automation: {}", record.name))
+        .unwrap_or_else(|| "Automation run".to_string());
+    let inbox_summary = inbox_summary_for_run_status(&next_status);
+    store
+        .update_run_status(
+            run.id.clone(),
+            next_status,
+            None,
+            Some(inbox_title),
+            Some(inbox_summary),
+        )
+        .await?;
+    let updated_run = store.run_by_id(run.id.clone()).await?.unwrap_or(run);
+    store.create_inbox_item_for_run(&updated_run).await?;
+    if let Some(automation) = automation {
+        store
+            .touch_automation_run_times(automation.id.clone(), now_ts(), automation.rrule.clone())
+            .await?;
+    }
+    let _ = app.emit("automation-runs-updated", serde_json::json!({}));
+    let _ = app.emit("inbox-items-updated", serde_json::json!({}));
+    Ok(())
 }
 
 fn main() {
@@ -490,6 +575,11 @@ fn main() {
             let automation_store = Arc::clone(app.state::<Arc<AutomationStore>>().inner());
             let app_server_bridge = Arc::clone(app.state::<Arc<AppServerBridge>>().inner());
             let scheduler_trigger = Arc::clone(app.state::<Arc<Notify>>().inner());
+            let app_handle_for_notifications = app.handle().clone();
+            let automation_store_for_notifications =
+                Arc::clone(app.state::<Arc<AutomationStore>>().inner());
+            let app_server_bridge_for_notifications =
+                Arc::clone(app.state::<Arc<AppServerBridge>>().inner());
             tauri::async_runtime::spawn(async move {
                 loop {
                     let due = match automation_store.due_automations(now_ts()).await {
@@ -528,6 +618,29 @@ fn main() {
                     tokio::select! {
                         _ = tokio::time::sleep(Duration::from_secs(sleep_seconds as u64)) => {}
                         _ = scheduler_trigger.notified() => {}
+                    }
+                }
+            });
+            tauri::async_runtime::spawn(async move {
+                let mut notifications =
+                    app_server_bridge_for_notifications.subscribe_notifications();
+                loop {
+                    let notification = match notifications.recv().await {
+                        Ok(message) => message,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    };
+                    if let Err(error) = reconcile_automation_run_completion(
+                        app_handle_for_notifications.clone(),
+                        Arc::clone(&automation_store_for_notifications),
+                        notification,
+                    )
+                    .await
+                    {
+                        let _ = app_handle_for_notifications.emit(
+                            "automation-runs-updated",
+                            serde_json::json!({ "error": error }),
+                        );
                     }
                 }
             });

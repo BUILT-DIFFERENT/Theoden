@@ -107,7 +107,9 @@ function runStatusClass(status: string) {
   if (normalized === "DONE" || normalized === "COMPLETED") {
     return "border-emerald-400/40 text-emerald-300";
   }
-  if (normalized === "FAILED") return "border-rose-400/40 text-rose-300";
+  if (normalized === "FAILED" || normalized === "INTERRUPTED") {
+    return "border-rose-400/40 text-rose-300";
+  }
   if (
     normalized === "PENDING_REVIEW" ||
     normalized === "NEEDS_REVIEW" ||

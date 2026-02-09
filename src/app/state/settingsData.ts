@@ -2,6 +2,9 @@ import type { EditorOption, ProviderStatus } from "@/app/types";
 
 export type SettingsSectionId =
   | "general"
+  | "account"
+  | "data-controls"
+  | "usage-analytics"
   | "configuration"
   | "personalization"
   | "mcp-servers"
@@ -24,6 +27,21 @@ export const settingsSections: SettingsSection[] = [
     id: "general",
     label: "General",
     description: "Default editor destination and basic preferences.",
+  },
+  {
+    id: "account",
+    label: "Account",
+    description: "Authentication status and sign-in controls.",
+  },
+  {
+    id: "data-controls",
+    label: "Data controls",
+    description: "Storage locations and privacy management links.",
+  },
+  {
+    id: "usage-analytics",
+    label: "Usage & analytics",
+    description: "Rate-limit visibility and analytics management links.",
   },
   {
     id: "configuration",

@@ -1,33 +1,35 @@
-import { Link, useParams } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { isRecord } from "@/app/services/cli/appServerPayload";
+import {
+  AccountActionCancelledError,
+  runAccountAction as performAccountAction,
+} from "@/app/services/cli/accountActions";
+import {
+  readAccountRateLimits,
+  type AccountRateLimitSnapshot,
+} from "@/app/services/cli/accountUsage";
+import { subscribeAppServerNotifications } from "@/app/services/cli/appServerEventHub";
 import { execCommand } from "@/app/services/cli/commands";
 import {
-  loadConfigSnapshot,
   loadAuthStatus,
+  loadMergedConfig,
   loadMcpServerStatuses,
-  mapConfigWriteErrorMessage,
   mcpServersFromConfig,
   providersFromConfig,
-  reloadMcpServerConfig,
   validateConfig,
-  writeMcpServerConfig,
-  type CodexConfig,
-  type ConfigLayer,
-  type ConfigLayerMetadata,
-  type ConfigValidationResult,
-  type ConfigWriteTarget,
   type MappedMcpServer,
   type MappedProviderStatus,
 } from "@/app/services/cli/config";
-import {
-  type ConfigWarningEntry,
-  getConfigWarnings,
-  subscribeConfigWarnings,
-} from "@/app/services/cli/configWarnings";
 import { listThreads, unarchiveThread } from "@/app/services/cli/threads";
+import { useAccount } from "@/app/services/cli/useAccount";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import { openPathInExplorer } from "@/app/services/desktop/open";
+import {
+  listWorktrees,
+  removeWorktree,
+  type WorktreeInventoryRow,
+} from "@/app/services/git/worktrees";
 import {
   environmentProfileIdFromWorkspace,
   loadStoredEnvironmentProfiles,
@@ -77,227 +79,6 @@ const actionButtonClass =
 const formInputClass =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none";
 
-type McpTransportType = "stdio" | "streamable_http" | "sse";
-
-interface McpServerRow extends MappedMcpServer {
-  rawConfig: Record<string, unknown>;
-  originType: string | null;
-  readOnly: boolean;
-}
-
-interface McpEditorState {
-  id: string;
-  name: string;
-  transport: McpTransportType;
-  url: string;
-  command: string;
-  argsText: string;
-  envText: string;
-  disabled: boolean;
-}
-
-const defaultMcpEditorState = (): McpEditorState => ({
-  id: "",
-  name: "",
-  transport: "stdio",
-  url: "",
-  command: "",
-  argsText: "",
-  envText: "",
-  disabled: false,
-});
-
-function layerSourcePath(source: ConfigLayer["name"]) {
-  if (typeof source.file === "string") {
-    return source.file;
-  }
-  if (typeof source.dotCodexFolder === "string") {
-    return source.dotCodexFolder;
-  }
-  return null;
-}
-
-function layerSourceLabel(source: ConfigLayer["name"]) {
-  const path = layerSourcePath(source);
-  if (source.type === "user") {
-    return path ? `user (${path})` : "user";
-  }
-  if (source.type === "project") {
-    return path ? `project (${path})` : "project";
-  }
-  if (source.type === "system") {
-    return path ? `system (${path})` : "system";
-  }
-  if (source.type === "mdm") {
-    return "mdm";
-  }
-  return source.type;
-}
-
-function parseCommandArgs(argsText: string) {
-  return argsText
-    .split(/\r?\n/)
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
-
-function parseEnvText(envText: string) {
-  const entries = envText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (!entries.length) {
-    return null;
-  }
-  const env: Record<string, string> = {};
-  for (const entry of entries) {
-    const separator = entry.indexOf("=");
-    if (separator <= 0) {
-      continue;
-    }
-    const key = entry.slice(0, separator).trim();
-    const value = entry.slice(separator + 1).trim();
-    if (!key) {
-      continue;
-    }
-    env[key] = value;
-  }
-  return Object.keys(env).length ? env : null;
-}
-
-function originTypeForMcpServer(
-  origins: Record<string, ConfigLayerMetadata>,
-  serverId: string,
-) {
-  const prefix = `mcp_servers.${serverId}`;
-  const matchingOrigins = Object.entries(origins)
-    .filter(([key]) => key === prefix || key.startsWith(`${prefix}.`))
-    .map(([, metadata]) => metadata.name.type);
-  if (!matchingOrigins.length) {
-    return null;
-  }
-  if (matchingOrigins.every((type) => type === "user")) {
-    return "user";
-  }
-  return matchingOrigins[0] ?? null;
-}
-
-function mcpEditorFromServer(server: McpServerRow): McpEditorState {
-  const command =
-    typeof server.rawConfig.command === "string"
-      ? server.rawConfig.command
-      : "";
-  const url =
-    typeof server.rawConfig.url === "string" ? server.rawConfig.url : "";
-  const args = Array.isArray(server.rawConfig.args)
-    ? server.rawConfig.args.filter((entry) => typeof entry === "string")
-    : [];
-  const env = isRecord(server.rawConfig.env)
-    ? Object.entries(server.rawConfig.env)
-        .filter(([, value]) => typeof value === "string")
-        .map(([key, value]) => `${key}=${value as string}`)
-    : [];
-  const transportRaw = server.rawConfig.transport;
-  const transport: McpTransportType =
-    transportRaw === "sse"
-      ? "sse"
-      : transportRaw === "streamable_http"
-        ? "streamable_http"
-        : url
-          ? "streamable_http"
-          : "stdio";
-  return {
-    id: server.id,
-    name:
-      typeof server.rawConfig.name === "string" && server.rawConfig.name.trim()
-        ? server.rawConfig.name
-        : server.name,
-    transport,
-    url,
-    command,
-    argsText: args.join("\n"),
-    envText: env.join("\n"),
-    disabled:
-      typeof server.rawConfig.disabled === "boolean"
-        ? server.rawConfig.disabled
-        : false,
-  };
-}
-
-function buildMcpConfigFromEditor(editor: McpEditorState) {
-  const result: Record<string, unknown> = {};
-  if (editor.name.trim()) {
-    result.name = editor.name.trim();
-  }
-  result.disabled = editor.disabled;
-  if (editor.transport === "stdio") {
-    if (!editor.command.trim()) {
-      throw new Error("Command is required for stdio transport.");
-    }
-    result.transport = "stdio";
-    result.command = editor.command.trim();
-    const args = parseCommandArgs(editor.argsText);
-    if (args.length) {
-      result.args = args;
-    }
-    const env = parseEnvText(editor.envText);
-    if (env) {
-      result.env = env;
-    }
-    return result;
-  }
-  if (!editor.url.trim()) {
-    throw new Error("URL is required for remote MCP transport.");
-  }
-  result.transport = editor.transport;
-  result.url = editor.url.trim();
-  return result;
-}
-
-function readOnlyForOrigin(originType: string | null) {
-  if (!originType) {
-    return false;
-  }
-  return originType !== "user";
-}
-
-function filterExperimentalConfig(
-  value: unknown,
-  showExperimentalConfig: boolean,
-): unknown {
-  if (showExperimentalConfig) {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) =>
-      filterExperimentalConfig(entry, showExperimentalConfig),
-    );
-  }
-  if (!isRecord(value)) {
-    return value;
-  }
-  return Object.entries(value).reduce<Record<string, unknown>>(
-    (accumulator, [key, entry]) => {
-      if (key.toLowerCase().includes("experimental")) {
-        return accumulator;
-      }
-      accumulator[key] = filterExperimentalConfig(
-        entry,
-        showExperimentalConfig,
-      );
-      return accumulator;
-    },
-    {},
-  );
-}
-
-function configWarningLabel(warning: ConfigWarningEntry) {
-  if (warning.path) {
-    return `${warning.summary} (${warning.path})`;
-  }
-  return warning.summary;
-}
-
 function environmentProfilesMatch(
   current: EnvironmentProfile[],
   next: EnvironmentProfile[],
@@ -321,9 +102,33 @@ function environmentProfilesMatch(
   });
 }
 
+function codexHomePathForPlatform() {
+  if (typeof navigator === "undefined") {
+    return "~/.codex";
+  }
+  const userAgent = navigator.userAgent.toLowerCase();
+  if (userAgent.includes("windows")) {
+    return "%USERPROFILE%\\.codex";
+  }
+  return "~/.codex";
+}
+
+function formatRateLimitResetAt(value: number | null) {
+  if (!value) {
+    return "Unknown";
+  }
+  return new Date(value * 1000).toLocaleString();
+}
+
 export function SettingsPage() {
+  const navigate = useNavigate();
   const { selectedWorkspace, setSelectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
+  const {
+    account,
+    isLoading: accountLoading,
+    refresh: refreshAccount,
+  } = useAccount();
   const { section } = useParams({ from: "/settings/$section" });
   const activeSection = settingsSections.find((item) => item.id === section);
   const activeSectionId = activeSection?.id ?? defaultSettingsSection;
@@ -422,34 +227,17 @@ export function SettingsPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [mcpServers, setMcpServers] = useState<McpServerRow[]>([]);
-  const [mcpEditor, setMcpEditor] = useState<McpEditorState>(
-    defaultMcpEditorState,
-  );
-  const [selectedMcpServerId, setSelectedMcpServerId] = useState<string | null>(
+  const [accountAction, setAccountAction] = useState<
+    "login-chatgpt" | "login-api-key" | "logout" | null
+  >(null);
+  const [rateLimits, setRateLimits] = useState<AccountRateLimitSnapshot | null>(
     null,
   );
-  const selectedMcpServerIdRef = useRef<string | null>(null);
+  const [rateLimitsLoading, setRateLimitsLoading] = useState(false);
+  const [mcpServers, setMcpServers] = useState<MappedMcpServer[]>([]);
   const [providerStatuses, setProviderStatuses] = useState<
     MappedProviderStatus[]
   >(fallbackProviderStatuses);
-  const [configPreview, setConfigPreview] = useState<CodexConfig>({});
-  const [configOrigins, setConfigOrigins] = useState<
-    Record<string, ConfigLayerMetadata>
-  >({});
-  const [configLayers, setConfigLayers] = useState<ConfigLayer[]>([]);
-  const [configWriteTarget, setConfigWriteTarget] = useState<ConfigWriteTarget>(
-    {
-      filePath: null,
-      expectedVersion: null,
-    },
-  );
-  const [configValidationResult, setConfigValidationResult] =
-    useState<ConfigValidationResult | null>(null);
-  const [configWarnings, setConfigWarnings] = useState<ConfigWarningEntry[]>(
-    [],
-  );
-  const [configReadError, setConfigReadError] = useState<string | null>(null);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [archivedThreads, setArchivedThreads] = useState<
     Array<{ id: string; preview: string; updatedAt: number }>
@@ -458,15 +246,14 @@ export function SettingsPage() {
   const [restoringArchivedThreadIds, setRestoringArchivedThreadIds] = useState<
     Set<string>
   >(() => new Set());
-  const configPreviewCwd = includeProjectOverrides ? resolvedWorkspace : null;
-  const filteredConfigPreview = useMemo(
-    () =>
-      filterExperimentalConfig(configPreview, showExperimentalConfig) as Record<
-        string,
-        unknown
-      >,
-    [configPreview, showExperimentalConfig],
+  const [worktreeRows, setWorktreeRows] = useState<WorktreeInventoryRow[]>([]);
+  const [worktreeRowsLoading, setWorktreeRowsLoading] = useState(false);
+  const [worktreeRowsError, setWorktreeRowsError] = useState<string | null>(
+    null,
   );
+  const [removingWorktreePaths, setRemovingWorktreePaths] = useState<
+    Set<string>
+  >(() => new Set());
   const environmentProfileFallback = useMemo(
     () => ({
       executionMode: initialSettings.defaultEnvironment,
@@ -514,17 +301,6 @@ export function SettingsPage() {
     }, 3000);
     return () => window.clearTimeout(timeoutId);
   }, [actionMessage]);
-
-  useEffect(() => {
-    setConfigWarnings(getConfigWarnings());
-    return subscribeConfigWarnings(() => {
-      setConfigWarnings(getConfigWarnings());
-    });
-  }, []);
-
-  useEffect(() => {
-    selectedMcpServerIdRef.current = selectedMcpServerId;
-  }, [selectedMcpServerId]);
 
   useEffect(() => {
     setEnvironmentProfiles((current) => {
@@ -651,16 +427,6 @@ export function SettingsPage() {
     );
   }, [activeEnvironmentProfileId, environmentProfiles]);
 
-  const selectedMcpServer = useMemo(
-    () =>
-      selectedMcpServerId
-        ? (mcpServers.find((server) => server.id === selectedMcpServerId) ??
-          null)
-        : null,
-    [mcpServers, selectedMcpServerId],
-  );
-  const mcpEditorReadOnly = Boolean(selectedMcpServer?.readOnly);
-
   const updateSelectedEnvironmentProfile = useCallback(
     (
       updater: (
@@ -719,12 +485,60 @@ export function SettingsPage() {
     }
     return "~/.codex/config.toml";
   }, []);
+  const codexHomePath = useMemo(() => codexHomePathForPlatform(), []);
+  const inferredSqlitePath = `${codexHomePath}${
+    codexHomePath.endsWith("\\")
+      ? ""
+      : codexHomePath.includes("\\")
+        ? "\\"
+        : "/"
+  }sqlite`;
+  const inferredAutomationsPath = `${codexHomePath}${
+    codexHomePath.endsWith("\\")
+      ? ""
+      : codexHomePath.includes("\\")
+        ? "\\"
+        : "/"
+  }automations`;
+
+  const refreshRateLimits = useCallback(async () => {
+    setRateLimitsLoading(true);
+    try {
+      const snapshot = await readAccountRateLimits();
+      setRateLimits(snapshot);
+      return snapshot;
+    } finally {
+      setRateLimitsLoading(false);
+    }
+  }, []);
+
+  const loadWorktreeRows = useCallback(async () => {
+    if (!resolvedWorkspace) {
+      setWorktreeRows([]);
+      setWorktreeRowsError("Select a workspace to inspect worktrees.");
+      return [];
+    }
+    setWorktreeRowsLoading(true);
+    setWorktreeRowsError(null);
+    try {
+      const rows = await listWorktrees(resolvedWorkspace);
+      setWorktreeRows(rows);
+      return rows;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to list worktrees.";
+      setWorktreeRowsError(message);
+      throw error;
+    } finally {
+      setWorktreeRowsLoading(false);
+    }
+  }, [resolvedWorkspace]);
 
   const refreshMcpServers = useCallback(async () => {
     setMcpLoading(true);
     try {
-      const [snapshot, runtimeStatuses, authStatus] = await Promise.all([
-        loadConfigSnapshot(configPreviewCwd),
+      const [config, runtimeStatuses, authStatus] = await Promise.all([
+        loadMergedConfig(resolvedWorkspace),
         loadMcpServerStatuses().catch(() => []),
         loadAuthStatus().catch(() => ({
           status: "unknown",
@@ -734,75 +548,26 @@ export function SettingsPage() {
       const runtimeStatusById = new Map(
         runtimeStatuses.map((status) => [status.id, status.status]),
       );
-      setConfigPreview(snapshot.config);
-      setConfigOrigins(snapshot.origins);
-      setConfigLayers(snapshot.layers);
-      setConfigWriteTarget(snapshot.writeTarget);
-      setConfigReadError(null);
-      setConfigValidationResult(null);
-
-      const mcpRecord =
-        (isRecord(snapshot.config.mcp_servers)
-          ? snapshot.config.mcp_servers
-          : null) ??
-        (isRecord(snapshot.config.mcpServers)
-          ? snapshot.config.mcpServers
-          : null);
-      const rawConfigById = new Map(
-        Object.entries(mcpRecord ?? {}).map(([id, value]) => [
-          id,
-          isRecord(value) ? value : {},
-        ]),
-      );
-
-      let parsedServers = mcpServersFromConfig(snapshot.config).map(
-        (server) => {
-          const runtimeStatus = runtimeStatusById.get(server.id);
-          const originType = originTypeForMcpServer(
-            snapshot.origins,
-            server.id,
-          );
-          const rawConfig = rawConfigById.get(server.id) ?? {};
-          const serverWithOrigin = {
-            ...server,
-            rawConfig,
-            originType,
-            readOnly: readOnlyForOrigin(originType),
-          } satisfies McpServerRow;
-          if (!runtimeStatus) {
-            return serverWithOrigin;
-          }
-          return {
-            ...serverWithOrigin,
-            status: runtimeStatus,
-          } satisfies McpServerRow;
-        },
-      );
+      let parsedServers = mcpServersFromConfig(config).map((server) => {
+        const runtimeStatus = runtimeStatusById.get(server.id);
+        if (!runtimeStatus) {
+          return server;
+        }
+        return {
+          ...server,
+          status: runtimeStatus,
+        } satisfies MappedMcpServer;
+      });
       if (!parsedServers.length && runtimeStatuses.length) {
         parsedServers = runtimeStatuses.map((status) => ({
           id: status.id,
           name: status.id,
           endpoint: "mcp://unknown",
           status: status.status,
-          rawConfig: {},
-          originType: null,
-          readOnly: false,
         }));
       }
       setMcpServers(parsedServers);
-      const selectedId = selectedMcpServerIdRef.current;
-      const nextSelectedServer =
-        (selectedId
-          ? parsedServers.find((server) => server.id === selectedId)
-          : null) ??
-        parsedServers[0] ??
-        null;
-      setSelectedMcpServerId(nextSelectedServer?.id ?? null);
-      if (nextSelectedServer) {
-        setMcpEditor(mcpEditorFromServer(nextSelectedServer));
-      }
-
-      const providers = providersFromConfig(snapshot.config).map((provider) => {
+      const providers = providersFromConfig(config).map((provider) => {
         if (provider.id !== "local") {
           return provider;
         }
@@ -822,119 +587,93 @@ export function SettingsPage() {
       return parsedServers.length
         ? `Reloaded ${parsedServers.length} MCP server(s).`
         : "No MCP servers configured.";
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load config.";
-      setConfigReadError(message);
-      throw error;
     } finally {
       setMcpLoading(false);
     }
-  }, [configPreviewCwd]);
+  }, [resolvedWorkspace]);
 
   const handleOpenConfigFile = () =>
     runAction(async () => {
-      const configPath = configWriteTarget.filePath ?? inferredConfigPath;
-      await navigator.clipboard.writeText(configPath);
-      return `Copied config path: ${configPath}`;
+      await navigator.clipboard.writeText(inferredConfigPath);
+      return `Copied config path: ${inferredConfigPath}`;
     }, "Failed to copy config path.");
 
-  const handleValidateConfig = async () => {
-    setActionError(null);
-    setActionMessage(null);
-    try {
-      const result = await validateConfig(configPreviewCwd);
-      setConfigValidationResult(result);
-      setConfigWarnings(result.warnings);
-      if (result.valid) {
-        setActionMessage(
-          `Config loaded successfully (${result.keys} top-level keys).`,
-        );
-        return;
-      }
-      setActionError(
-        result.errors.join("; ") ||
-          "Config validation failed with unknown errors.",
-      );
-    } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : "Config validation failed.",
-      );
-    }
-  };
-
-  const handleSaveMcpServer = () =>
+  const handleOpenPathInExplorer = (path: string, label: string) =>
     runAction(async () => {
-      const id = mcpEditor.id.trim();
-      if (!id) {
+      if (!isTauri()) {
+        throw new Error(
+          "Open in file explorer is available in the desktop app.",
+        );
+      }
+      await openPathInExplorer(path);
+      return `Opened ${label}.`;
+    }, `Failed to open ${label}.`);
+
+  const handleRunAccountAction = (
+    action: "login-chatgpt" | "login-api-key" | "logout",
+  ) =>
+    runAction(async () => {
+      setAccountAction(action);
+      try {
+        const message = await performAccountAction(action, {
+          promptApiKey: () => window.prompt("Enter OpenAI API key"),
+          openExternal: (url) => {
+            window.open(url, "_blank", "noopener,noreferrer");
+          },
+          refreshAccount,
+        });
+        return message;
+      } catch (error) {
+        if (error instanceof AccountActionCancelledError) {
+          return "Account action cancelled.";
+        }
+        throw error;
+      } finally {
+        setAccountAction(null);
+      }
+    }, "Account action failed.");
+
+  const handleValidateConfig = () =>
+    runAction(async () => {
+      const result = await validateConfig(resolvedWorkspace);
+      if (!result.valid) {
+        throw new Error(result.errors.join("; ") || "Config is invalid.");
+      }
+      return `Config loaded successfully (${result.keys} top-level keys).`;
+    }, "Config validation failed.");
+
+  const handleAddMcpServer = () =>
+    runAction(() => {
+      const id = window.prompt("MCP server ID (example: github)");
+      if (!id?.trim()) {
         throw new Error("MCP server ID is required.");
       }
-      if (selectedMcpServer?.readOnly) {
-        throw new Error(
-          "This server is managed by a non-user config layer and is read-only.",
-        );
+      const endpoint =
+        window.prompt(
+          "MCP endpoint or command",
+          `mcp://${id.trim().toLowerCase()}`,
+        ) ?? "";
+      if (!endpoint.trim()) {
+        throw new Error("MCP endpoint is required.");
       }
-      try {
-        const value = buildMcpConfigFromEditor(mcpEditor);
-        await writeMcpServerConfig({
-          serverId: id,
-          value,
-          cwd: configPreviewCwd,
-        });
-        await reloadMcpServerConfig();
-      } catch (error) {
-        throw new Error(
-          mapConfigWriteErrorMessage(error, "Failed to save MCP server."),
-        );
-      }
-      await refreshMcpServers();
-      return selectedMcpServer
-        ? `Updated MCP server ${id}.`
-        : `Added MCP server ${id}.`;
-    }, "Failed to save MCP server.");
-
-  const handleDeleteMcpServer = (server: McpServerRow) =>
-    runAction(async () => {
-      if (server.readOnly) {
-        throw new Error(
-          "This server is managed by a non-user config layer and is read-only.",
-        );
-      }
-      try {
-        await writeMcpServerConfig({
-          serverId: server.id,
-          value: null,
-          cwd: configPreviewCwd,
-        });
-        await reloadMcpServerConfig();
-      } catch (error) {
-        throw new Error(
-          mapConfigWriteErrorMessage(error, "Failed to uninstall MCP server."),
-        );
-      }
-      await refreshMcpServers();
-      if (selectedMcpServerId === server.id) {
-        setSelectedMcpServerId(null);
-        setMcpEditor(defaultMcpEditorState());
-      }
-      return `Uninstalled MCP server ${server.id}.`;
-    }, "Failed to uninstall MCP server.");
+      const server: MappedMcpServer = {
+        id: id.trim(),
+        name: id.trim(),
+        endpoint: endpoint.trim(),
+        status: "connected",
+      };
+      setMcpServers((current) => {
+        const deduped = current.filter((entry) => entry.id !== server.id);
+        return [server, ...deduped];
+      });
+      return `Added MCP server ${server.id} (session-only).`;
+    }, "Failed to add MCP server.");
 
   const handleReloadMcpServers = () =>
-    runAction(async () => {
-      await reloadMcpServerConfig();
-      return refreshMcpServers();
-    }, "Failed to reload MCP server connections.");
-
-  const handleSelectMcpServer = useCallback((server: McpServerRow) => {
-    setSelectedMcpServerId(server.id);
-    setMcpEditor(mcpEditorFromServer(server));
-  }, []);
-
-  const handleCreateMcpServer = () => {
-    setSelectedMcpServerId(null);
-    setMcpEditor(defaultMcpEditorState());
-  };
+    runAction(
+      () => refreshMcpServers(),
+      "Failed to reload MCP server connections.",
+    );
 
   const handleRunPruneNow = () =>
     runAction(async () => {
@@ -954,8 +693,37 @@ export function SettingsPage() {
         );
       }
       const output = result.stdout.trim();
+      await loadWorktreeRows();
       return output || "Worktree prune finished successfully.";
     }, "Failed to prune worktrees.");
+
+  const handleRemoveWorktreeRow = (path: string) =>
+    runAction(async () => {
+      if (!resolvedWorkspace) {
+        throw new Error("Select a workspace before removing worktrees.");
+      }
+      setRemovingWorktreePaths((current) => new Set(current).add(path));
+      try {
+        await removeWorktree(resolvedWorkspace, path);
+        await loadWorktreeRows();
+        return "Worktree removed.";
+      } finally {
+        setRemovingWorktreePaths((current) => {
+          const next = new Set(current);
+          next.delete(path);
+          return next;
+        });
+      }
+    }, "Failed to remove worktree.");
+
+  const handleOpenLinkedConversation = (threadId: string) => {
+    void navigate({
+      to: "/t/$threadId",
+      params: {
+        threadId,
+      },
+    });
+  };
 
   const handleLoadArchivedThreads = () =>
     runAction(async () => {
@@ -1032,6 +800,31 @@ export function SettingsPage() {
     }
     void refreshMcpServers();
   }, [activeSectionId, refreshMcpServers]);
+
+  useEffect(() => {
+    if (activeSectionId !== "usage-analytics") {
+      return;
+    }
+    void refreshRateLimits();
+  }, [activeSectionId, refreshRateLimits]);
+
+  useEffect(() => {
+    if (activeSectionId !== "worktrees") {
+      return;
+    }
+    void loadWorktreeRows().catch(() => {});
+  }, [activeSectionId, loadWorktreeRows]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    return subscribeAppServerNotifications((notification) => {
+      if (notification.method === "account/rateLimits/updated") {
+        void refreshRateLimits();
+      }
+    });
+  }, [refreshRateLimits]);
 
   const renderFormForSection = (targetSection: SettingsSectionId) => {
     switch (targetSection) {
@@ -1126,6 +919,260 @@ export function SettingsPage() {
             </div>
           </section>
         );
+      case "account": {
+        const isAuthenticated = account?.isAuthenticated ?? false;
+        const accountEmail =
+          account?.email ?? (isAuthenticated ? "Signed in" : "Not signed in");
+        const accountOrganization =
+          account?.organizationName ??
+          (account?.authMethod === "apiKey" ? "API key" : "Personal workspace");
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Account
+            </p>
+            <h2 className="font-display text-xl">Identity and access</h2>
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
+              <p className="text-ink-100">{accountEmail}</p>
+              <p className="text-xs text-ink-500">{accountOrganization}</p>
+              <p className="mt-2 text-xs text-ink-400">
+                Auth method: {account?.authMethod ?? "Unknown"}
+              </p>
+              <p className="text-xs text-ink-400">
+                Status:{" "}
+                {accountLoading
+                  ? "Loading…"
+                  : isAuthenticated
+                    ? "Authenticated"
+                    : "Not authenticated"}
+              </p>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {isAuthenticated ? (
+                <button
+                  className={actionButtonClass}
+                  onClick={() => {
+                    void handleRunAccountAction("logout");
+                  }}
+                  disabled={accountAction !== null}
+                >
+                  {accountAction === "logout" ? "Signing out…" : "Sign out"}
+                </button>
+              ) : (
+                <>
+                  <button
+                    className={actionButtonClass}
+                    onClick={() => {
+                      void handleRunAccountAction("login-chatgpt");
+                    }}
+                    disabled={accountAction !== null}
+                  >
+                    {accountAction === "login-chatgpt"
+                      ? "Starting sign in…"
+                      : "Sign in with ChatGPT"}
+                  </button>
+                  <button
+                    className={actionButtonClass}
+                    onClick={() => {
+                      void handleRunAccountAction("login-api-key");
+                    }}
+                    disabled={accountAction !== null}
+                  >
+                    Sign in with API key
+                  </button>
+                </>
+              )}
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  window.open(
+                    "https://platform.openai.com/settings/organization",
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
+              >
+                Manage account in browser
+              </button>
+            </div>
+          </section>
+        );
+      }
+      case "data-controls":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Data controls
+            </p>
+            <h2 className="font-display text-xl">Local data locations</h2>
+            <div className="mt-4 space-y-3 text-sm">
+              {[
+                {
+                  label: "Codex home",
+                  path: codexHomePath,
+                },
+                {
+                  label: "Config file",
+                  path: inferredConfigPath,
+                },
+                {
+                  label: "Automation database",
+                  path: inferredSqlitePath,
+                },
+                {
+                  label: "Automation definitions",
+                  path: inferredAutomationsPath,
+                },
+              ].map((entry) => (
+                <div
+                  key={entry.label}
+                  className="rounded-xl border border-white/10 bg-black/20 p-3"
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                    {entry.label}
+                  </p>
+                  <p className="mt-1 break-all text-xs text-ink-200">
+                    {entry.path}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      className={actionButtonClass}
+                      onClick={() => {
+                        void runAction(async () => {
+                          await navigator.clipboard.writeText(entry.path);
+                          return `Copied ${entry.label.toLowerCase()} path.`;
+                        }, `Failed to copy ${entry.label.toLowerCase()} path.`);
+                      }}
+                    >
+                      Copy path
+                    </button>
+                    <button
+                      className={actionButtonClass}
+                      onClick={() => {
+                        void handleOpenPathInExplorer(
+                          entry.path,
+                          entry.label.toLowerCase(),
+                        );
+                      }}
+                    >
+                      Open folder
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  window.open(
+                    "https://platform.openai.com/settings/data-controls",
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
+              >
+                Data controls in browser
+              </button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  window.open(
+                    "https://platform.openai.com/settings/privacy",
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
+              >
+                Privacy settings in browser
+              </button>
+            </div>
+          </section>
+        );
+      case "usage-analytics":
+        return (
+          <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
+              Usage & analytics
+            </p>
+            <h2 className="font-display text-xl">
+              Quota and telemetry visibility
+            </h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void runAction(async () => {
+                    await refreshRateLimits();
+                    return "Usage refreshed.";
+                  }, "Failed to refresh usage.");
+                }}
+                disabled={rateLimitsLoading}
+              >
+                {rateLimitsLoading ? "Refreshing…" : "Refresh usage"}
+              </button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  window.open(
+                    "https://platform.openai.com/usage",
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
+              >
+                Open usage dashboard
+              </button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  window.open(
+                    "https://platform.openai.com/settings/organization/general",
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
+              >
+                Analytics settings in browser
+              </button>
+            </div>
+            <div className="mt-4 space-y-3 text-sm">
+              {[
+                {
+                  label: "Primary limit",
+                  window: rateLimits?.primary ?? null,
+                },
+                {
+                  label: "Secondary limit",
+                  window: rateLimits?.secondary ?? null,
+                },
+              ].map((entry) => (
+                <div
+                  key={entry.label}
+                  className="rounded-xl border border-white/10 bg-black/20 p-3"
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                    {entry.label}
+                  </p>
+                  {entry.window ? (
+                    <div className="mt-2 space-y-1 text-xs text-ink-200">
+                      <p>Used: {entry.window.usedPercent}%</p>
+                      <p>
+                        Window: {entry.window.windowDurationMins ?? "Unknown"}{" "}
+                        min
+                      </p>
+                      <p>
+                        Resets: {formatRateLimitResetAt(entry.window.resetsAt)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-ink-500">Not available.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        );
       case "configuration":
         return (
           <section className="rounded-2xl border border-white/10 bg-ink-900/50 p-5 shadow-card">
@@ -1137,63 +1184,8 @@ export function SettingsPage() {
               Review merged `config.toml` values for this workspace and global
               defaults.
             </p>
-            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
-                  Effective config preview
-                </p>
-                <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs text-ink-200">
-                  {JSON.stringify(filteredConfigPreview, null, 2)}
-                </pre>
-                {configReadError ? (
-                  <p className="mt-2 text-xs text-rose-300">
-                    {configReadError}
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-ink-300">
-                <div>
-                  <p className="uppercase tracking-[0.2em] text-ink-500">
-                    Summary
-                  </p>
-                  <p className="mt-1">
-                    keys: {Object.keys(filteredConfigPreview).length}
-                  </p>
-                  <p>origins: {Object.keys(configOrigins).length}</p>
-                  <p>layers: {configLayers.length}</p>
-                </div>
-                <div>
-                  <p className="uppercase tracking-[0.2em] text-ink-500">
-                    Write target
-                  </p>
-                  <p className="mt-1">
-                    file: {configWriteTarget.filePath ?? "not resolved"}
-                  </p>
-                  <p>
-                    version:{" "}
-                    {configWriteTarget.expectedVersion ?? "not resolved"}
-                  </p>
-                </div>
-                <div>
-                  <p className="uppercase tracking-[0.2em] text-ink-500">
-                    Layers
-                  </p>
-                  <ul className="mt-1 space-y-1">
-                    {configLayers.length ? (
-                      configLayers.map((layer) => (
-                        <li key={`${layer.name.type}-${layer.version}`}>
-                          {layerSourceLabel(layer.name)} [{layer.version}]
-                          {layer.disabledReason
-                            ? ` (disabled: ${layer.disabledReason})`
-                            : ""}
-                        </li>
-                      ))
-                    ) : (
-                      <li>No layer details available.</li>
-                    )}
-                  </ul>
-                </div>
-              </div>
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-ink-300">
+              config.toml preview will live here.
             </div>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               <button
@@ -1207,9 +1199,7 @@ export function SettingsPage() {
               <button
                 className={actionButtonClass}
                 onClick={() => {
-                  void handleValidateConfig().catch((error) => {
-                    console.warn("Config validation failed", error);
-                  });
+                  void handleValidateConfig();
                 }}
               >
                 Validate TOML
@@ -1224,9 +1214,7 @@ export function SettingsPage() {
                     setIncludeProjectOverrides(event.target.checked)
                   }
                 />
-                Include project overrides (
-                {includeProjectOverrides ? "cwd" : "null"}:{" "}
-                {configPreviewCwd ?? "none"})
+                Include project overrides
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1239,50 +1227,6 @@ export function SettingsPage() {
                 Show experimental keys
               </label>
             </div>
-            {configValidationResult ? (
-              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
-                <p className="uppercase tracking-[0.2em] text-ink-500">
-                  Validation results
-                </p>
-                <p className="mt-1 text-ink-300">
-                  {configValidationResult.valid
-                    ? `Valid (${configValidationResult.keys} top-level keys)`
-                    : `Invalid (${configValidationResult.errors.length} error(s))`}
-                </p>
-                {configValidationResult.errors.length ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-4 text-rose-300">
-                    {configValidationResult.errors.map((error, index) => (
-                      <li key={`config-error-${index}`}>{error}</li>
-                    ))}
-                  </ul>
-                ) : null}
-                {configValidationResult.warnings.length ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-4 text-amber-300">
-                    {configValidationResult.warnings.map((warning, index) => (
-                      <li key={`config-warning-${index}`}>
-                        {configWarningLabel(warning)}
-                        {warning.details ? ` — ${warning.details}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            ) : null}
-            {configWarnings.length > 0 && !configValidationResult ? (
-              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-amber-300">
-                <p className="uppercase tracking-[0.2em] text-ink-500">
-                  Startup warnings
-                </p>
-                <ul className="mt-2 list-disc space-y-1 pl-4">
-                  {configWarnings.map((warning, index) => (
-                    <li key={`startup-warning-${index}`}>
-                      {configWarningLabel(warning)}
-                      {warning.details ? ` — ${warning.details}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
             <div className="mt-5 space-y-3">
               <h3 className="font-display text-base text-ink-100">
                 Detected tools
@@ -1395,226 +1339,19 @@ export function SettingsPage() {
               MCP servers
             </p>
             <h2 className="font-display text-xl">Tool endpoints</h2>
-            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="space-y-2">
-                {mcpServers.map((server) => (
-                  <div
-                    key={server.id}
-                    className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-ink-100">{server.name}</p>
-                        <p className="text-xs text-ink-500">
-                          {server.endpoint}
-                        </p>
-                        <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
-                          {server.originType
-                            ? `origin: ${server.originType}`
-                            : "origin: unknown"}
-                        </p>
-                      </div>
-                      <span className="text-xs text-ink-300">
-                        {server.status}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        className={actionButtonClass}
-                        onClick={() => handleSelectMcpServer(server)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className={actionButtonClass}
-                        onClick={() => {
-                          void handleReloadMcpServers();
-                        }}
-                      >
-                        Reconnect
-                      </button>
-                      <button
-                        className={actionButtonClass}
-                        onClick={() => {
-                          void handleDeleteMcpServer(server);
-                        }}
-                        disabled={server.readOnly}
-                      >
-                        Uninstall
-                      </button>
-                    </div>
-                    {server.readOnly ? (
-                      <p className="mt-2 text-[0.7rem] text-amber-300">
-                        Managed by {server.originType} config layer (read-only).
-                      </p>
-                    ) : null}
+            <div className="mt-4 space-y-2">
+              {mcpServers.map((server) => (
+                <div
+                  key={server.id}
+                  className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
+                >
+                  <div>
+                    <p className="text-ink-100">{server.name}</p>
+                    <p className="text-xs text-ink-500">{server.endpoint}</p>
                   </div>
-                ))}
-                {!mcpServers.length ? (
-                  <p className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-400">
-                    No MCP servers configured.
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
-                  MCP server editor
-                </p>
-                <label className="space-y-1 text-xs text-ink-300">
-                  <span className="uppercase tracking-[0.2em] text-ink-500">
-                    Server ID
-                  </span>
-                  <input
-                    className={formInputClass}
-                    aria-label="MCP server ID"
-                    value={mcpEditor.id}
-                    onChange={(event) =>
-                      setMcpEditor((current) => ({
-                        ...current,
-                        id: event.target.value,
-                      }))
-                    }
-                    placeholder="github"
-                    readOnly={mcpEditorReadOnly}
-                  />
-                </label>
-                <label className="space-y-1 text-xs text-ink-300">
-                  <span className="uppercase tracking-[0.2em] text-ink-500">
-                    Name
-                  </span>
-                  <input
-                    className={formInputClass}
-                    aria-label="MCP server name"
-                    value={mcpEditor.name}
-                    onChange={(event) =>
-                      setMcpEditor((current) => ({
-                        ...current,
-                        name: event.target.value,
-                      }))
-                    }
-                    readOnly={mcpEditorReadOnly}
-                  />
-                </label>
-                <label className="space-y-1 text-xs text-ink-300">
-                  <span className="uppercase tracking-[0.2em] text-ink-500">
-                    Transport
-                  </span>
-                  <select
-                    className={formInputClass}
-                    aria-label="MCP transport"
-                    value={mcpEditor.transport}
-                    onChange={(event) =>
-                      setMcpEditor((current) => ({
-                        ...current,
-                        transport: event.target.value as McpTransportType,
-                      }))
-                    }
-                    disabled={mcpEditorReadOnly}
-                  >
-                    <option value="stdio">stdio</option>
-                    <option value="streamable_http">streamable_http</option>
-                    <option value="sse">sse</option>
-                  </select>
-                </label>
-                {mcpEditor.transport === "stdio" ? (
-                  <>
-                    <label className="space-y-1 text-xs text-ink-300">
-                      <span className="uppercase tracking-[0.2em] text-ink-500">
-                        Command
-                      </span>
-                      <input
-                        className={formInputClass}
-                        aria-label="Command"
-                        value={mcpEditor.command}
-                        onChange={(event) =>
-                          setMcpEditor((current) => ({
-                            ...current,
-                            command: event.target.value,
-                          }))
-                        }
-                        readOnly={mcpEditorReadOnly}
-                      />
-                    </label>
-                    <label className="space-y-1 text-xs text-ink-300">
-                      <span className="uppercase tracking-[0.2em] text-ink-500">
-                        Args (one per line)
-                      </span>
-                      <textarea
-                        className={formInputClass}
-                        aria-label="Args"
-                        rows={3}
-                        value={mcpEditor.argsText}
-                        onChange={(event) =>
-                          setMcpEditor((current) => ({
-                            ...current,
-                            argsText: event.target.value,
-                          }))
-                        }
-                        readOnly={mcpEditorReadOnly}
-                      />
-                    </label>
-                    <label className="space-y-1 text-xs text-ink-300">
-                      <span className="uppercase tracking-[0.2em] text-ink-500">
-                        Env (KEY=VALUE per line)
-                      </span>
-                      <textarea
-                        className={formInputClass}
-                        aria-label="Env"
-                        rows={3}
-                        value={mcpEditor.envText}
-                        onChange={(event) =>
-                          setMcpEditor((current) => ({
-                            ...current,
-                            envText: event.target.value,
-                          }))
-                        }
-                        readOnly={mcpEditorReadOnly}
-                      />
-                    </label>
-                  </>
-                ) : (
-                  <label className="space-y-1 text-xs text-ink-300">
-                    <span className="uppercase tracking-[0.2em] text-ink-500">
-                      URL
-                    </span>
-                    <input
-                      className={formInputClass}
-                      aria-label="URL"
-                      value={mcpEditor.url}
-                      onChange={(event) =>
-                        setMcpEditor((current) => ({
-                          ...current,
-                          url: event.target.value,
-                        }))
-                      }
-                      readOnly={mcpEditorReadOnly}
-                    />
-                  </label>
-                )}
-                <label className="flex items-center gap-2 text-xs text-ink-300">
-                  <input
-                    type="checkbox"
-                    checked={mcpEditor.disabled}
-                    onChange={(event) =>
-                      setMcpEditor((current) => ({
-                        ...current,
-                        disabled: event.target.checked,
-                      }))
-                    }
-                    disabled={mcpEditorReadOnly}
-                  />
-                  Disabled
-                </label>
-                <div className="pt-2">
-                  <p className="text-[0.7rem] text-ink-500">
-                    writes to:{" "}
-                    {configWriteTarget.filePath ?? "user config not resolved"}
-                  </p>
-                  <p className="text-[0.7rem] text-ink-500">
-                    version: {configWriteTarget.expectedVersion ?? "unknown"}
-                  </p>
+                  <span className="text-xs text-ink-300">{server.status}</span>
                 </div>
-              </div>
+              ))}
             </div>
             <div className="mt-4 max-w-sm space-y-2">
               <label
@@ -1634,17 +1371,10 @@ export function SettingsPage() {
               <button
                 className={actionButtonClass}
                 onClick={() => {
-                  void handleSaveMcpServer();
+                  void handleAddMcpServer();
                 }}
-                disabled={mcpEditorReadOnly}
               >
-                {selectedMcpServerId ? "Update server" : "Save server"}
-              </button>
-              <button
-                className={actionButtonClass}
-                onClick={handleCreateMcpServer}
-              >
-                + New server
+                + Add MCP server
               </button>
               <button
                 className={actionButtonClass}
@@ -2045,10 +1775,176 @@ export function SettingsPage() {
               </button>
               <button
                 className={actionButtonClass}
+                onClick={() => {
+                  void runAction(async () => {
+                    await loadWorktreeRows();
+                    return "Worktree inventory refreshed.";
+                  }, "Failed to refresh worktree inventory.");
+                }}
+                disabled={worktreeRowsLoading}
+              >
+                {worktreeRowsLoading ? "Refreshing…" : "Refresh inventory"}
+              </button>
+              <button
+                className={actionButtonClass}
                 onClick={() => handleSave("worktrees")}
               >
                 Save worktree settings
               </button>
+            </div>
+            <div className="mt-5 rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                Worktree inventory
+              </p>
+              <p className="mt-1 text-xs text-ink-400">
+                {resolvedWorkspace
+                  ? `Workspace: ${resolvedWorkspace}`
+                  : "No workspace selected."}
+              </p>
+              {worktreeRowsLoading ? (
+                <p className="mt-3 text-sm text-ink-300">Loading worktrees…</p>
+              ) : worktreeRowsError ? (
+                <div className="mt-3 space-y-2">
+                  <p className="text-sm text-rose-300">{worktreeRowsError}</p>
+                  <button
+                    className={actionButtonClass}
+                    onClick={() => {
+                      void runAction(async () => {
+                        await loadWorktreeRows();
+                        return "Worktree inventory refreshed.";
+                      }, "Failed to refresh worktree inventory.");
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : !worktreeRows.length ? (
+                <p className="mt-3 text-sm text-ink-400">
+                  No worktrees found for this workspace.
+                </p>
+              ) : (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="min-w-full text-left text-xs text-ink-200">
+                    <thead className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                      <tr>
+                        <th className="px-2 py-2 font-medium">Path</th>
+                        <th className="px-2 py-2 font-medium">Branch</th>
+                        <th className="px-2 py-2 font-medium">Linked thread</th>
+                        <th className="px-2 py-2 font-medium">Status</th>
+                        <th className="px-2 py-2 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {worktreeRows.map((row) => {
+                        const isRemoving = removingWorktreePaths.has(row.path);
+                        const disableRemove =
+                          row.isCurrent || row.isBare || isRemoving;
+                        const linkedThreadId = row.linkedThreadId;
+                        const statusTokens = [
+                          row.isCurrent ? "main" : null,
+                          row.isDetached ? "detached" : null,
+                          row.isBare ? "bare" : null,
+                          row.isPrunable ? "prunable" : null,
+                        ].filter((value): value is string => value !== null);
+                        return (
+                          <tr
+                            key={row.path}
+                            className="border-t border-white/5 align-top"
+                          >
+                            <td className="px-2 py-2">
+                              <p className="break-all">{row.path}</p>
+                              {row.head ? (
+                                <p className="mt-1 text-[0.65rem] text-ink-500">
+                                  HEAD: {row.head}
+                                </p>
+                              ) : null}
+                              {row.prunableReason ? (
+                                <p className="mt-1 text-[0.65rem] text-ink-500">
+                                  {row.prunableReason}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="px-2 py-2">
+                              {row.branch ??
+                                (row.isDetached ? "Detached" : "Unknown")}
+                            </td>
+                            <td className="px-2 py-2">
+                              {linkedThreadId ? (
+                                <button
+                                  className="underline decoration-dotted underline-offset-2 hover:text-ink-50"
+                                  onClick={() =>
+                                    handleOpenLinkedConversation(linkedThreadId)
+                                  }
+                                >
+                                  {linkedThreadId}
+                                </button>
+                              ) : (
+                                <span className="text-ink-500">Not linked</span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              <div className="flex flex-wrap gap-1">
+                                {statusTokens.length ? (
+                                  statusTokens.map((token) => (
+                                    <span
+                                      key={token}
+                                      className="rounded-full border border-white/10 px-2 py-0.5 text-[0.65rem]"
+                                    >
+                                      {token}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-ink-500">active</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 py-2">
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  className={actionButtonClass}
+                                  onClick={() => {
+                                    void handleOpenPathInExplorer(
+                                      row.path,
+                                      "worktree folder",
+                                    );
+                                  }}
+                                >
+                                  Open folder
+                                </button>
+                                {linkedThreadId ? (
+                                  <button
+                                    className={actionButtonClass}
+                                    onClick={() =>
+                                      handleOpenLinkedConversation(
+                                        linkedThreadId,
+                                      )
+                                    }
+                                  >
+                                    Open conversation
+                                  </button>
+                                ) : null}
+                                <button
+                                  className={actionButtonClass}
+                                  onClick={() => {
+                                    void handleRemoveWorktreeRow(row.path);
+                                  }}
+                                  disabled={disableRemove}
+                                >
+                                  {isRemoving
+                                    ? "Removing…"
+                                    : row.isCurrent
+                                      ? "Main worktree"
+                                      : "Remove"}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </section>
         );

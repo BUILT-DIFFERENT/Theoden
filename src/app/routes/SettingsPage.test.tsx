@@ -3,33 +3,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "@/app/routes/SettingsPage";
 
-const {
-  listThreadsMock,
-  unarchiveThreadMock,
-  loadAuthStatusMock,
-  loadConfigSnapshotMock,
-  loadMcpServerStatusesMock,
-  mcpServersFromConfigMock,
-  providersFromConfigMock,
-  validateConfigMock,
-  reloadMcpServerConfigMock,
-  writeMcpServerConfigMock,
-  mapConfigWriteErrorMessageMock,
-} = vi.hoisted(() => ({
-  listThreadsMock: vi.fn(),
-  unarchiveThreadMock: vi.fn(),
-  loadAuthStatusMock: vi.fn(),
-  loadConfigSnapshotMock: vi.fn(),
-  loadMcpServerStatusesMock: vi.fn(),
-  mcpServersFromConfigMock: vi.fn(),
-  providersFromConfigMock: vi.fn(),
-  validateConfigMock: vi.fn(),
-  reloadMcpServerConfigMock: vi.fn(),
-  writeMcpServerConfigMock: vi.fn(),
-  mapConfigWriteErrorMessageMock: vi.fn(),
-}));
-
-let mockSection = "archived-threads";
+const mocks = vi.hoisted(() => {
+  const notificationListeners: Array<
+    (notification: { method: string }) => void
+  > = [];
+  return {
+    currentSection: "archived-threads",
+    isTauriEnabled: false,
+    navigateMock: vi.fn(),
+    listThreadsMock: vi.fn(),
+    unarchiveThreadMock: vi.fn(),
+    refreshAccountMock: vi.fn(),
+    readAccountRateLimitsMock: vi.fn(),
+    listWorktreesMock: vi.fn(),
+    removeWorktreeMock: vi.fn(),
+    notificationListeners,
+    subscribeNotificationsMock: vi.fn(
+      (listener: (notification: { method: string }) => void) => {
+        notificationListeners.push(listener);
+        return () => {
+          const index = notificationListeners.indexOf(listener);
+          if (index >= 0) {
+            notificationListeners.splice(index, 1);
+          }
+        };
+      },
+    ),
+  };
+});
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -43,7 +44,8 @@ vi.mock("@tanstack/react-router", () => ({
       {children as string}
     </button>
   ),
-  useParams: () => ({ section: mockSection }),
+  useNavigate: () => mocks.navigateMock,
+  useParams: () => ({ section: mocks.currentSection }),
 }));
 
 vi.mock("@/app/services/cli/useWorkspaces", () => ({
@@ -62,21 +64,44 @@ vi.mock("@/app/state/workspaceUi", () => ({
   }),
 }));
 
-vi.mock("@/app/services/cli/configWarnings", () => ({
-  getConfigWarnings: () => [],
-  subscribeConfigWarnings: () => () => {},
+vi.mock("@/app/services/cli/useAccount", () => ({
+  useAccount: () => ({
+    account: {
+      isAuthenticated: true,
+      email: "test@example.com",
+      organizationName: "Test org",
+      authMethod: "chatgpt",
+    },
+    isLoading: false,
+    error: null,
+    refresh: mocks.refreshAccountMock,
+  }),
+}));
+
+vi.mock("@/app/services/cli/accountActions", () => ({
+  AccountActionCancelledError: class AccountActionCancelledError extends Error {},
+  runAccountAction: () => Promise.resolve("ok"),
+}));
+
+vi.mock("@/app/services/cli/accountUsage", () => ({
+  readAccountRateLimits: mocks.readAccountRateLimitsMock,
+}));
+
+vi.mock("@/app/services/cli/appServerEventHub", () => ({
+  subscribeAppServerNotifications: mocks.subscribeNotificationsMock,
 }));
 
 vi.mock("@/app/services/cli/config", () => ({
-  loadAuthStatus: loadAuthStatusMock,
-  loadConfigSnapshot: loadConfigSnapshotMock,
-  loadMcpServerStatuses: loadMcpServerStatusesMock,
-  mcpServersFromConfig: mcpServersFromConfigMock,
-  providersFromConfig: providersFromConfigMock,
-  validateConfig: validateConfigMock,
-  reloadMcpServerConfig: reloadMcpServerConfigMock,
-  writeMcpServerConfig: writeMcpServerConfigMock,
-  mapConfigWriteErrorMessage: mapConfigWriteErrorMessageMock,
+  loadAuthStatus: () =>
+    Promise.resolve({
+      status: "unknown",
+      requiresOpenaiAuth: null,
+    }),
+  loadMergedConfig: () => Promise.resolve({}),
+  loadMcpServerStatuses: () => Promise.resolve([]),
+  mcpServersFromConfig: () => [],
+  providersFromConfig: () => [],
+  validateConfig: () => Promise.resolve({ valid: true, errors: [], keys: 0 }),
 }));
 
 vi.mock("@/app/services/cli/commands", () => ({
@@ -89,30 +114,38 @@ vi.mock("@/app/services/cli/commands", () => ({
 }));
 
 vi.mock("@/app/services/cli/threads", () => ({
-  listThreads: listThreadsMock,
-  unarchiveThread: unarchiveThreadMock,
+  listThreads: mocks.listThreadsMock,
+  unarchiveThread: mocks.unarchiveThreadMock,
+}));
+
+vi.mock("@/app/services/desktop/open", () => ({
+  openPathInExplorer: () => Promise.resolve(),
+}));
+
+vi.mock("@/app/services/git/worktrees", () => ({
+  listWorktrees: mocks.listWorktreesMock,
+  removeWorktree: mocks.removeWorktreeMock,
 }));
 
 vi.mock("@/app/utils/tauri", () => ({
-  isTauri: () => false,
+  isTauri: () => mocks.isTauriEnabled,
 }));
 
-describe("SettingsPage", () => {
+describe("SettingsPage archived threads", () => {
   beforeEach(() => {
-    mockSection = "archived-threads";
-    listThreadsMock.mockReset();
-    unarchiveThreadMock.mockReset();
-    loadAuthStatusMock.mockReset();
-    loadConfigSnapshotMock.mockReset();
-    loadMcpServerStatusesMock.mockReset();
-    mcpServersFromConfigMock.mockReset();
-    providersFromConfigMock.mockReset();
-    validateConfigMock.mockReset();
-    reloadMcpServerConfigMock.mockReset();
-    writeMcpServerConfigMock.mockReset();
-    mapConfigWriteErrorMessageMock.mockReset();
+    mocks.currentSection = "archived-threads";
+    mocks.isTauriEnabled = false;
+    mocks.notificationListeners.splice(0, mocks.notificationListeners.length);
+    mocks.navigateMock.mockReset();
+    mocks.listThreadsMock.mockReset();
+    mocks.unarchiveThreadMock.mockReset();
+    mocks.refreshAccountMock.mockReset();
+    mocks.readAccountRateLimitsMock.mockReset();
+    mocks.subscribeNotificationsMock.mockClear();
+    mocks.listWorktreesMock.mockReset();
+    mocks.removeWorktreeMock.mockReset();
 
-    listThreadsMock.mockResolvedValue({
+    mocks.listThreadsMock.mockResolvedValue({
       data: [
         {
           id: "thread-1",
@@ -122,41 +155,15 @@ describe("SettingsPage", () => {
       ],
       nextCursor: null,
     });
-    unarchiveThreadMock.mockResolvedValue({});
-    loadAuthStatusMock.mockResolvedValue({
-      status: "unknown",
-      requiresOpenaiAuth: null,
+    mocks.unarchiveThreadMock.mockResolvedValue({});
+    mocks.readAccountRateLimitsMock.mockResolvedValue({
+      primary: null,
+      secondary: null,
+      credits: null,
+      planType: null,
     });
-    loadConfigSnapshotMock.mockResolvedValue({
-      config: {
-        model: "gpt-5-codex",
-      },
-      origins: {},
-      layers: [],
-      writeTarget: {
-        filePath: "/home/user/.codex/config.toml",
-        expectedVersion: "sha256:abc",
-      },
-    });
-    loadMcpServerStatusesMock.mockResolvedValue([]);
-    mcpServersFromConfigMock.mockReturnValue([]);
-    providersFromConfigMock.mockReturnValue([]);
-    validateConfigMock.mockResolvedValue({
-      valid: true,
-      errors: [],
-      warnings: [],
-      keys: 1,
-    });
-    reloadMcpServerConfigMock.mockResolvedValue({});
-    writeMcpServerConfigMock.mockResolvedValue({
-      status: "ok",
-      version: "sha256:new",
-      filePath: "/home/user/.codex/config.toml",
-      overriddenMetadata: null,
-    });
-    mapConfigWriteErrorMessageMock.mockImplementation((error: unknown) =>
-      error instanceof Error ? error.message : "error",
-    );
+    mocks.listWorktreesMock.mockResolvedValue([]);
+    mocks.removeWorktreeMock.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -175,166 +182,61 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));
 
     await waitFor(() => {
-      expect(unarchiveThreadMock).toHaveBeenCalledWith("thread-1");
+      expect(mocks.unarchiveThreadMock).toHaveBeenCalledWith("thread-1");
     });
     await waitFor(() => {
       expect(screen.queryByText("Archived thread one")).not.toBeInTheDocument();
     });
   });
 
-  it("persists MCP add/update/delete through config writes", async () => {
-    mockSection = "mcp-servers";
-    loadConfigSnapshotMock.mockResolvedValue({
-      config: {
-        mcp_servers: {
-          existing: {
-            name: "Existing",
-            transport: "stdio",
-            command: "npx existing",
-          },
-        },
-      },
-      origins: {
-        "mcp_servers.existing.command": {
-          name: {
-            type: "user",
-            file: "/home/user/.codex/config.toml",
-          },
-          version: "sha256:existing",
-        },
-      },
-      layers: [],
-      writeTarget: {
-        filePath: "/home/user/.codex/config.toml",
-        expectedVersion: "sha256:existing",
-      },
-    });
-    mcpServersFromConfigMock.mockReturnValue([
-      {
-        id: "existing",
-        name: "Existing",
-        endpoint: "npx existing",
-        status: "connected",
-      },
-    ]);
-
+  it("includes parity settings sections in navigation", () => {
+    mocks.currentSection = "general";
     render(<SettingsPage />);
-
-    await waitFor(() => {
-      expect(loadConfigSnapshotMock).toHaveBeenCalled();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "+ New server" }));
-    fireEvent.change(screen.getByPlaceholderText("github"), {
-      target: { value: "github" },
-    });
-    fireEvent.change(screen.getByLabelText(/Command/i), {
-      target: { value: "npx github-mcp" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save server" }));
-
-    await waitFor(() => {
-      expect(writeMcpServerConfigMock).toHaveBeenCalledWith({
-        serverId: "github",
-        value: {
-          disabled: false,
-          transport: "stdio",
-          command: "npx github-mcp",
-        },
-        cwd: "/repo/theoden",
-      });
-    });
-    await waitFor(() => {
-      expect(reloadMcpServerConfigMock).toHaveBeenCalled();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
-
-    await waitFor(() => {
-      expect(writeMcpServerConfigMock).toHaveBeenCalledWith({
-        serverId: "existing",
-        value: null,
-        cwd: "/repo/theoden",
-      });
-    });
+    expect(screen.getByRole("button", { name: "Account" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Data controls" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Usage & analytics" }),
+    ).toBeInTheDocument();
   });
 
-  it("renders real config preview and validation output", async () => {
-    mockSection = "configuration";
-    loadConfigSnapshotMock.mockResolvedValue({
-      config: {
-        model: "gpt-5-codex",
-        experimental_feature_flag: true,
-      },
-      origins: {
-        model: {
-          name: {
-            type: "user",
-            file: "/home/user/.codex/config.toml",
-          },
-          version: "sha256:user",
+  it("refreshes usage analytics when rate-limit update notification arrives", async () => {
+    mocks.currentSection = "usage-analytics";
+    mocks.isTauriEnabled = true;
+    mocks.readAccountRateLimitsMock
+      .mockResolvedValueOnce({
+        primary: {
+          usedPercent: 41,
+          windowDurationMins: 180,
+          resetsAt: 1_738_900_000,
         },
-      },
-      layers: [
-        {
-          name: {
-            type: "user",
-            file: "/home/user/.codex/config.toml",
-          },
-          version: "sha256:user",
-          config: {
-            model: "gpt-5-codex",
-          },
-          disabledReason: null,
+        secondary: null,
+        credits: null,
+        planType: "pro",
+      })
+      .mockResolvedValueOnce({
+        primary: {
+          usedPercent: 52,
+          windowDurationMins: 180,
+          resetsAt: 1_738_900_600,
         },
-      ],
-      writeTarget: {
-        filePath: "/home/user/.codex/config.toml",
-        expectedVersion: "sha256:user",
-      },
-    });
-    validateConfigMock.mockResolvedValue({
-      valid: false,
-      errors: ["Unknown key experimental_feature_flag"],
-      warnings: [
-        {
-          summary: "Project config warning",
-          details: "Check project settings",
-          path: "/repo/theoden/.codex/config.toml",
-        },
-      ],
-      keys: 2,
-    });
+        secondary: null,
+        credits: null,
+        planType: "pro",
+      });
 
     render(<SettingsPage />);
 
-    expect(
-      await screen.findByText(/"model": "gpt-5-codex"/),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/experimental_feature_flag/),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText("Used: 41%")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText("Show experimental keys"));
-    expect(
-      await screen.findByText(/experimental_feature_flag/),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Validate TOML" }));
-
-    await waitFor(() => {
-      expect(validateConfigMock).toHaveBeenCalledWith("/repo/theoden");
-    });
-    const validationErrors = await screen.findAllByText(
-      "Unknown key experimental_feature_flag",
+    mocks.notificationListeners.forEach((listener) =>
+      listener({ method: "account/rateLimits/updated" }),
     );
-    expect(validationErrors.length).toBeGreaterThan(0);
-    expect(screen.getByText(/Project config warning/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/Include project overrides/i));
     await waitFor(() => {
-      expect(loadConfigSnapshotMock).toHaveBeenCalledWith(null);
+      expect(mocks.readAccountRateLimitsMock).toHaveBeenCalledTimes(2);
     });
+    expect(await screen.findByText("Used: 52%")).toBeInTheDocument();
   });
 });

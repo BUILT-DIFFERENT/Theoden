@@ -19,6 +19,18 @@ export interface WorkspaceInfo {
   strategy: WorkspaceStrategy;
 }
 
+export interface WorktreeInventoryRow {
+  path: string;
+  branch: string | null;
+  head: string | null;
+  isCurrent: boolean;
+  isDetached: boolean;
+  isBare: boolean;
+  isPrunable: boolean;
+  prunableReason: string | null;
+  linkedThreadId: string | null;
+}
+
 export interface WorkspaceCreateResult {
   info: WorkspaceInfo;
   logs: string[];
@@ -80,6 +92,85 @@ function normalizePath(path: string) {
   return path.replace(/\\/g, "/");
 }
 
+function trimTrailingSlash(path: string) {
+  return normalizePath(path).replace(/\/+$/, "");
+}
+
+function linkedThreadIdFromWorktreePath(path: string) {
+  const normalized = trimTrailingSlash(path);
+  const match = normalized.match(/\/\.codex\/worktrees\/([^/]+)(?:$|\/)/i);
+  return match?.[1] ?? null;
+}
+
+function branchFromRef(ref: string) {
+  return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
+}
+
+export function parseWorktreeListPorcelain(output: string, repoPath: string) {
+  const lines = output.split(NEWLINE_REGEX);
+  const rows: WorktreeInventoryRow[] = [];
+  const repoRoot = trimTrailingSlash(repoPath).toLowerCase();
+  let current: WorktreeInventoryRow | null = null;
+
+  const flush = () => {
+    if (!current) {
+      return;
+    }
+    rows.push(current);
+    current = null;
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed.length) {
+      flush();
+      return;
+    }
+    if (trimmed.startsWith("worktree ")) {
+      flush();
+      const path = trimmed.slice("worktree ".length);
+      current = {
+        path,
+        branch: null,
+        head: null,
+        isCurrent: trimTrailingSlash(path).toLowerCase() === repoRoot,
+        isDetached: false,
+        isBare: false,
+        isPrunable: false,
+        prunableReason: null,
+        linkedThreadId: linkedThreadIdFromWorktreePath(path),
+      };
+      return;
+    }
+    if (!current) {
+      return;
+    }
+    if (trimmed.startsWith("HEAD ")) {
+      current.head = trimmed.slice("HEAD ".length).trim() || null;
+      return;
+    }
+    if (trimmed.startsWith("branch ")) {
+      const ref = trimmed.slice("branch ".length).trim();
+      current.branch = ref ? branchFromRef(ref) : null;
+      return;
+    }
+    if (trimmed === "detached") {
+      current.isDetached = true;
+      return;
+    }
+    if (trimmed === "bare") {
+      current.isBare = true;
+      return;
+    }
+    if (trimmed.startsWith("prunable")) {
+      current.isPrunable = true;
+      current.prunableReason = trimmed.slice("prunable".length).trim() || null;
+    }
+  });
+  flush();
+  return rows;
+}
+
 function isCancelled(signal?: AbortSignal | null) {
   return Boolean(signal?.aborted);
 }
@@ -92,6 +183,26 @@ function assertNotCancelled(signal?: AbortSignal | null) {
 
 async function runGit(args: string[], cwd: string) {
   return execCommand({ command: ["git", ...args], cwd });
+}
+
+export async function listWorktrees(repoPath: string) {
+  const result = await runGit(["worktree", "list", "--porcelain"], repoPath);
+  ensureSuccess(result, "List git worktrees");
+  return parseWorktreeListPorcelain(result.stdout, repoPath);
+}
+
+export async function removeWorktree(repoPath: string, targetPath: string) {
+  const normalizedRepo = trimTrailingSlash(repoPath).toLowerCase();
+  const normalizedTarget = trimTrailingSlash(targetPath).toLowerCase();
+  if (normalizedRepo === normalizedTarget) {
+    throw new Error("Cannot remove the main workspace worktree.");
+  }
+  const result = await runGit(
+    ["worktree", "remove", "--force", targetPath],
+    repoPath,
+  );
+  ensureSuccess(result, "Remove worktree");
+  return result;
 }
 
 async function removeDirectory(path: string, logs: string[]) {

@@ -355,6 +355,20 @@ function weekdayToken(day: number | null) {
   return tokens[day] ?? "MO";
 }
 
+function sanitizeTimezone(value: string | null | undefined) {
+  if (!value) {
+    return "UTC";
+  }
+  const trimmed = value.trim();
+  if (!trimmed.length) {
+    return "UTC";
+  }
+  if (trimmed.includes(";") || trimmed.includes("=")) {
+    return "UTC";
+  }
+  return trimmed;
+}
+
 function weekdayFromToken(token: string) {
   const tokens = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
   const index = tokens.indexOf(token.toUpperCase());
@@ -363,15 +377,16 @@ function weekdayFromToken(token: string) {
 
 export function recurrenceToRrule(recurrence: AutomationRecurrence) {
   const timeParts = parseTimeParts(recurrence.time) ?? { hour: 9, minute: 0 };
+  const timezone = sanitizeTimezone(recurrence.timezone);
   if (recurrence.kind === "daily") {
-    return `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU;BYHOUR=${timeParts.hour};BYMINUTE=${timeParts.minute}`;
+    return `FREQ=DAILY;BYHOUR=${timeParts.hour};BYMINUTE=${timeParts.minute};TZID=${timezone}`;
   }
   if (recurrence.kind === "weekly") {
-    return `FREQ=WEEKLY;BYDAY=${weekdayToken(
-      recurrence.dayOfWeek,
-    )};BYHOUR=${timeParts.hour};BYMINUTE=${timeParts.minute}`;
+    return `FREQ=WEEKLY;BYDAY=${weekdayToken(recurrence.dayOfWeek)};BYHOUR=${timeParts.hour};BYMINUTE=${timeParts.minute};TZID=${timezone}`;
   }
-  return `FREQ=HOURLY;INTERVAL=720`;
+  const dayOfMonth = recurrence.dayOfMonth ?? 1;
+  const normalizedDay = Math.min(Math.max(dayOfMonth, 1), 31);
+  return `FREQ=MONTHLY;BYMONTHDAY=${normalizedDay};BYHOUR=${timeParts.hour};BYMINUTE=${timeParts.minute};TZID=${timezone}`;
 }
 
 export function recurrenceFromRrule(
@@ -390,6 +405,7 @@ export function recurrenceFromRrule(
   const freq = parts.get("FREQ");
   const byHour = Number.parseInt(parts.get("BYHOUR") ?? "9", 10);
   const byMinute = Number.parseInt(parts.get("BYMINUTE") ?? "0", 10);
+  const parsedTimezone = sanitizeTimezone(parts.get("TZID") ?? timezone);
   const hour = Number.isNaN(byHour) ? 9 : Math.min(Math.max(byHour, 0), 23);
   const minute = Number.isNaN(byMinute)
     ? 0
@@ -398,21 +414,61 @@ export function recurrenceFromRrule(
     2,
     "0",
   )}`;
+  if (freq === "DAILY") {
+    return {
+      kind: "daily",
+      time,
+      timezone: parsedTimezone,
+      dayOfWeek: null,
+      dayOfMonth: null,
+    };
+  }
   if (freq === "WEEKLY") {
-    const byDay = (parts.get("BYDAY") ?? "MO").split(",")[0];
+    const byDays = (parts.get("BYDAY") ?? "MO")
+      .split(",")
+      .map((value) => value.trim().toUpperCase())
+      .filter(Boolean);
+    const uniqueByDay = Array.from(new Set(byDays));
+    const allDays = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+    const isDailyLegacy =
+      uniqueByDay.length === allDays.length &&
+      allDays.every((token) => uniqueByDay.includes(token));
+    if (isDailyLegacy) {
+      return {
+        kind: "daily",
+        time,
+        timezone: parsedTimezone,
+        dayOfWeek: null,
+        dayOfMonth: null,
+      };
+    }
+    const byDay = uniqueByDay[0] ?? "MO";
     return {
       kind: "weekly",
       time,
-      timezone,
+      timezone: parsedTimezone,
       dayOfWeek: weekdayFromToken(byDay),
       dayOfMonth: null,
+    };
+  }
+  if (freq === "MONTHLY") {
+    const byMonthDay = Number.parseInt(parts.get("BYMONTHDAY") ?? "1", 10);
+    const dayOfMonth = Number.isNaN(byMonthDay)
+      ? 1
+      : Math.min(Math.max(byMonthDay, 1), 31);
+    return {
+      kind: "monthly",
+      time,
+      timezone: parsedTimezone,
+      dayOfWeek: null,
+      dayOfMonth,
     };
   }
   if (freq === "HOURLY") {
     return {
       kind: "monthly",
       time,
-      timezone,
+      timezone: parsedTimezone,
       dayOfWeek: null,
       dayOfMonth: 1,
     };
@@ -420,7 +476,7 @@ export function recurrenceFromRrule(
   return {
     kind: "daily",
     time,
-    timezone,
+    timezone: parsedTimezone,
     dayOfWeek: null,
     dayOfMonth: null,
   };
