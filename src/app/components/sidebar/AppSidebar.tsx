@@ -15,10 +15,16 @@ import {
   UserRound,
   WandSparkles,
   Workflow,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { logoutAccount, startAccountLogin } from "@/app/services/cli/account";
+import {
+  cancelAccountLogin,
+  logoutAccount,
+  startAccountLogin,
+} from "@/app/services/cli/account";
+import { subscribeAccountLoginCompleted } from "@/app/services/cli/authNotifications";
 import { useAccount } from "@/app/services/cli/useAccount";
 import { useThreadList } from "@/app/services/cli/useThreads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
@@ -44,27 +50,6 @@ type WorkspaceGroup = {
   key: string;
   threads: ThreadSummary[];
 };
-
-function readLoginUrl(result: unknown) {
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-  const record = result as Record<string, unknown>;
-  const knownKeys = [
-    "authUrl",
-    "verificationUri",
-    "browserUrl",
-    "url",
-    "authorizeUrl",
-  ];
-  for (const key of knownKeys) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim().length) {
-      return value;
-    }
-  }
-  return null;
-}
 
 export function AppSidebar() {
   const queryClient = useQueryClient();
@@ -114,7 +99,10 @@ export function AppSidebar() {
     null,
   );
   const [accountAction, setAccountAction] = useState<
-    "login-chatgpt" | "login-api-key" | "logout" | null
+    "login-chatgpt" | "login-api-key" | "cancel-login" | "logout" | null
+  >(null);
+  const [pendingChatgptLoginId, setPendingChatgptLoginId] = useState<
+    string | null
   >(null);
   const filterMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -318,8 +306,28 @@ export function AppSidebar() {
     window.setTimeout(() => setAccountActionMessage(null), 2500);
   };
 
+  useEffect(() => {
+    const unsubscribe = subscribeAccountLoginCompleted((event) => {
+      if (
+        event.loginId &&
+        pendingChatgptLoginId &&
+        event.loginId !== pendingChatgptLoginId
+      ) {
+        return;
+      }
+      setPendingChatgptLoginId(null);
+      void queryClient.invalidateQueries({ queryKey: ["account", "read"] });
+      if (event.success) {
+        showAccountMessage("Signed in.");
+        return;
+      }
+      setAccountActionError(event.error ?? "Sign-in failed.");
+    });
+    return unsubscribe;
+  }, [pendingChatgptLoginId, queryClient]);
+
   const runAccountAction = async (
-    action: "login-chatgpt" | "login-api-key" | "logout",
+    action: "login-chatgpt" | "login-api-key" | "cancel-login" | "logout",
   ) => {
     setAccountAction(action);
     setAccountActionError(null);
@@ -331,25 +339,37 @@ export function AppSidebar() {
         return;
       }
 
+      if (action === "cancel-login") {
+        if (!pendingChatgptLoginId) {
+          throw new Error("No pending ChatGPT login.");
+        }
+        await cancelAccountLogin(pendingChatgptLoginId);
+        setPendingChatgptLoginId(null);
+        showAccountMessage("Sign-in canceled.");
+        return;
+      }
+
       if (action === "login-api-key") {
         const apiKey = window.prompt("Enter OpenAI API key");
         if (!apiKey?.trim()) {
           return;
         }
         const result = await startAccountLogin("apiKey", apiKey.trim());
-        const url = readLoginUrl(result);
-        if (url) {
-          window.open(url, "_blank", "noopener,noreferrer");
+        if (result.type === "chatgpt") {
+          setPendingChatgptLoginId(result.loginId);
+          window.open(result.authUrl, "_blank", "noopener,noreferrer");
         }
+        await queryClient.invalidateQueries({ queryKey: ["account", "read"] });
+        showAccountMessage("Signed in.");
       } else {
         const result = await startAccountLogin("chatgpt");
-        const url = readLoginUrl(result);
-        if (url) {
-          window.open(url, "_blank", "noopener,noreferrer");
+        if (result.type !== "chatgpt") {
+          throw new Error("ChatGPT sign-in did not return OAuth details.");
         }
+        setPendingChatgptLoginId(result.loginId);
+        window.open(result.authUrl, "_blank", "noopener,noreferrer");
+        showAccountMessage("Complete sign-in in your browser.");
       }
-      await queryClient.invalidateQueries({ queryKey: ["account", "read"] });
-      showAccountMessage("Sign-in started.");
     } catch (error) {
       setAccountActionError(
         error instanceof Error ? error.message : "Account action failed.",
@@ -714,19 +734,39 @@ export function AppSidebar() {
                     onClick={() => {
                       void runAccountAction("login-chatgpt");
                     }}
-                    disabled={accountAction !== null}
+                    disabled={
+                      accountAction !== null || Boolean(pendingChatgptLoginId)
+                    }
                   >
                     <UserRound className="h-3.5 w-3.5 text-ink-400" />
                     {accountAction === "login-chatgpt"
                       ? "Starting sign in…"
-                      : "Sign in with ChatGPT"}
+                      : pendingChatgptLoginId
+                        ? "Awaiting browser confirmation…"
+                        : "Sign in with ChatGPT"}
                   </button>
+                  {pendingChatgptLoginId ? (
+                    <button
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5 disabled:opacity-60"
+                      onClick={() => {
+                        void runAccountAction("cancel-login");
+                      }}
+                      disabled={accountAction !== null}
+                    >
+                      <X className="h-3.5 w-3.5 text-ink-400" />
+                      {accountAction === "cancel-login"
+                        ? "Canceling sign in…"
+                        : "Cancel ChatGPT sign in"}
+                    </button>
+                  ) : null}
                   <button
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5 disabled:opacity-60"
                     onClick={() => {
                       void runAccountAction("login-api-key");
                     }}
-                    disabled={accountAction !== null}
+                    disabled={
+                      accountAction !== null || Boolean(pendingChatgptLoginId)
+                    }
                   >
                     <Plus className="h-3.5 w-3.5 text-ink-400" />
                     Sign in with API key

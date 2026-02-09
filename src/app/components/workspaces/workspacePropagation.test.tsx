@@ -151,8 +151,14 @@ vi.mock("@/app/services/cli/useAccount", () => ({
 }));
 
 vi.mock("@/app/services/cli/account", () => ({
+  cancelAccountLogin: () => Promise.resolve("canceled"),
   logoutAccount: () => Promise.resolve(),
-  startAccountLogin: () => Promise.resolve({}),
+  startAccountLogin: () =>
+    Promise.resolve({
+      type: "chatgpt",
+      loginId: "login-123",
+      authUrl: "https://example.test/login",
+    }),
 }));
 
 vi.mock("@/app/services/git/useWorkspaceGitStatus", () => ({

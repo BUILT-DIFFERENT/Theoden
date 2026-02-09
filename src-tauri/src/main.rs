@@ -14,7 +14,7 @@ use automation_store::{
     now_ts, AutomationCreateParams, AutomationRecord, AutomationRunRecord, AutomationStore,
     AutomationUpdateParams, RunArchiveParams, RunNowParams,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use state_store::StateStore;
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -34,13 +34,6 @@ use tokio::sync::Notify;
 
 static REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ConfigPayload {
-    model: Option<String>,
-    effort: Option<String>,
-    verbosity: Option<String>,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AutomationRunsListParams {
@@ -57,25 +50,6 @@ struct InboxMarkReadParams {
 #[serde(rename_all = "camelCase")]
 struct TerminalAttachParams {
     session_id: String,
-}
-
-#[tauri::command]
-fn load_config() -> ConfigPayload {
-    ConfigPayload {
-        model: Some("gpt-5".to_string()),
-        effort: Some("high".to_string()),
-        verbosity: Some("normal".to_string()),
-    }
-}
-
-#[tauri::command]
-fn list_threads() -> Vec<String> {
-    Vec::new()
-}
-
-#[tauri::command]
-fn start_run(_prompt: String) -> Result<String, String> {
-    Ok("run-stub".to_string())
 }
 
 #[tauri::command]
@@ -534,9 +508,6 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            load_config,
-            list_threads,
-            start_run,
             app_server_start,
             app_server_request,
             app_server_notify,

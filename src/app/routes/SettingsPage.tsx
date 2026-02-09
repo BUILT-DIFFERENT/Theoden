@@ -1,13 +1,19 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  subscribeAccountLoginCompleted,
+  subscribeMcpOauthLoginCompleted,
+} from "@/app/services/cli/authNotifications";
 import { execCommand } from "@/app/services/cli/commands";
 import {
   loadAuthStatus,
   loadMergedConfig,
   loadMcpServerStatuses,
+  reloadMcpServerConnections,
   mcpServersFromConfig,
   providersFromConfig,
+  startMcpServerOauthLogin,
   validateConfig,
   type MappedMcpServer,
   type MappedProviderStatus,
@@ -192,6 +198,9 @@ export function SettingsPage() {
     MappedProviderStatus[]
   >(fallbackProviderStatuses);
   const [mcpLoading, setMcpLoading] = useState(false);
+  const [connectingMcpServerIds, setConnectingMcpServerIds] = useState<
+    Set<string>
+  >(() => new Set());
   const [archivedThreads, setArchivedThreads] = useState<
     Array<{ id: string; preview: string; updatedAt: number }>
   >([]);
@@ -443,7 +452,7 @@ export function SettingsPage() {
         })),
       ]);
       const runtimeStatusById = new Map(
-        runtimeStatuses.map((status) => [status.id, status.status]),
+        runtimeStatuses.map((status) => [status.id, status]),
       );
       let parsedServers = mcpServersFromConfig(config).map((server) => {
         const runtimeStatus = runtimeStatusById.get(server.id);
@@ -452,7 +461,8 @@ export function SettingsPage() {
         }
         return {
           ...server,
-          status: runtimeStatus,
+          status: runtimeStatus.status,
+          authStatus: runtimeStatus.authStatus,
         } satisfies MappedMcpServer;
       });
       if (!parsedServers.length && runtimeStatuses.length) {
@@ -461,6 +471,7 @@ export function SettingsPage() {
           name: status.id,
           endpoint: "mcp://unknown",
           status: status.status,
+          authStatus: status.authStatus,
         }));
       }
       setMcpServers(parsedServers);
@@ -523,6 +534,7 @@ export function SettingsPage() {
         name: id.trim(),
         endpoint: endpoint.trim(),
         status: "connected",
+        authStatus: "unknown",
       };
       setMcpServers((current) => {
         const deduped = current.filter((entry) => entry.id !== server.id);
@@ -536,6 +548,30 @@ export function SettingsPage() {
       () => refreshMcpServers(),
       "Failed to reload MCP server connections.",
     );
+
+  const handleConnectMcpServer = (serverName: string) =>
+    runAction(async () => {
+      setConnectingMcpServerIds((current) => {
+        const next = new Set(current);
+        next.add(serverName);
+        return next;
+      });
+      try {
+        const oauthLogin = await startMcpServerOauthLogin(serverName);
+        window.open(
+          oauthLogin.authorizationUrl,
+          "_blank",
+          "noopener,noreferrer",
+        );
+        return `Opened OAuth sign-in for ${oauthLogin.name}. Complete authorization in your browser.`;
+      } finally {
+        setConnectingMcpServerIds((current) => {
+          const next = new Set(current);
+          next.delete(serverName);
+          return next;
+        });
+      }
+    }, `Failed to start OAuth login for ${serverName}.`);
 
   const handleRunPruneNow = () =>
     runAction(async () => {
@@ -633,6 +669,36 @@ export function SettingsPage() {
     }
     void refreshMcpServers();
   }, [activeSectionId, refreshMcpServers]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeAccountLoginCompleted(() => {
+      void refreshMcpServers();
+    });
+    return unsubscribe;
+  }, [refreshMcpServers]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeMcpOauthLoginCompleted((event) => {
+      setConnectingMcpServerIds((current) => {
+        const next = new Set(current);
+        next.delete(event.name);
+        return next;
+      });
+      if (!event.success) {
+        setActionError(
+          event.error ?? `MCP OAuth login failed for ${event.name}.`,
+        );
+        return;
+      }
+      setActionError(null);
+      setActionMessage(`MCP OAuth connected for ${event.name}.`);
+      void (async () => {
+        await reloadMcpServerConnections().catch(() => undefined);
+        await refreshMcpServers().catch(() => undefined);
+      })();
+    });
+    return unsubscribe;
+  }, [refreshMcpServers]);
 
   const renderFormForSection = (targetSection: SettingsSectionId) => {
     switch (targetSection) {
@@ -902,8 +968,30 @@ export function SettingsPage() {
                   <div>
                     <p className="text-ink-100">{server.name}</p>
                     <p className="text-xs text-ink-500">{server.endpoint}</p>
+                    <p className="text-[0.65rem] text-ink-500">
+                      auth: {server.authStatus}
+                    </p>
                   </div>
-                  <span className="text-xs text-ink-300">{server.status}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-ink-300">
+                      {server.status}
+                    </span>
+                    {server.status === "needs_auth" ? (
+                      <button
+                        className={actionButtonClass}
+                        onClick={() => {
+                          void handleConnectMcpServer(server.id);
+                        }}
+                        disabled={
+                          mcpLoading || connectingMcpServerIds.has(server.id)
+                        }
+                      >
+                        {connectingMcpServerIds.has(server.id)
+                          ? "Connecting…"
+                          : "Connect"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

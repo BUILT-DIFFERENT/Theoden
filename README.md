@@ -155,6 +155,7 @@ Key submodule debug files:
 
 - Parity and execution plan: `docs/custom/plan.md`
 - Backend parity matrix and deviations: `docs/custom/parity-backend-v1.md`
+- Signal-level parity closure map: `docs/custom/signal-parity-map-tauri.md`
 - Product/experience specification: `docs/custom/codex-app.md`
 - Official desktop debug harness reference: `docs/custom/official-desktop-debugging.md`
 

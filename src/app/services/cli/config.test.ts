@@ -6,6 +6,8 @@ import {
   loadMergedConfig,
   mcpServersFromConfig,
   providersFromConfig,
+  reloadMcpServerConnections,
+  startMcpServerOauthLogin,
 } from "@/app/services/cli/config";
 import { requestAppServer } from "@/app/services/cli/rpc";
 
@@ -46,8 +48,9 @@ describe("config service", () => {
     const requestMock = vi.mocked(requestAppServer);
     requestMock.mockResolvedValueOnce({
       data: [
-        { id: "buildkite", status: "OFFLINE" },
-        { name: "github", status: "connected" },
+        { name: "buildkite", authStatus: "NotLoggedIn" },
+        { name: "github", authStatus: "oauth" },
+        { name: "legacy", status: "OFFLINE" },
         { id: "", status: "disabled" },
       ],
     });
@@ -66,25 +69,59 @@ describe("config service", () => {
         name: "buildkite",
         endpoint: "npx buildkite-mcp",
         status: "disabled",
+        authStatus: "unknown",
       },
       {
         id: "github_actions",
         name: "github actions",
         endpoint: "https://mcp.example",
         status: "connected",
+        authStatus: "unknown",
       },
       {
         id: "fallback_only",
         name: "fallback only",
         endpoint: "mcp://fallback_only",
         status: "connected",
+        authStatus: "unknown",
       },
     ]);
 
     await expect(loadMcpServerStatuses()).resolves.toEqual([
-      { id: "buildkite", status: "disabled" },
-      { id: "github", status: "connected" },
+      { id: "buildkite", status: "needs_auth", authStatus: "notLoggedIn" },
+      { id: "github", status: "connected", authStatus: "oauth" },
+      { id: "legacy", status: "disabled", authStatus: "unknown" },
     ]);
+  });
+
+  it("starts MCP OAuth login and reloads MCP connections", async () => {
+    const requestMock = vi.mocked(requestAppServer);
+    requestMock.mockResolvedValueOnce({
+      authorization_url: "https://example.test/oauth",
+    });
+    requestMock.mockResolvedValueOnce({
+      ok: true,
+    });
+
+    await expect(startMcpServerOauthLogin("github")).resolves.toEqual({
+      name: "github",
+      authorizationUrl: "https://example.test/oauth",
+    });
+    await expect(reloadMcpServerConnections()).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(requestMock).toHaveBeenNthCalledWith(1, {
+      method: "mcpServer/oauth/login",
+      params: {
+        name: "github",
+        scopes: undefined,
+        timeoutSecs: undefined,
+      },
+    });
+    expect(requestMock).toHaveBeenNthCalledWith(2, {
+      method: "config/mcpServer/reload",
+    });
   });
 
   it("maps auth status and provider readiness from config variants", async () => {

@@ -18,6 +18,11 @@ interface McpServerStatusListResponse {
   data?: unknown[];
 }
 
+interface McpServerOauthLoginResponse {
+  authorizationUrl?: string;
+  authorization_url?: string;
+}
+
 interface AuthStatusResponse {
   status?: string;
   authStatus?: string;
@@ -29,10 +34,22 @@ export interface MappedMcpServer {
   id: string;
   name: string;
   endpoint: string;
-  status: "connected" | "disabled";
+  status: "connected" | "needs_auth" | "disabled" | "error";
+  authStatus:
+    | "unsupported"
+    | "notLoggedIn"
+    | "bearerToken"
+    | "oauth"
+    | "unknown";
 }
 
 export type MappedProviderStatus = ProviderStatus;
+
+export interface McpServerRuntimeStatus {
+  id: string;
+  status: MappedMcpServer["status"];
+  authStatus: MappedMcpServer["authStatus"];
+}
 
 export async function loadMergedConfig(cwd: string | null = null) {
   const result = await requestAppServer<ConfigReadResponse>({
@@ -79,11 +96,14 @@ export function mcpServersFromConfig(config: CodexConfig): MappedMcpServer[] {
       name: id.replace(/[-_]/g, " "),
       endpoint,
       status: disabledValue ? "disabled" : "connected",
+      authStatus: "unknown",
     } satisfies MappedMcpServer;
   });
 }
 
-export async function loadMcpServerStatuses() {
+export async function loadMcpServerStatuses(): Promise<
+  McpServerRuntimeStatus[]
+> {
   const result = await requestAppServer<McpServerStatusListResponse>({
     method: "mcpServerStatus/list",
     params: {},
@@ -104,22 +124,61 @@ export async function loadMcpServerStatuses() {
       if (!id) {
         return null;
       }
-      const statusValue =
-        (typeof entry.status === "string" && entry.status.toLowerCase()) ||
-        "connected";
-      const status: MappedMcpServer["status"] =
-        statusValue === "disabled" || statusValue === "offline"
-          ? "disabled"
-          : "connected";
+      const authStatus = normalizeMcpAuthStatus(entry);
+      const status = normalizeMcpRuntimeStatus(entry, authStatus);
       return {
         id,
         status,
+        authStatus,
       };
     })
-    .filter(
-      (entry): entry is { id: string; status: MappedMcpServer["status"] } =>
-        Boolean(entry),
+    .filter((entry): entry is McpServerRuntimeStatus => Boolean(entry));
+}
+
+export async function startMcpServerOauthLogin(
+  name: string,
+  options: {
+    scopes?: string[] | null;
+    timeoutSecs?: number | null;
+  } = {},
+) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("MCP server name is required.");
+  }
+  const result = await requestAppServer<McpServerOauthLoginResponse>({
+    method: "mcpServer/oauth/login",
+    params: {
+      name: trimmed,
+      scopes:
+        options.scopes && options.scopes.length ? options.scopes : undefined,
+      timeoutSecs:
+        typeof options.timeoutSecs === "number"
+          ? options.timeoutSecs
+          : undefined,
+    },
+  });
+  const authorizationUrl =
+    (typeof result?.authorizationUrl === "string" &&
+      result.authorizationUrl.trim()) ||
+    (typeof result?.authorization_url === "string" &&
+      result.authorization_url.trim()) ||
+    null;
+  if (!authorizationUrl) {
+    throw new Error(
+      `MCP OAuth login for ${trimmed} did not return an authorization URL.`,
     );
+  }
+  return {
+    name: trimmed,
+    authorizationUrl,
+  };
+}
+
+export async function reloadMcpServerConnections() {
+  return requestAppServer({
+    method: "config/mcpServer/reload",
+  });
 }
 
 export async function loadAuthStatus() {
@@ -149,6 +208,61 @@ function readString(record: Record<string, unknown>, ...keys: string[]) {
     }
   }
   return null;
+}
+
+function normalizeMcpRuntimeStatus(
+  entry: Record<string, unknown>,
+  authStatus: MappedMcpServer["authStatus"],
+): MappedMcpServer["status"] {
+  const statusValue =
+    typeof entry.status === "string" ? entry.status.trim().toLowerCase() : null;
+  if (
+    statusValue === "disabled" ||
+    statusValue === "offline" ||
+    statusValue === "inactive"
+  ) {
+    return "disabled";
+  }
+  if (
+    statusValue === "error" ||
+    statusValue === "failed" ||
+    statusValue === "unreachable"
+  ) {
+    return "error";
+  }
+  if (entry.disabled === true || entry.enabled === false) {
+    return "disabled";
+  }
+  if (authStatus === "notLoggedIn") {
+    return "needs_auth";
+  }
+  return "connected";
+}
+
+function normalizeMcpAuthStatus(
+  entry: Record<string, unknown>,
+): MappedMcpServer["authStatus"] {
+  const raw =
+    (typeof entry.authStatus === "string" && entry.authStatus) ||
+    (typeof entry.auth_status === "string" && entry.auth_status) ||
+    null;
+  if (!raw) {
+    return "unknown";
+  }
+  const normalized = raw.replace(/[\s_-]/g, "").toLowerCase();
+  if (normalized === "unsupported") {
+    return "unsupported";
+  }
+  if (normalized === "notloggedin") {
+    return "notLoggedIn";
+  }
+  if (normalized === "bearertoken") {
+    return "bearerToken";
+  }
+  if (normalized === "oauth") {
+    return "oauth";
+  }
+  return "unknown";
 }
 
 function readBoolean(record: Record<string, unknown>, ...keys: string[]) {
