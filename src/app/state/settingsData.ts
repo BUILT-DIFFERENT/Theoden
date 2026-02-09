@@ -80,5 +80,9 @@ export const mockProviders: ProviderStatus[] = [
     status: "ready",
     detail: "Workspace clone strategy enabled",
   },
-  { id: "cloud", status: "stub", detail: "codex cloud exec not wired yet" },
+  {
+    id: "cloud",
+    status: "unavailable",
+    detail: "Configure cloud environment to run remote tasks",
+  },
 ];

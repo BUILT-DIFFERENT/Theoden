@@ -13,6 +13,11 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { clearActiveRun, getActiveRun } from "@/app/services/cli/activeRuns";
+import {
+  cancelCloudRun,
+  hasActiveCloudRun,
+  startCloudRun,
+} from "@/app/services/cli/cloudRuns";
 import { getWorkspaceFileIndex } from "@/app/services/cli/fileIndex";
 import {
   cancelTurn,
@@ -52,6 +57,12 @@ const effortFromQuality: Record<
   medium: "medium",
   high: "high",
   extra_high: "xhigh",
+};
+const cloudAttemptsFromQuality: Record<QualityPreset, number> = {
+  low: 1,
+  medium: 1,
+  high: 2,
+  extra_high: 4,
 };
 
 const modelOptions = ["GPT-5.2-Codex", "GPT-5", "o4-mini"] as const;
@@ -426,12 +437,23 @@ export function ThreadComposer({
       ? `\n\nAttached files:\n${attachments.map((path) => `- ${path}`).join("\n")}`
       : "";
     const turnInput = `${prompt}${attachmentContext}`;
-    await startTurn({
-      threadId: targetThreadId,
-      input: turnInput,
-      cwd,
-      effort: effortFromQuality[qualityPreset],
-    });
+    if (environmentMode === "cloud") {
+      await startCloudRun({
+        threadId: targetThreadId,
+        prompt: turnInput,
+        environmentId: runtimeSettings.cloudRegion,
+        branch: branchLabel,
+        attempts: cloudAttemptsFromQuality[qualityPreset],
+        cwd,
+      });
+    } else {
+      await startTurn({
+        threadId: targetThreadId,
+        input: turnInput,
+        cwd,
+        effort: effortFromQuality[qualityPreset],
+      });
+    }
     onSubmitted?.(turnInput);
 
     if (clearComposerAfterSubmit) {
@@ -506,6 +528,10 @@ export function ThreadComposer({
   };
 
   const handleStop = async () => {
+    if (threadId && hasActiveCloudRun(threadId)) {
+      cancelCloudRun(threadId);
+      return;
+    }
     if (isSubmitting && !isRunning) {
       setIsSubmitting(false);
       return;

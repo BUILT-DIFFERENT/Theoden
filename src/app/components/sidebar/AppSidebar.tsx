@@ -2,6 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  Archive,
+  ArchiveRestore,
   BookOpen,
   Check,
   ChevronDown,
@@ -9,9 +11,12 @@ import {
   Filter,
   Folder,
   LogOut,
+  Pencil,
+  Pin,
+  PinOff,
   Plus,
-  SquarePen,
   Settings,
+  SquarePen,
   UserRound,
   WandSparkles,
   Workflow,
@@ -19,10 +24,16 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { logoutAccount, startAccountLogin } from "@/app/services/cli/account";
+import { archiveThread, unarchiveThread } from "@/app/services/cli/threads";
 import { useAccount } from "@/app/services/cli/useAccount";
 import { useThreadList } from "@/app/services/cli/useThreads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useAppUi } from "@/app/state/appUi";
+import {
+  setSidebarThreadAlias,
+  toggleSidebarThreadPinned,
+  useSidebarThreadMetadataMap,
+} from "@/app/state/sidebarThreadMetadata";
 import {
   loadStoredSidebarUi,
   storeSidebarUi,
@@ -100,9 +111,9 @@ export function AppSidebar() {
   const { selectedWorkspace, setSelectedWorkspace, setWorkspacePickerOpen } =
     useWorkspaceUi();
   const { projects, allThreads } = useThreadList({
-    limit: 100,
     workspacePath: selectedWorkspace,
   });
+  const sidebarThreadMetadata = useSidebarThreadMetadataMap();
   const { workspaces } = useWorkspaces();
   const [initialSidebarState] = useState(() => loadStoredSidebarUi());
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<
@@ -135,6 +146,12 @@ export function AppSidebar() {
   const [accountAction, setAccountAction] = useState<
     "login-chatgpt" | "login-api-key" | "logout" | null
   >(null);
+  const [threadActionError, setThreadActionError] = useState<string | null>(
+    null,
+  );
+  const [threadActionBusyId, setThreadActionBusyId] = useState<string | null>(
+    null,
+  );
   const filterMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const threadListParentRef = useRef<HTMLDivElement | null>(null);
@@ -212,12 +229,21 @@ export function AppSidebar() {
             thread.id === selectedThreadId
           );
         });
-        const sortedThreads =
-          threadSort === "title"
-            ? filteredThreads
-                .slice()
-                .sort((a, b) => a.title.localeCompare(b.title))
-            : filteredThreads;
+        const sortedThreads = filteredThreads.slice().sort((a, b) => {
+          const aMeta = sidebarThreadMetadata[a.id];
+          const bMeta = sidebarThreadMetadata[b.id];
+          const aPinned = Boolean(aMeta?.pinned);
+          const bPinned = Boolean(bMeta?.pinned);
+          if (aPinned !== bPinned) {
+            return aPinned ? -1 : 1;
+          }
+          if (threadSort === "title") {
+            const aLabel = (aMeta?.alias ?? a.title).toLowerCase();
+            const bLabel = (bMeta?.alias ?? b.title).toLowerCase();
+            return aLabel.localeCompare(bLabel);
+          }
+          return 0;
+        });
         return {
           ...workspace,
           threads: sortedThreads,
@@ -227,7 +253,13 @@ export function AppSidebar() {
         (workspace) =>
           workspace.threads.length > 0 || threadVisibility === "all",
       );
-  }, [selectedThreadId, threadSort, threadVisibility, workspaceTree]);
+  }, [
+    selectedThreadId,
+    sidebarThreadMetadata,
+    threadSort,
+    threadVisibility,
+    workspaceTree,
+  ]);
   const expandedWorkspaceKeys = useMemo(
     () =>
       Object.entries(expandedWorkspaces)
@@ -375,6 +407,48 @@ export function AppSidebar() {
       );
     } finally {
       setAccountAction(null);
+    }
+  };
+
+  const renameThreadAlias = (thread: ThreadSummary) => {
+    const metadata = sidebarThreadMetadata[thread.id];
+    const currentLabel = metadata?.alias ?? thread.title;
+    const nextLabel = window.prompt("Rename thread label", currentLabel);
+    if (nextLabel === null) {
+      return;
+    }
+    setSidebarThreadAlias(thread.id, nextLabel || undefined);
+  };
+
+  const toggleThreadArchive = async (thread: ThreadSummary) => {
+    if (threadActionBusyId) {
+      return;
+    }
+    setThreadActionError(null);
+    setThreadActionBusyId(thread.id);
+    try {
+      if (thread.archived) {
+        await unarchiveThread(thread.id);
+      } else {
+        await archiveThread(thread.id);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["threads", "list"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["threads", "read", thread.id],
+        }),
+      ]);
+      if (!thread.archived && selectedThreadId === thread.id) {
+        await navigate({ to: "/" });
+      }
+    } catch (error) {
+      setThreadActionError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update thread archive status.",
+      );
+    } finally {
+      setThreadActionBusyId(null);
     }
   };
 
@@ -594,9 +668,13 @@ export function AppSidebar() {
                       {isExpanded ? (
                         <div className="border-t border-white/10 px-2 pb-2 pt-1">
                           {workspace.threads.length ? (
-                            workspace.threads.slice(0, 10).map((thread) => {
+                            workspace.threads.map((thread) => {
                               const isThreadSelected =
                                 thread.id === selectedThreadId;
+                              const metadata = sidebarThreadMetadata[thread.id];
+                              const isPinned = Boolean(metadata?.pinned);
+                              const threadLabel =
+                                metadata?.alias ?? thread.title;
                               const showDot =
                                 thread.status === "needs_review" ||
                                 thread.status === "running";
@@ -606,39 +684,116 @@ export function AppSidebar() {
                                 (changeSummary.additions > 0 ||
                                   changeSummary.deletions > 0);
                               return (
-                                <Link
+                                <div
                                   key={thread.id}
-                                  to="/t/$threadId"
-                                  params={{ threadId: thread.id }}
-                                  className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[0.7rem] transition ${
+                                  className={`group mt-1 flex items-center gap-1 rounded-lg px-2 py-1.5 text-[0.7rem] transition ${
                                     isThreadSelected
                                       ? "bg-flare-400/20 text-ink-50"
                                       : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
                                   }`}
-                                  onClick={() =>
-                                    setSelectedWorkspace(workspace.path)
-                                  }
                                 >
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    {showDot ? (
-                                      <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
-                                    ) : (
-                                      <span className="h-1.5 w-1.5 rounded-full border border-white/10" />
-                                    )}
-                                    <span className="truncate">
-                                      {thread.title}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[0.65rem] text-ink-500">
-                                    {showChanges ? (
-                                      <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[0.6rem]">
-                                        +{changeSummary.additions} -
-                                        {changeSummary.deletions}
+                                  <Link
+                                    to="/t/$threadId"
+                                    params={{ threadId: thread.id }}
+                                    className="flex min-w-0 flex-1 items-center justify-between gap-2"
+                                    onClick={() =>
+                                      setSelectedWorkspace(workspace.path)
+                                    }
+                                  >
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      {showDot ? (
+                                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                                      ) : (
+                                        <span className="h-1.5 w-1.5 rounded-full border border-white/10" />
+                                      )}
+                                      <span className="truncate">
+                                        {threadLabel}
                                       </span>
-                                    ) : null}
-                                    <span>{thread.lastUpdated}</span>
+                                      {isPinned ? (
+                                        <Pin className="h-3 w-3 text-amber-300" />
+                                      ) : null}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[0.65rem] text-ink-500">
+                                      {showChanges ? (
+                                        <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[0.6rem]">
+                                          +{changeSummary.additions} -
+                                          {changeSummary.deletions}
+                                        </span>
+                                      ) : null}
+                                      <span>{thread.lastUpdated}</span>
+                                    </div>
+                                  </Link>
+                                  <div
+                                    className={`flex items-center gap-1 transition ${
+                                      isThreadSelected
+                                        ? "opacity-100"
+                                        : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="rounded p-1 text-ink-400 hover:bg-white/10 hover:text-ink-100"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        toggleSidebarThreadPinned(thread.id);
+                                      }}
+                                      aria-label={
+                                        isPinned ? "Unpin thread" : "Pin thread"
+                                      }
+                                      title={
+                                        isPinned ? "Unpin thread" : "Pin thread"
+                                      }
+                                    >
+                                      {isPinned ? (
+                                        <PinOff className="h-3 w-3" />
+                                      ) : (
+                                        <Pin className="h-3 w-3" />
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="rounded p-1 text-ink-400 hover:bg-white/10 hover:text-ink-100"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        renameThreadAlias(thread);
+                                      }}
+                                      aria-label="Rename thread label"
+                                      title="Rename thread label"
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        threadActionBusyId === thread.id
+                                      }
+                                      className="rounded p-1 text-ink-400 hover:bg-white/10 hover:text-ink-100 disabled:opacity-50"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        void toggleThreadArchive(thread);
+                                      }}
+                                      aria-label={
+                                        thread.archived
+                                          ? "Unarchive thread"
+                                          : "Archive thread"
+                                      }
+                                      title={
+                                        thread.archived
+                                          ? "Unarchive thread"
+                                          : "Archive thread"
+                                      }
+                                    >
+                                      {thread.archived ? (
+                                        <ArchiveRestore className="h-3 w-3" />
+                                      ) : (
+                                        <Archive className="h-3 w-3" />
+                                      )}
+                                    </button>
                                   </div>
-                                </Link>
+                                </div>
                               );
                             })
                           ) : (
@@ -646,6 +801,11 @@ export function AppSidebar() {
                               No threads yet.
                             </p>
                           )}
+                          {threadActionError ? (
+                            <p className="mt-1 px-2 text-[0.65rem] text-rose-300">
+                              {threadActionError}
+                            </p>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>

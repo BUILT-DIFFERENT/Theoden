@@ -3,25 +3,43 @@ import type { Provider, RunRequest } from "@/app/services/providers/types";
 
 export const CloudProvider: Provider = {
   id: "cloud",
-  status: "unavailable",
+  status: "ready",
   displayName: "Cloud Runner",
-  async startRun(_request: RunRequest) {
-    // Placeholder: run `codex cloud exec` and stream events into the thread.
-    const envId = _request.cloud?.environmentId ?? "env-id";
-    await runCli({
+  async startRun(request: RunRequest) {
+    const envId = request.cloud?.environmentId?.trim();
+    if (!envId) {
+      throw new Error("Cloud environment is required.");
+    }
+    const attempts = Math.min(Math.max(request.cloud?.attempts ?? 1, 1), 4);
+    const result = await runCli({
       args: [
         "cloud",
         "exec",
         "--env",
         envId,
-        ...(_request.cloud?.branch ? ["--branch", _request.cloud.branch] : []),
-        ...(_request.cloud?.attempts
-          ? ["--attempts", String(_request.cloud.attempts)]
-          : []),
-        _request.prompt,
+        "--attempts",
+        String(attempts),
+        ...(request.cloud?.branch ? ["--branch", request.cloud.branch] : []),
+        request.prompt,
       ],
-      cwd: _request.repoPath,
+      cwd: request.repoPath,
     });
-    throw new Error("Cloud provider not implemented yet.");
+    if (result.code !== 0) {
+      throw new Error(
+        result.stderr.trim() || result.stdout.trim() || "Cloud run failed.",
+      );
+    }
+    const now = Date.now();
+    return {
+      handle: {
+        id: `cloud-${now}`,
+        stop: () => Promise.resolve(),
+      },
+      stream: {
+        onEvent: () => {},
+        onComplete: () => {},
+        onError: () => {},
+      },
+    };
   },
 };

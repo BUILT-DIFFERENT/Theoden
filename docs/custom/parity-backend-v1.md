@@ -4,8 +4,8 @@ This document tracks backend-focused parity decisions for the Tauri desktop clon
 
 ## Scope Lock
 
-- In scope: core thread/turn/approval flows, app-server bridge parity, SQLite-backed automations/inbox, host terminal channel, persisted atom host state, settings/auth/MCP runtime reads.
-- Out of scope: UI polish and cloud execution orchestration (`codex cloud exec` lifecycle).
+- In scope: core thread/turn/approval flows, app-server bridge parity, cloud execution orchestration (`codex cloud exec` lifecycle), SQLite-backed automations/inbox, host terminal channel, persisted atom host state, settings/auth/MCP runtime reads.
+- Out of scope: UI polish beyond parity-critical behavior.
 
 ## Acceptance Matrix
 
@@ -26,8 +26,7 @@ This document tracks backend-focused parity decisions for the Tauri desktop clon
 
 ## Intentional Deviations
 
-- Cloud execution remains unavailable for this milestone (`cloud` provider marked unavailable; orchestration deferred).
-- Terminal host uses command-based streaming rather than full PTY emulation for V1.
+- Cloud execution is CLI-backed (`codex cloud exec` + `cloud list` polling) and does not emit native app-server turn notifications for remote execution.
 - Persisted atom synchronization is host-backed in desktop mode with non-desktop local fallback retained.
 
 ## Runtime Remediation Update (2026-02-07)
@@ -40,6 +39,13 @@ This document tracks backend-focused parity decisions for the Tauri desktop clon
 - Frontend app-server event consumers now share a single listener hub, reducing duplicate `listen(...)` registrations.
 - Turn cancellation path is aligned to protocol-supported `turn/interrupt` only.
 - Terminal descriptors now expose explicit capability metadata (`interactive`, `supportsResize`, `mode`) while keeping stateless execution semantics for V1.
+
+## Runtime Remediation Update (2026-02-09)
+
+- Cloud composer mode now runs `codex cloud exec`, captures environment/branch/attempt options, and feeds cloud lifecycle events into run progress/timeline streams.
+- Cloud provider status is no longer `stub`, and cloud start failures now surface CLI stderr/stdout details.
+- Terminal host is now PTY-backed (`portable-pty`) with persistent shells, real resize support, and stream-driven terminal events.
+- Sidebar thread list parity landed for full list rendering (no per-workspace cap) and row-level pin/rename/archive actions with persisted local + host-backed metadata.
 
 ## Validation Checklist
 

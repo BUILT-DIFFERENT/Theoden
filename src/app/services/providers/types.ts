@@ -36,7 +36,7 @@ export interface RunEventStream {
 
 export interface Provider {
   id: "local" | "worktree" | "cloud";
-  status: "ready" | "unavailable" | "stub";
+  status: "ready" | "unavailable";
   displayName: string;
   startRun: (
     request: RunRequest,
