@@ -23,7 +23,9 @@ const listeners = new Set<() => void>();
 const MAX_WARNINGS = 50;
 
 function emit() {
-  listeners.forEach((listener) => listener());
+  listeners.forEach((listener) => {
+    listener();
+  });
 }
 
 function readRangePosition(

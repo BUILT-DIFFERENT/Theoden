@@ -231,6 +231,20 @@ describe("config service", () => {
     });
   });
 
+  it("rejects invalid MCP server IDs before issuing config RPC calls", async () => {
+    const requestMock = vi.mocked(requestAppServer);
+    await expect(
+      writeMcpServerConfig({
+        serverId: "bad.id",
+        value: {
+          transport: "stdio",
+        },
+        cwd: "C:/repo/theoden",
+      }),
+    ).rejects.toThrow('Invalid MCP server ID "bad.id"');
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
   it("maps config write error metadata to actionable messages", () => {
     const conflictError = new AppServerRpcError("write failed", {
       code: -32000,

@@ -98,12 +98,14 @@ describe("automations state helpers", () => {
     };
 
     expect(recurrenceToRrule(weekly)).toBe(
-      "FREQ=WEEKLY;BYDAY=FR;BYHOUR=16;BYMINUTE=5",
+      "FREQ=WEEKLY;BYDAY=FR;BYHOUR=16;BYMINUTE=5;TZID=UTC",
     );
     expect(recurrenceToRrule(daily)).toBe(
-      "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU;BYHOUR=9;BYMINUTE=0",
+      "FREQ=DAILY;BYHOUR=9;BYMINUTE=0;TZID=UTC",
     );
-    expect(recurrenceToRrule(monthly)).toBe("FREQ=HOURLY;INTERVAL=720");
+    expect(recurrenceToRrule(monthly)).toBe(
+      "FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=8;BYMINUTE=15;TZID=UTC",
+    );
 
     expect(recurrenceFromRrule(recurrenceToRrule(weekly), "UTC")).toEqual({
       kind: "weekly",
@@ -113,6 +115,25 @@ describe("automations state helpers", () => {
       dayOfMonth: null,
     });
     expect(recurrenceFromRrule(recurrenceToRrule(monthly), "UTC")).toEqual({
+      kind: "monthly",
+      time: "08:15",
+      timezone: "UTC",
+      dayOfWeek: null,
+      dayOfMonth: 1,
+    });
+    expect(
+      recurrenceFromRrule(
+        "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU;BYHOUR=9;BYMINUTE=0",
+        "UTC",
+      ),
+    ).toEqual({
+      kind: "daily",
+      time: "09:00",
+      timezone: "UTC",
+      dayOfWeek: null,
+      dayOfMonth: null,
+    });
+    expect(recurrenceFromRrule("FREQ=HOURLY;INTERVAL=720", "UTC")).toEqual({
       kind: "monthly",
       time: "09:00",
       timezone: "UTC",

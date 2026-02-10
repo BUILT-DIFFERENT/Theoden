@@ -16,7 +16,7 @@ This document lists **everything I can confirm from the two screen recordings**:
 - [x] Added host terminal command channel with `terminal_create/attach/write/resize/close` and streaming events (`terminal-attached`, `terminal-data`, `terminal-error`, `terminal-exit`).
 - [x] Moved Automations page data authority from localStorage to host APIs, including one-time migration of legacy localStorage automations.
 - [x] Removed desktop mock fallback behavior in thread list/detail data hooks so desktop mode now uses real/cached backend data only.
-- [x] Added settings runtime reads for MCP/auth status via `mcpServerStatus/list` and `account/read`.
+- [x] Added settings runtime reads for MCP/auth status via `mcpServerStatus/list` and `getAuthStatus`.
 - [x] Added parity contract doc: `docs/custom/parity-backend-v1.md`.
 - [x] Added persisted sidebar UI state for thread list controls (`sort/filter`), expanded workspace folders, and scroll restoration.
 - [x] Added archived-thread row restore actions in Settings and automation create-sheet safety parity details (warning callout + backdrop close).
@@ -26,15 +26,15 @@ This document lists **everything I can confirm from the two screen recordings**:
 
 ## Electron parity gaps still open (February 7, 2026)
 
-- [x] **Cloud execution parity:** Cloud mode now starts `codex cloud exec` runs with environment/branch/attempt options, reports lifecycle updates in timeline/progress, and no longer throws placeholder provider errors. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39601`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:22342`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39627`.
+- [ ] **Cloud execution parity (still stubbed):** Implement full cloud orchestration so selecting cloud mode starts real runs, emits `thread/start` + `turn/start` lifecycle, and supports environment/branch/attempt options without throwing a placeholder error. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39601`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:22342`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39627`.
 - [ ] **Thread history/lifecycle RPC parity:** Replace local placeholders/stubs for listing/resuming threads with real app-server-backed `thread/list`, `thread/resume`, `thread/read`, archive/unarchive wiring and pagination/filter semantics matching Electron behavior. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39601`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:12`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:14`.
-- [x] **Terminal PTY parity (interactive shell):** Terminal host now uses persistent `portable-pty` sessions with resize support, long-lived shell state, and PTY capability metadata. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:42041`.
-- [ ] **Settings information architecture parity:** Add missing settings sections and behavior parity for Account, Data controls, Usage & Analytics, and external/browser-open settings paths so navigation and section scope matches Electron. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2525`, `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2845`.
-- [x] **MCP settings persistence parity:** Settings now mutate persisted user config via `config/batchWrite` (create/update/delete on `mcp_servers.<id>`), then trigger `config/mcpServer/reload` + status refresh; session-only add/edit behavior is removed.
-- [x] **Config validation parity:** Configuration validation now performs real `config/read` validation with surfaced per-error output, warning integration from `configWarning`, and live merged-config preview metadata (origins/layers/write-target).
-- [ ] **Worktrees management parity (row-level operations):** Add full worktree inventory rows with delete actions, linked conversation visibility, explicit empty/error states, and row-scoped actions that match official settings behavior. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/worktrees-settings-page-Bx5YHGa_.js:1`.
-- [x] **Sidebar interaction parity and polish:** Sidebar now supports pinned threads, rename/archive row actions, pinned-first sorting, host-backed metadata persistence, and no per-workspace thread truncation. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:1624`.
-- [ ] **Automation schedule semantics parity:** Expand recurrence handling beyond current hourly/weekly shortcuts and fallback scheduling so recurrence parsing/execution behavior aligns with official automation scheduling expectations. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:15069`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:18360`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:21906`, `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2824`.
+- [ ] **Terminal PTY parity (interactive shell):** Upgrade terminal host from stateless command streaming to true PTY-backed interactive sessions with resize support, long-lived shell state, and terminal capability parity with Electron. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:42041`.
+- [x] **Settings information architecture parity:** Added Account, Data controls, and Usage & analytics sections in settings navigation with live account actions, local data path controls, browser-open links, and runtime usage reads/refresh via `account/rateLimits/read` + `account/rateLimits/updated`. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2525`, `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2845`.
+- [ ] **MCP settings persistence parity:** Replace session-only MCP add/edit behavior with persisted config-backed mutation flows (create/update/delete, reconnect, validation, and status refresh) so changes survive restart like official app behavior. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:181`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:26`.
+- [ ] **Config validation parity:** Implement real validation against merged config schema and runtime constraints (not always-valid placeholders), including actionable per-key errors shown in Configuration settings. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2525`.
+- [x] **Worktrees management parity (row-level operations):** Added worktree inventory table in Settings with `git worktree list --porcelain` parsing, row-scoped actions (open folder, open linked conversation, remove), main-worktree delete guardrails, and explicit loading/empty/error states. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/worktrees-settings-page-Bx5YHGa_.js:1`.
+- [ ] **Sidebar interaction parity and polish:** Implement pinned threads, rename/archive thread actions, group-by workspace/recency parity, and automations inbox route affordance; remove truncating behavior that limits visible threads per workspace. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:1624`.
+- [x] **Automation schedule semantics parity:** Recurrence now uses canonical daily/weekly/monthly RRULE semantics in frontend + backend scheduler with legacy monthly-hourly fallback support (`FREQ=HOURLY;INTERVAL=720`) and normalization on read/write. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:15069`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:18360`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:21906`, `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2824`.
 - [ ] **Protocol parity map closure:** Resolve remaining `TBD` items in signal mapping (thread/turn/approval/auth surfaces), and close documented OAuth parity deferrals with implemented v2-compatible flows and audits. Electron reference: `third_party/CodexDesktop-Rebuild/signal-parity-map.md:12`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:32`, `third_party/CodexDesktop-Rebuild/README.md:131`.
 
 ---
@@ -134,7 +134,7 @@ The real app shows git-related UI in at least two ways:
 ### 2.2 Top bar / window chrome
 
 #### ✅ Real app
-- [x] Thread view top bar contains: **thread title**, **workspace label**, and a **“…” overflow** menu.
+- [ ] Thread view top bar contains: **thread title**, **workspace label**, and a **“…” overflow** menu.
 - [ ] New thread screen shows a simple “New thread” header in the main area (not a toolbar full of controls).
 - [ ] No visible “Run” and “Open” primary actions in the top-right (in the portions shown).
 
@@ -322,8 +322,8 @@ The real app shows git-related UI in at least two ways:
   - [x] Chip/tokens with remove “x”
   - [x] Multiline prompt box
   - [x] Primary/secondary actions (not visible in frame; ensure there is a save/create CTA consistent with real app)
-- [ ] Persist created/updated automation rows into SQLite (`automations` table) with canonical fields (`name`, `prompt`, `status`, `cwds`, `rrule`, timestamps).
-- [ ] Ensure scheduler lifecycle updates `next_run_at`/`last_run_at` and reflects them in UI.
+- [x] Persist created/updated automation rows into SQLite (`automations` table) with canonical fields (`name`, `prompt`, `status`, `cwds`, `rrule`, timestamps).
+- [x] Ensure scheduler lifecycle updates `next_run_at`/`last_run_at` and reflects them in UI, with completion-driven run transitions (`PENDING_REVIEW`/`FAILED`/`INTERRUPTED`) and idempotent inbox reconciliation on `turn/completed`.
 
 ---
 
@@ -391,9 +391,9 @@ The real app shows git-related UI in at least two ways:
 ### 4.2 Automations
 - [x] Templates page
 - [x] Create automation sheet
-- [ ] Scheduling + background execution on worktrees
-- [ ] SQLite-backed automation persistence parity (`automations`, `automation_runs`, `inbox_items`)
-- [ ] Inbox/archiving behavior for automation results (persisted run + inbox state)
+- [x] Scheduling + background execution on worktrees
+- [x] SQLite-backed automation persistence parity (`automations`, `automation_runs`, `inbox_items`)
+- [x] Inbox/archiving behavior for automation results (persisted run + inbox state)
 
 ### 4.3 Settings
 - [ ] Settings nav sections

@@ -309,6 +309,11 @@ export async function writeMcpServerConfig(params: {
   if (!serverId) {
     throw new Error("MCP server ID is required.");
   }
+  if (!/^[A-Za-z0-9_-]+$/.test(serverId)) {
+    throw new Error(
+      `Invalid MCP server ID "${serverId}". Use only letters, numbers, underscores, and hyphens.`,
+    );
+  }
   const snapshot = await loadConfigSnapshot(params.cwd ?? null);
   return batchWriteConfig({
     edits: [

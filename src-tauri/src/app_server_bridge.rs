@@ -10,7 +10,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -25,12 +25,25 @@ pub struct CliRunResult {
     pub stderr: String,
 }
 
-#[derive(Default)]
 pub struct AppServerBridge {
     writer: Arc<Mutex<Option<mpsc::Sender<String>>>>,
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
     kill_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     running: Arc<AtomicBool>,
+    notification_tx: broadcast::Sender<serde_json::Value>,
+}
+
+impl Default for AppServerBridge {
+    fn default() -> Self {
+        let (notification_tx, _) = broadcast::channel(512);
+        Self {
+            writer: Arc::new(Mutex::new(None)),
+            pending: Arc::new(Mutex::new(HashMap::new())),
+            kill_signal: Arc::new(Mutex::new(None)),
+            running: Arc::new(AtomicBool::new(false)),
+            notification_tx,
+        }
+    }
 }
 
 pub struct CodexCliCommand {
@@ -111,6 +124,7 @@ impl AppServerBridge {
 
         let bridge = self.clone_for_tasks();
         let app_handle = app.clone();
+        let notification_tx = self.notification_tx.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = lines.next_line().await {
@@ -136,7 +150,10 @@ impl AppServerBridge {
                         }
 
                         if has_method {
-                            let _ = app_handle.emit("app-server-notification", message);
+                            let _ = app_handle.emit("app-server-notification", message.clone());
+                            if !has_id {
+                                let _ = notification_tx.send(message);
+                            }
                         } else {
                             let _ = app_handle.emit("app-server-response", message);
                         }
@@ -288,6 +305,10 @@ impl AppServerBridge {
         self.pending.lock().await.clear();
         *self.writer.lock().await = None;
         Ok(())
+    }
+
+    pub fn subscribe_notifications(&self) -> broadcast::Receiver<serde_json::Value> {
+        self.notification_tx.subscribe()
     }
 
     async fn write_line(&self, payload: serde_json::Value) -> Result<(), String> {

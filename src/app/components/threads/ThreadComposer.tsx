@@ -529,7 +529,22 @@ export function ThreadComposer({
 
   const handleStop = async () => {
     if (threadId && hasActiveCloudRun(threadId)) {
-      cancelCloudRun(threadId);
+      setIsStopping(true);
+      setError(null);
+      try {
+        cancelCloudRun(threadId);
+        await queryClient.invalidateQueries({
+          queryKey: ["threads", "read", threadId],
+        });
+      } catch (stopError) {
+        setError(
+          stopError instanceof Error
+            ? stopError.message
+            : "Failed to cancel active run.",
+        );
+      } finally {
+        setIsStopping(false);
+      }
       return;
     }
     if (isSubmitting && !isRunning) {

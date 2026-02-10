@@ -4,6 +4,11 @@ import type { RunEvent, RunStatus } from "@/app/types";
 
 const MAX_EVENTS = 200;
 const POLL_INTERVAL_MS = 5000;
+const MAX_POLL_DURATION_MS = 120000;
+const MAX_POLL_ATTEMPTS = Math.max(
+  1,
+  Math.ceil(MAX_POLL_DURATION_MS / POLL_INTERVAL_MS),
+);
 
 interface CloudRunEntry {
   threadId: string;
@@ -72,9 +77,21 @@ function mapTaskStatus(status: "queued" | "running" | "completed" | "failed") {
 }
 
 async function pollCloudRunStatus(threadId: string) {
+  let attempts = 0;
   while (true) {
     const run = activeRuns.get(threadId);
     if (!run) {
+      return;
+    }
+    attempts += 1;
+    if (attempts > MAX_POLL_ATTEMPTS) {
+      activeRuns.delete(threadId);
+      appendCloudEvent(
+        threadId,
+        "Cloud task polling timed out",
+        "failed",
+        `No terminal cloud status after ${MAX_POLL_DURATION_MS / 1000}s.`,
+      );
       return;
     }
     try {
