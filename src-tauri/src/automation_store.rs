@@ -652,6 +652,31 @@ impl AutomationStore {
         .await
     }
 
+    pub async fn delete_run_by_thread_id(&self, thread_id: String) -> Result<bool, String> {
+        self.with_connection(|connection| {
+            let run_id: Option<String> = connection
+                .query_row(
+                    "SELECT id FROM automation_runs WHERE thread_id = ?1 ORDER BY created_at DESC LIMIT 1",
+                    params![&thread_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            let Some(run_id) = run_id else {
+                return Ok(false);
+            };
+            connection.execute(
+                "DELETE FROM inbox_items WHERE thread_id = ?1",
+                params![&thread_id],
+            )?;
+            connection.execute(
+                "DELETE FROM automation_runs WHERE id = ?1",
+                params![run_id],
+            )?;
+            Ok(true)
+        })
+        .await
+    }
+
     pub async fn next_due_timestamp(&self) -> Result<Option<i64>, String> {
         self.with_connection(|connection| {
             let mut statement = connection.prepare(

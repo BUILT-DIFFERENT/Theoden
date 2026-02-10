@@ -22,6 +22,9 @@ portable-pty = "0.9.0"
 chrono = { version = "0.4.40", default-features = false, features = ["clock"] }
 chrono-tz = "0.10.4"
 url = "2.5.4"
+base64 = "0.22.1"
+walkdir = "2.5.0"
+webbrowser = "1.0.6"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

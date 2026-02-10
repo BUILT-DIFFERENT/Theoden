@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use tokio::sync::Mutex;
 
 pub struct StateStore {
+    state_dir: PathBuf,
     file_path: PathBuf,
     atoms: Mutex<HashMap<String, Value>>,
 }
@@ -28,6 +29,7 @@ impl StateStore {
         };
 
         Ok(Self {
+            state_dir,
             file_path,
             atoms: Mutex::new(atoms),
         })
@@ -52,6 +54,45 @@ impl StateStore {
         let snapshot = atoms.clone();
         drop(atoms);
         self.persist(snapshot).await
+    }
+
+    pub async fn get_json_state(&self, key: &str) -> Result<Value, String> {
+        let validated = Self::validate_state_key(key)?;
+        let path = self.state_dir.join(format!("{validated}.json"));
+        if !path.exists() {
+            return Ok(serde_json::json!({}));
+        }
+        let raw = tokio::fs::read_to_string(&path)
+            .await
+            .map_err(|err| format!("failed to read state file '{}': {err}", path.display()))?;
+        serde_json::from_str(&raw)
+            .map_err(|err| format!("failed to parse state file '{}': {err}", path.display()))
+    }
+
+    pub async fn set_json_state(&self, key: &str, value: &Value) -> Result<(), String> {
+        let validated = Self::validate_state_key(key)?;
+        let path = self.state_dir.join(format!("{validated}.json"));
+        let encoded = serde_json::to_string_pretty(value)
+            .map_err(|err| format!("failed to serialize state key '{validated}': {err}"))?;
+        let temp_name = format!("{validated}.tmp-{}", std::process::id());
+        let temp_path = self.state_dir.join(temp_name);
+        tokio::fs::write(&temp_path, encoded).await.map_err(|err| {
+            format!(
+                "failed to write temporary state file '{}': {err}",
+                temp_path.display()
+            )
+        })?;
+        if path.exists() {
+            let _ = tokio::fs::remove_file(&path).await;
+        }
+        tokio::fs::rename(&temp_path, &path).await.map_err(|err| {
+            format!(
+                "failed to replace state file '{}' from '{}': {err}",
+                path.display(),
+                temp_path.display()
+            )
+        })?;
+        Ok(())
     }
 
     async fn persist(&self, atoms: HashMap<String, Value>) -> Result<(), String> {
@@ -79,5 +120,23 @@ impl StateStore {
         })
         .await
         .map_err(|err| format!("failed to persist atoms task: {err}"))?
+    }
+
+    fn validate_state_key(key: &str) -> Result<String, String> {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            return Err("state key must not be empty".to_string());
+        }
+        if trimmed.contains("..")
+            || trimmed.contains('/')
+            || trimmed.contains('\\')
+            || trimmed.contains(':')
+            || trimmed.contains('\0')
+        {
+            return Err(format!(
+                "state key '{trimmed}' contains unsupported characters"
+            ));
+        }
+        Ok(trimmed.to_string())
     }
 }
