@@ -6,6 +6,7 @@ on:
       - "src/app/components/sidebar/**"
       - "src/app/routes/**"
       - "src/app/services/cli/**"
+      - "src/app/services/git/**"
       - "src/app/services/bridge/**"
       - "src/app/services/host/**"
       - "src/styles/**"
@@ -109,6 +110,78 @@ jobs:
       - name: Focused parity suite
         run: pnpm parity:test:cloud-sidebar-settings
 
+  parity-thread-slice:
+    name: Parity thread slice suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Thread slice parity suite
+        run: pnpm parity:test:thread-slice
+
+  parity-review-git-terminal:
+    name: Parity review/git/terminal suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Review/git/terminal parity suite
+        run: pnpm parity:test:review-git-terminal
+
+  parity-automations-cloud-settings:
+    name: Parity automations/cloud/settings suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Automations/cloud/settings parity suite
+        run: pnpm parity:test:automations-cloud-settings
+
   official-audit-gate:
     name: Official audit gate
     runs-on: ubuntu-latest
@@ -169,6 +242,30 @@ jobs:
       - name: Rewrite bridge boundary contract
         run: pnpm parity:check:bridge-boundary
 
+  parity-renderer-mode-matrix:
+    name: Parity renderer mode matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate renderer mode matrix
+        run: pnpm parity:check:renderer-mode-matrix
+
   parity-results:
     name: Parity gate results (required)
     needs:
@@ -176,8 +273,12 @@ jobs:
       - tauri-rust-tests
       - parity-route-snapshot
       - parity-cloud-sidebar-settings
+      - parity-thread-slice
+      - parity-review-git-terminal
+      - parity-automations-cloud-settings
       - official-audit-gate
       - parity-contract-checks
+      - parity-renderer-mode-matrix
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -188,5 +289,9 @@ jobs:
           [[ "${{ needs.tauri-rust-tests.result }}" == "success" ]] || exit 1
           [[ "${{ needs.parity-route-snapshot.result }}" == "success" ]] || exit 1
           [[ "${{ needs.parity-cloud-sidebar-settings.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.parity-thread-slice.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.parity-review-git-terminal.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.parity-automations-cloud-settings.result }}" == "success" ]] || exit 1
           [[ "${{ needs.official-audit-gate.result }}" == "success" ]] || exit 1
           [[ "${{ needs.parity-contract-checks.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.parity-renderer-mode-matrix.result }}" == "success" ]] || exit 1

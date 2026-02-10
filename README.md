@@ -117,27 +117,35 @@ pnpm build
 - `pnpm desktop:build:rewrite`
 - `pnpm parity:check:baseline-lock`
 - `pnpm parity:check:bridge-boundary`
+- `pnpm parity:check:renderer-mode-matrix`
 - `pnpm parity:test:routes`
+- `pnpm parity:test:thread-slice`
+- `pnpm parity:test:review-git-terminal`
+- `pnpm parity:test:automations-cloud-settings`
 - `pnpm parity:test:cloud-sidebar-settings`
 - `pnpm parity:audit:check`
 
 ## Command Map
 
-| Goal                                           | Command                                   |
-| ---------------------------------------------- | ----------------------------------------- |
-| Web dev server                                 | `pnpm frontend:dev`                       |
-| Desktop dev app (default compat mode)          | `pnpm desktop:dev`                        |
-| Desktop dev app (forced compat mode)           | `pnpm desktop:dev:compat`                 |
-| Desktop dev app (rewrite mode)                 | `pnpm desktop:dev:rewrite`                |
-| Frontend production bundle                     | `pnpm frontend:build`                     |
-| Desktop production build (default compat mode) | `pnpm build` (or `pnpm desktop:build`)    |
-| Desktop production build (forced rewrite mode) | `pnpm desktop:build:rewrite`              |
-| Frontend tests                                 | `pnpm frontend:test`                      |
-| Route parity snapshot                          | `pnpm parity:test:routes`                 |
-| Cloud/sidebar/settings parity suite            | `pnpm parity:test:cloud-sidebar-settings` |
-| Baseline lock check                            | `pnpm parity:check:baseline-lock`         |
-| Rewrite bridge boundary check                  | `pnpm parity:check:bridge-boundary`       |
-| Official audit artifact gate                   | `pnpm parity:audit:check`                 |
+| Goal                                           | Command                                       |
+| ---------------------------------------------- | --------------------------------------------- |
+| Web dev server                                 | `pnpm frontend:dev`                           |
+| Desktop dev app (default compat mode)          | `pnpm desktop:dev`                            |
+| Desktop dev app (forced compat mode)           | `pnpm desktop:dev:compat`                     |
+| Desktop dev app (rewrite mode)                 | `pnpm desktop:dev:rewrite`                    |
+| Frontend production bundle                     | `pnpm frontend:build`                         |
+| Desktop production build (default compat mode) | `pnpm build` (or `pnpm desktop:build`)        |
+| Desktop production build (forced rewrite mode) | `pnpm desktop:build:rewrite`                  |
+| Frontend tests                                 | `pnpm frontend:test`                          |
+| Route parity snapshot                          | `pnpm parity:test:routes`                     |
+| Thread slice parity suite                      | `pnpm parity:test:thread-slice`               |
+| Review/git/terminal parity suite               | `pnpm parity:test:review-git-terminal`        |
+| Automations/cloud/settings parity suite        | `pnpm parity:test:automations-cloud-settings` |
+| Cloud/sidebar/settings parity suite            | `pnpm parity:test:cloud-sidebar-settings`     |
+| Baseline lock check                            | `pnpm parity:check:baseline-lock`             |
+| Rewrite bridge boundary check                  | `pnpm parity:check:bridge-boundary`           |
+| Renderer mode matrix check                     | `pnpm parity:check:renderer-mode-matrix`      |
+| Official audit artifact gate                   | `pnpm parity:audit:check`                     |
 
 ## Parity CI Gate
 
@@ -146,7 +154,10 @@ Parity-touching pull requests now run `.github/workflows/tauri-parity-gates.yml`
 - frontend lint/test/build
 - Rust tests for `src-tauri`
 - route parity snapshot test
+- focused review/git/terminal parity suite
+- focused automations/cloud/settings parity suite
 - focused cloud/sidebar/settings parity suite
+- renderer mode matrix parity check
 - official audit artifact pass check
 
 Use `Parity gate results (required)` as the branch protection required status to enforce merge blocking on parity regressions.
