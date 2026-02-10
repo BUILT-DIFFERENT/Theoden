@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { uploadFeedback } from "@/app/services/cli/feedback";
 import {
   listSkills,
   writeSkillEnabled,
@@ -401,14 +402,28 @@ export function SkillsPage() {
     }
   };
 
-  const handleOverflowAction = (action: "copy-id" | "report") => {
+  const handleOverflowAction = async (action: "copy-id" | "report") => {
     setDetailMenuOpen(false);
     if (!detailSkill) return;
     if (action === "copy-id") {
       void handleCopySkillId();
       return;
     }
-    setDetailMessage("Thanks, feedback captured.");
+    try {
+      if (isDesktop) {
+        await uploadFeedback({
+          classification: "bug",
+          includeLogs: false,
+          reason: `Skill report: ${detailSkill.id}`,
+          threadId: null,
+        });
+      }
+      setDetailMessage("Thanks, feedback captured.");
+    } catch (error) {
+      setDetailMessage(
+        error instanceof Error ? error.message : "Failed to submit feedback.",
+      );
+    }
   };
 
   return (
@@ -754,13 +769,17 @@ export function SkillsPage() {
                     <div className="surface-card absolute right-0 mt-2 w-40 p-1">
                       <button
                         className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
-                        onClick={() => handleOverflowAction("copy-id")}
+                        onClick={() => {
+                          void handleOverflowAction("copy-id");
+                        }}
                       >
                         Copy skill ID
                       </button>
                       <button
                         className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
-                        onClick={() => handleOverflowAction("report")}
+                        onClick={() => {
+                          void handleOverflowAction("report");
+                        }}
                       >
                         Report skill
                       </button>

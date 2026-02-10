@@ -18,11 +18,12 @@ const mocks = vi.hoisted(() => {
     readAccountRateLimitsMock: vi.fn(),
     listWorktreesMock: vi.fn(),
     removeWorktreeMock: vi.fn(),
-    batchWriteConfigMock: vi.fn(),
+    writeConfigValueMock: vi.fn(),
     loadConfigSnapshotMock: vi.fn(),
     loadMergedConfigMock: vi.fn(),
     loadMcpServerStatusesMock: vi.fn(),
     loadAuthStatusMock: vi.fn(),
+    readConfigRequirementsMock: vi.fn(),
     mcpServersFromConfigMock: vi.fn(),
     providersFromConfigMock: vi.fn(),
     reloadMcpServerConfigMock: vi.fn(),
@@ -104,7 +105,6 @@ vi.mock("@/app/services/cli/appServerEventHub", () => ({
 }));
 
 vi.mock("@/app/services/cli/config", () => ({
-  batchWriteConfig: mocks.batchWriteConfigMock,
   loadAuthStatus: mocks.loadAuthStatusMock,
   loadConfigSnapshot: mocks.loadConfigSnapshotMock,
   loadMergedConfig: mocks.loadMergedConfigMock,
@@ -112,9 +112,11 @@ vi.mock("@/app/services/cli/config", () => ({
   mapConfigWriteErrorMessage: mocks.mapConfigWriteErrorMessageMock,
   mcpServersFromConfig: mocks.mcpServersFromConfigMock,
   providersFromConfig: mocks.providersFromConfigMock,
+  readConfigRequirements: mocks.readConfigRequirementsMock,
   reloadMcpServerConfig: mocks.reloadMcpServerConfigMock,
   startMcpServerOauthLogin: mocks.startMcpServerOauthLoginMock,
   validateConfig: mocks.validateConfigMock,
+  writeConfigValue: mocks.writeConfigValueMock,
 }));
 
 vi.mock("@/app/services/cli/commands", () => ({
@@ -166,11 +168,12 @@ describe("SettingsPage archived threads", () => {
     mocks.subscribeNotificationsMock.mockClear();
     mocks.listWorktreesMock.mockReset();
     mocks.removeWorktreeMock.mockReset();
-    mocks.batchWriteConfigMock.mockReset();
+    mocks.writeConfigValueMock.mockReset();
     mocks.loadConfigSnapshotMock.mockReset();
     mocks.loadMergedConfigMock.mockReset();
     mocks.loadMcpServerStatusesMock.mockReset();
     mocks.loadAuthStatusMock.mockReset();
+    mocks.readConfigRequirementsMock.mockReset();
     mocks.mcpServersFromConfigMock.mockReset();
     mocks.providersFromConfigMock.mockReset();
     mocks.reloadMcpServerConfigMock.mockReset();
@@ -197,7 +200,7 @@ describe("SettingsPage archived threads", () => {
     });
     mocks.listWorktreesMock.mockResolvedValue([]);
     mocks.removeWorktreeMock.mockResolvedValue({});
-    mocks.batchWriteConfigMock.mockResolvedValue({
+    mocks.writeConfigValueMock.mockResolvedValue({
       status: "ok",
       version: "next",
       filePath: "C:/Users/gamer/.codex/config.toml",
@@ -218,6 +221,7 @@ describe("SettingsPage archived threads", () => {
       status: "unknown",
       requiresOpenaiAuth: null,
     });
+    mocks.readConfigRequirementsMock.mockResolvedValue(null);
     mocks.mcpServersFromConfigMock.mockReturnValue([]);
     mocks.providersFromConfigMock.mockReturnValue([]);
     mocks.reloadMcpServerConfigMock.mockResolvedValue({});
@@ -324,16 +328,12 @@ describe("SettingsPage archived threads", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
 
     await waitFor(() => {
-      expect(mocks.batchWriteConfigMock).toHaveBeenCalled();
+      expect(mocks.writeConfigValueMock).toHaveBeenCalled();
     });
     expect(mocks.reloadMcpServerConfigMock).toHaveBeenCalled();
-    expect(mocks.batchWriteConfigMock.mock.calls[0]?.[0]).toMatchObject({
-      edits: [
-        {
-          keyPath: "mcp_servers",
-          mergeStrategy: "replace",
-        },
-      ],
+    expect(mocks.writeConfigValueMock.mock.calls[0]?.[0]).toMatchObject({
+      keyPath: "mcp_servers",
+      mergeStrategy: "replace",
     });
   });
 });

@@ -27,13 +27,15 @@ This document records the documented-surface hardening completed for app-server 
 
 - `src/app/components/threads/ThreadComposer.tsx` now sources model options from `model/list` via `src/app/services/cli/useModels.ts`.
 - `src/app/components/threads/ThreadComposer.tsx` now passes selected model into `thread/start`, `thread/resume`, and `turn/start` for local/worktree runs.
+- `src/app/components/threads/ThreadComposer.tsx`, `src/app/routes/ThreadPage.tsx`, and `src/app/components/diff/DiffPanel.tsx` now start reviewer runs through documented `review/start` instead of prompt-only review requests.
+- `src/app/routes/SkillsPage.tsx` report action now submits feedback through documented `feedback/upload`.
+- `src/app/routes/LoginPage.tsx` now exposes cancel for pending ChatGPT login flows and routes cancellation through documented `account/login/cancel`.
+- `src/app/routes/SettingsPage.tsx` now writes MCP server map through documented `config/value/write` and loads requirements via `configRequirements/read`.
 
 ## Deferred API-Overview Methods (No New Surface In This Phase)
 
 - `app/list`
 - `collaborationMode/list`
-- `feedback/upload`
-- `review/start`
 - `thread/fork`
 - `thread/loaded/list`
 - `thread/rollback`

@@ -21,6 +21,17 @@ interface ToolUserInputQuestion {
   options: ToolUserInputOption[];
 }
 
+const USER_INPUT_REQUEST_METHODS = new Set([
+  "item/tool/requestUserInput",
+  "tool/requestUserInput",
+]);
+
+const UNSUPPORTED_SERVER_REQUEST_METHODS = new Set([
+  "item/tool/call",
+  "applyPatchApproval",
+  "execCommandApproval",
+]);
+
 function parseToolUserInputQuestions(request: AppServerRequest) {
   const params = request.params;
   if (!params) return [] as ToolUserInputQuestion[];
@@ -143,6 +154,10 @@ async function handleChatgptAuthTokenRefresh(request: AppServerRequest) {
 }
 
 async function respondUnsupportedRequest(request: AppServerRequest) {
+  console.warn("Declined unsupported app-server request", {
+    id: request.id,
+    method: request.method,
+  });
   await respondAppServerRequest(request.id, undefined, {
     code: -32601,
     message: `Unsupported app-server request method: ${request.method}`,
@@ -154,16 +169,18 @@ export async function handleAppServerRequest(request: AppServerRequest) {
     return;
   }
 
-  if (
-    request.method === "item/tool/requestUserInput" ||
-    request.method === "tool/requestUserInput"
-  ) {
+  if (USER_INPUT_REQUEST_METHODS.has(request.method)) {
     await handleToolRequestUserInput(request);
     return;
   }
 
   if (request.method === "account/chatgptAuthTokens/refresh") {
     await handleChatgptAuthTokenRefresh(request);
+    return;
+  }
+
+  if (UNSUPPORTED_SERVER_REQUEST_METHODS.has(request.method)) {
+    await respondUnsupportedRequest(request);
     return;
   }
 

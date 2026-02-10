@@ -8,6 +8,7 @@ import { ThreadComposer } from "@/app/components/threads/ThreadComposer";
 import { ThreadMessages } from "@/app/components/threads/ThreadMessages";
 import { ThreadModals } from "@/app/components/threads/ThreadModals";
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
+import { startReview } from "@/app/services/cli/review";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
 import { mockThreadDetail } from "@/app/state/mockData";
@@ -33,6 +34,8 @@ export function ThreadPage() {
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [visibleStartIndex, setVisibleStartIndex] = useState(0);
   const [stickToBottom, setStickToBottom] = useState(true);
+  const [reviewStarting, setReviewStarting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const detail = thread ?? mockThreadDetail;
   const liveDiffText = useThreadDiffText(threadId, detail.diffText ?? "");
   const hasLiveDiff = liveDiffText.trim().length > 0;
@@ -138,6 +141,29 @@ export function ThreadPage() {
     });
   };
 
+  const handleReviewChanges = async () => {
+    if (!threadId) {
+      setReviewError("No active thread to review.");
+      return;
+    }
+    setReviewError(null);
+    setReviewStarting(true);
+    setReviewOpen(true);
+    try {
+      await startReview({
+        threadId,
+        target: { type: "uncommittedChanges" },
+        delivery: "inline",
+      });
+    } catch (error) {
+      setReviewError(
+        error instanceof Error ? error.message : "Failed to start review.",
+      );
+    } finally {
+      setReviewStarting(false);
+    }
+  };
+
   return (
     <div className="flex min-h-[70vh] flex-col gap-4">
       <div
@@ -184,18 +210,26 @@ export function ThreadPage() {
           ) : null}
         </div>
         {hasChanges ? (
-          <div className="surface-panel flex items-center justify-between px-4 py-3 text-xs text-ink-200">
-            <span>
-              {summary.filesChanged} file changed +{summary.additions} -
-              {summary.deletions}
-            </span>
-            <button
-              className="flex items-center gap-2 rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20"
-              onClick={() => setReviewOpen(true)}
-            >
-              Review changes
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+          <div className="surface-panel px-4 py-3 text-xs text-ink-200">
+            <div className="flex items-center justify-between">
+              <span>
+                {summary.filesChanged} file changed +{summary.additions} -
+                {summary.deletions}
+              </span>
+              <button
+                className="flex items-center gap-2 rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  void handleReviewChanges();
+                }}
+                disabled={reviewStarting}
+              >
+                {reviewStarting ? "Starting review…" : "Review changes"}
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {reviewError ? (
+              <p className="mt-2 text-[0.7rem] text-rose-300">{reviewError}</p>
+            ) : null}
           </div>
         ) : null}
         <ThreadComposer

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import {
   AccountActionCancelledError,
+  cancelPendingChatgptLogin,
   runAccountAction,
 } from "@/app/services/cli/accountActions";
 
@@ -12,12 +13,16 @@ export function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<
-    "login-chatgpt" | "login-api-key" | null
+    "login-chatgpt" | "login-api-key" | "cancel-login" | null
   >(null);
+  const [pendingLoginId, setPendingLoginId] = useState<string | null>(null);
 
   const handleAction = async (action: "login-chatgpt" | "login-api-key") => {
     setError(null);
     setMessage(null);
+    if (action === "login-chatgpt") {
+      setPendingLoginId(null);
+    }
     setActiveAction(action);
     try {
       const result = await runAccountAction(action, {
@@ -30,8 +35,14 @@ export function LoginPage() {
             queryKey: ["account", "read"],
           });
         },
+        onChatgptLoginStarted: (loginId) => {
+          setPendingLoginId(loginId);
+        },
       });
       setMessage(result);
+      if (action !== "login-chatgpt") {
+        setPendingLoginId(null);
+      }
     } catch (actionError) {
       if (actionError instanceof AccountActionCancelledError) {
         setMessage("Login cancelled.");
@@ -42,6 +53,28 @@ export function LoginPage() {
             : "Login request failed.",
         );
       }
+    } finally {
+      setActiveAction(null);
+    }
+  };
+
+  const handleCancelLogin = async () => {
+    if (!pendingLoginId) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    setActiveAction("cancel-login");
+    try {
+      const result = await cancelPendingChatgptLogin(pendingLoginId);
+      setPendingLoginId(null);
+      setMessage(result);
+    } catch (cancelError) {
+      setError(
+        cancelError instanceof Error
+          ? cancelError.message
+          : "Failed to cancel login.",
+      );
     } finally {
       setActiveAction(null);
     }
@@ -79,6 +112,19 @@ export function LoginPage() {
             ? "Checking API key…"
             : "Sign in with API key"}
         </button>
+        {pendingLoginId ? (
+          <button
+            className="rounded-full border border-white/10 px-4 py-2 text-sm text-ink-100 hover:border-flare-300 disabled:opacity-60"
+            onClick={() => {
+              void handleCancelLogin();
+            }}
+            disabled={activeAction !== null}
+          >
+            {activeAction === "cancel-login"
+              ? "Cancelling sign-in…"
+              : "Cancel sign-in"}
+          </button>
+        ) : null}
       </div>
       {message ? (
         <p className="mt-3 text-sm text-emerald-300">{message}</p>

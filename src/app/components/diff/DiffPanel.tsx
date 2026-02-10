@@ -12,6 +12,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { diffStatsFromText } from "@/app/services/cli/diffSummary";
+import { startReview } from "@/app/services/cli/review";
 import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { openInEditor } from "@/app/services/desktop/open";
@@ -256,6 +257,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     null,
   );
   const [hunkActionError, setHunkActionError] = useState<string | null>(null);
+  const [reviewStarting, setReviewStarting] = useState(false);
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
   const [expandedContextBlocks, setExpandedContextBlocks] = useState<
     Record<string, boolean>
@@ -706,6 +708,32 @@ export function DiffPanel({ thread }: DiffPanelProps) {
     }
   };
 
+  const handleRunReview = async () => {
+    if (!threadId) {
+      setHunkActionFeedback(null);
+      setHunkActionError("No active thread to review.");
+      return;
+    }
+    setReviewOpen(true);
+    setReviewStarting(true);
+    setHunkActionError(null);
+    try {
+      await startReview({
+        threadId,
+        target: { type: "uncommittedChanges" },
+        delivery: "inline",
+      });
+      setHunkActionFeedback("Review started.");
+    } catch (error) {
+      setHunkActionFeedback(null);
+      setHunkActionError(
+        error instanceof Error ? error.message : "Failed to start review.",
+      );
+    } finally {
+      setReviewStarting(false);
+    }
+  };
+
   const renderDiffLine = (
     path: string,
     entry: DiffLineEntry,
@@ -787,6 +815,16 @@ export function DiffPanel({ thread }: DiffPanelProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 text-ink-400">
+          <button
+            className="rounded-full border border-white/10 px-2 py-1 text-[0.65rem] text-ink-300 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => {
+              void handleRunReview();
+            }}
+            disabled={reviewStarting}
+            title="Start review"
+          >
+            {reviewStarting ? "Starting…" : "Run review"}
+          </button>
           <button
             className="rounded-full border border-white/10 p-1 hover:border-flare-300"
             onClick={() => {

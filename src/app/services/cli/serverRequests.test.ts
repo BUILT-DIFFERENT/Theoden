@@ -104,14 +104,40 @@ describe("handleAppServerRequest", () => {
   });
 
   it("responds with method-not-found for unsupported server requests", async () => {
-    await handleAppServerRequest({
-      id: 4,
-      method: "item/tool/call",
-      params: {},
-    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      for (const method of [
+        "item/tool/call",
+        "applyPatchApproval",
+        "execCommandApproval",
+      ]) {
+        await handleAppServerRequest({
+          id: method,
+          method,
+          params: {},
+        });
+      }
+    } finally {
+      warnSpy.mockRestore();
+    }
 
+    expect(respondMock).toHaveBeenCalledTimes(3);
     expect(respondMock).toHaveBeenCalledWith(
-      4,
+      "item/tool/call",
+      undefined,
+      expect.objectContaining({
+        code: -32601,
+      }),
+    );
+    expect(respondMock).toHaveBeenCalledWith(
+      "applyPatchApproval",
+      undefined,
+      expect.objectContaining({
+        code: -32601,
+      }),
+    );
+    expect(respondMock).toHaveBeenCalledWith(
+      "execCommandApproval",
       undefined,
       expect.objectContaining({
         code: -32601,

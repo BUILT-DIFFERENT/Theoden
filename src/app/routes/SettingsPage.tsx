@@ -13,16 +13,17 @@ import {
 import { subscribeAppServerNotifications } from "@/app/services/cli/appServerEventHub";
 import { execCommand } from "@/app/services/cli/commands";
 import {
-  batchWriteConfig,
   loadAuthStatus,
   loadConfigSnapshot,
   loadMcpServerStatuses,
   mapConfigWriteErrorMessage,
   mcpServersFromConfig,
   providersFromConfig,
+  readConfigRequirements,
   reloadMcpServerConfig,
   startMcpServerOauthLogin,
   validateConfig,
+  writeConfigValue,
   type ConfigReadSnapshot,
   type ConfigValidationResult,
   type MappedMcpServer,
@@ -327,6 +328,10 @@ export function SettingsPage() {
     useState<ConfigReadSnapshot | null>(null);
   const [configValidationResult, setConfigValidationResult] =
     useState<ConfigValidationResult | null>(null);
+  const [configRequirements, setConfigRequirements] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [archivedThreads, setArchivedThreads] = useState<
     Array<{ id: string; preview: string; updatedAt: number }>
   >([]);
@@ -694,13 +699,15 @@ export function SettingsPage() {
   }, [resolvedWorkspace]);
 
   const refreshConfigDiagnostics = useCallback(async () => {
-    const [snapshot, validation] = await Promise.all([
+    const [snapshot, validation, requirements] = await Promise.all([
       loadConfigSnapshot(resolvedWorkspace),
       validateConfig(resolvedWorkspace),
+      readConfigRequirements().catch(() => null),
     ]);
     setConfigSnapshot(snapshot);
     setConfigValidationResult(validation);
-    return { snapshot, validation };
+    setConfigRequirements(requirements);
+    return { snapshot, validation, requirements };
   }, [resolvedWorkspace]);
 
   const handleOpenConfigFile = () =>
@@ -772,14 +779,10 @@ export function SettingsPage() {
       setMcpMutating(true);
       try {
         const snapshot = await loadConfigSnapshot(resolvedWorkspace);
-        await batchWriteConfig({
-          edits: [
-            {
-              keyPath: "mcp_servers",
-              value: nextMap,
-              mergeStrategy: "replace",
-            },
-          ],
+        await writeConfigValue({
+          keyPath: "mcp_servers",
+          value: nextMap,
+          mergeStrategy: "replace",
           filePath: snapshot.writeTarget.filePath,
           expectedVersion: snapshot.writeTarget.expectedVersion,
         });
@@ -1486,6 +1489,20 @@ export function SettingsPage() {
                   </p>
                 )}
               </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                Requirements
+              </p>
+              {configRequirements ? (
+                <pre className="codex-scrollbar mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all text-[0.7rem] text-ink-200">
+                  {JSON.stringify(configRequirements, null, 2)}
+                </pre>
+              ) : (
+                <p className="mt-2 text-xs text-ink-500">
+                  No config requirements returned by app-server.
+                </p>
+              )}
             </div>
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
               <p className="text-xs uppercase tracking-[0.2em] text-ink-500">

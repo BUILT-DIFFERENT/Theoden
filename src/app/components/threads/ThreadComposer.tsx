@@ -19,6 +19,7 @@ import {
   startCloudRun,
 } from "@/app/services/cli/cloudRuns";
 import { getWorkspaceFileIndex } from "@/app/services/cli/fileIndex";
+import { startReview } from "@/app/services/cli/review";
 import {
   cancelTurn,
   resumeThread,
@@ -487,6 +488,63 @@ export function ThreadComposer({
   const runComposerCommand = async (commandId: CommandOptionId) => {
     setInlineMenu(null);
     setError(null);
+    if (commandId === "review") {
+      if (!isTauri()) {
+        setError("Review is available in the desktop app.");
+        return;
+      }
+      if (!resolvedWorkspacePath) {
+        setWorkspacePickerOpen(true);
+        setError("Select a workspace before starting a review.");
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        const runModel = !resolvedModel ? null : resolvedModel;
+        let targetThreadId = threadId;
+        if (!targetThreadId) {
+          const newThread = await startThread({
+            cwd: resolvedWorkspacePath,
+            model: runModel,
+          });
+          targetThreadId = newThread?.id;
+          if (targetThreadId) {
+            await navigate({
+              to: "/t/$threadId",
+              params: { threadId: targetThreadId },
+            });
+          }
+        } else {
+          await resumeThread({
+            threadId: targetThreadId,
+            cwd: resolvedWorkspacePath,
+            model: runModel,
+          });
+        }
+        if (!targetThreadId) {
+          throw new Error("Unable to create a thread for review.");
+        }
+        setReviewOpen(true);
+        await startReview({
+          threadId: targetThreadId,
+          target: { type: "uncommittedChanges" },
+          delivery: "inline",
+        });
+        await queryClient.invalidateQueries({
+          queryKey: ["threads", "read", targetThreadId],
+        });
+      } catch (commandError) {
+        setError(
+          commandError instanceof Error
+            ? commandError.message
+            : "Failed to run review.",
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     const commandPrompts: Record<CommandOptionId, string> = {
       summarize:
         "Summarize the current workspace changes and call out any risks.",
@@ -496,9 +554,6 @@ export function ThreadComposer({
         "Review the current code changes and list bugs, regressions, and missing tests.",
       plan: "Update docs/custom/plan.md with current progress and remaining work.",
     };
-    if (commandId === "review") {
-      setReviewOpen(true);
-    }
 
     setIsSubmitting(true);
     try {
