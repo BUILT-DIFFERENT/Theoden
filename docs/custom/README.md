@@ -14,6 +14,7 @@ Current docs:
 - `docs/custom/parity-route-report.md`: scoped route contract checker evidence.
 - `docs/custom/parity-motion-report.md`: keyframe/token parity checker evidence.
 - `docs/custom/parity-runtime-contract-report.md`: host/bridge contract checker evidence.
+- `docs/custom/electron-method-compat-map.md`: Electron UI compat dispatch/translation map for query, mutation, and git worker methods.
 - `docs/custom/app-server-adoption-hardening.md`: app-server documented-surface adoption status, outbound method policy, and deferred API-overview backlog.
 - `docs/custom/signal-parity-map-tauri.md`: closed signal-level parity mapping for thread/turn/approval/auth + OAuth coverage.
 - `docs/custom/codex-app.md`: consolidated product/UX specification.

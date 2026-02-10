@@ -1,6 +1,6 @@
-# Codex Desktop (Tauri + React)
+# Codex Desktop (Tauri + Electron UI Compat)
 
-This repository contains a Codex desktop app built with a Tauri host and React frontend.
+This repository contains a Codex desktop app built with a Tauri host and an Electron UI compatibility runtime.
 It is targeted to and used by Windows and Linux desktop users, and it connects to `codex app-server` for thread, turn, config, skills, and command APIs.
 
 ## Platform Support
@@ -33,8 +33,10 @@ The goal of this repository is to deliver a parity-focused Tauri implementation 
 
 ## What Is In This Repo
 
-- `src/`: React app (routes, components, state, services)
+- `src/`: React rewrite code (kept in-repo for staged refactor, not the default desktop runtime renderer)
 - `src-tauri/`: Tauri host (window/menu setup, app-server bridge commands)
+- `out/electron-ui/`: synced Electron renderer bundle used by desktop runtime (`frontendDist`)
+- `sync-electron-ui.cjs` + `scripts/sync-electron-ui.cjs`: build-time sync pipeline from `third_party/CodexDesktop-Rebuild/src/webview`
 - `codex-rs/`: Rust workspace for Codex core/app-server/protocol crates
 - `third_party/CodexDesktop-Rebuild/`: official Codex desktop app submodule used for runtime parity tracing/debugging
 - `docs/custom/`: implementation and parity plan docs
@@ -77,6 +79,12 @@ Run as desktop app:
 pnpm desktop:dev
 ```
 
+Sync Electron UI bundle only:
+
+```bash
+pnpm sync:electron-ui
+```
+
 Build frontend bundle:
 
 ```bash
@@ -102,16 +110,16 @@ pnpm build
 
 ## Command Map
 
-| Goal                                | Command                                   |
-| ----------------------------------- | ----------------------------------------- |
-| Web dev server                      | `pnpm frontend:dev`                       |
-| Desktop dev app                     | `pnpm desktop:dev`                        |
-| Frontend production bundle          | `pnpm frontend:build`                     |
-| Desktop production build            | `pnpm build` (or `pnpm desktop:build`)    |
-| Frontend tests                      | `pnpm frontend:test`                      |
-| Route parity snapshot               | `pnpm parity:test:routes`                 |
-| Cloud/sidebar/settings parity suite | `pnpm parity:test:cloud-sidebar-settings` |
-| Official audit artifact gate        | `pnpm parity:audit:check`                 |
+| Goal                                 | Command                                   |
+| ------------------------------------ | ----------------------------------------- |
+| Web dev server                       | `pnpm frontend:dev`                       |
+| Desktop dev app (Electron UI bundle) | `pnpm desktop:dev`                        |
+| Frontend production bundle           | `pnpm frontend:build`                     |
+| Desktop production build             | `pnpm build` (or `pnpm desktop:build`)    |
+| Frontend tests                       | `pnpm frontend:test`                      |
+| Route parity snapshot                | `pnpm parity:test:routes`                 |
+| Cloud/sidebar/settings parity suite  | `pnpm parity:test:cloud-sidebar-settings` |
+| Official audit artifact gate         | `pnpm parity:audit:check`                 |
 
 ## Parity CI Gate
 

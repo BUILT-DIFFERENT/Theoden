@@ -3,7 +3,7 @@
   "private": true,
   "description": "Tools for repo-wide maintenance.",
   "scripts": {
-    "sync:electron-ui": "node scripts/sync-electron-ui.cjs",
+    "sync:electron-ui": "node sync-electron-ui.cjs",
     "compat:check:methods": "node scripts/check-electron-method-coverage.cjs",
     "compat:check:worker": "node scripts/check-electron-worker-coverage.cjs",
     "build": "pnpm desktop:build",
