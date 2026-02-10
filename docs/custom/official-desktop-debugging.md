@@ -136,6 +136,20 @@ Signal mapping between official app methods/events, native/Tauri equivalents, an
 - `CODEX_DEBUG_RENDERER_TARGET_URL_MATCH` (choose renderer target when multiple tabs exist)
 - `CODEX_DEBUG_SCREENSHOT_DIR` (default `logs/screenshots`)
 
+## Latest Audit Refresh (February 10, 2026)
+
+Command transcript used to refresh the checked-in audit artifact:
+
+```bash
+node third_party/CodexDesktop-Rebuild/scripts/debug-audit/index.js --log third_party/CodexDesktop-Rebuild/logs/test-audit.ndjson --json > docs/custom/official-debug-audit-2026-02-10.json
+pnpm parity:audit:check
+```
+
+Outputs:
+
+- `docs/custom/official-debug-audit-2026-02-10.json`
+- `summary.status = "pass"` across all required checks.
+
 ## Notes
 
 - `third_party/CodexDesktop-Rebuild/.gitignore` ignores `logs/` outputs by default.

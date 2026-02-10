@@ -9,6 +9,7 @@ import {
   closeTerminalSession,
   createTerminalSession,
   listTerminalSessions,
+  resizeTerminalSession,
   subscribeTerminalEvents,
   writeTerminalSession,
   type HostTerminalDataEvent,
@@ -419,7 +420,7 @@ export async function runTerminalCommand(
   try {
     if (isTauri()) {
       const sessionId = await ensureHostSession(scope);
-      await writeTerminalSession(sessionId, command);
+      await writeTerminalSession(sessionId, command, false);
       return;
     }
     throw new Error("Terminal commands are available in the desktop app.");
@@ -431,6 +432,29 @@ export async function runTerminalCommand(
     setRunning(scope, false);
     throw error;
   }
+}
+
+export async function writeTerminalInput(
+  scope: TerminalSessionScope,
+  input: string,
+) {
+  if (!isTauri()) {
+    return;
+  }
+  const sessionId = await ensureHostSession(scope);
+  await writeTerminalSession(sessionId, input, true);
+}
+
+export async function resizeTerminalViewport(
+  scope: TerminalSessionScope,
+  cols: number,
+  rows: number,
+) {
+  if (!isTauri()) {
+    return;
+  }
+  const sessionId = await ensureHostSession(scope);
+  await resizeTerminalSession(sessionId, cols, rows);
 }
 
 export function registerTerminalNotification(

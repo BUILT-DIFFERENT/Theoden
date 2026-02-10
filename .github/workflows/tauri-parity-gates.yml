@@ -1,0 +1,150 @@
+name: Tauri parity gates
+
+on:
+  pull_request:
+    paths:
+      - "src/app/components/sidebar/**"
+      - "src/app/routes/**"
+      - "src/app/services/cli/**"
+      - "src-tauri/src/**"
+      - "docs/custom/**"
+      - ".github/workflows/tauri-parity-gates.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+jobs:
+  frontend-lint-test-build:
+    name: Frontend lint/test/build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Frontend tests
+        run: pnpm frontend:test
+
+      - name: Frontend build
+        run: pnpm frontend:build
+
+  tauri-rust-tests:
+    name: Tauri rust tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo test (src-tauri)
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  parity-route-snapshot:
+    name: Parity route snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Route parity test
+        run: pnpm parity:test:routes
+
+  parity-cloud-sidebar-settings:
+    name: Parity cloud/sidebar/settings suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Focused parity suite
+        run: pnpm parity:test:cloud-sidebar-settings
+
+  official-audit-gate:
+    name: Official audit gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify official audit artifact
+        run: pnpm parity:audit:check
+
+  parity-results:
+    name: Parity gate results (required)
+    needs:
+      - frontend-lint-test-build
+      - tauri-rust-tests
+      - parity-route-snapshot
+      - parity-cloud-sidebar-settings
+      - official-audit-gate
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all parity jobs passed
+        shell: bash
+        run: |
+          [[ "${{ needs.frontend-lint-test-build.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.tauri-rust-tests.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.parity-route-snapshot.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.parity-cloud-sidebar-settings.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.official-audit-gate.result }}" == "success" ]] || exit 1

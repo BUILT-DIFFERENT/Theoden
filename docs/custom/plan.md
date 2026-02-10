@@ -9,11 +9,11 @@ This document lists **everything I can confirm from the two screen recordings**:
 
 ---
 
-## Backend parity milestone update (February 7, 2026)
+## Backend parity milestone update (February 10, 2026)
 
 - [x] Added host-side persisted atom API (`persisted_atom_sync`, `persisted_atom_update`, `persisted_atom_reset`) and wired desktop state modules to mirror host persistence.
 - [x] Added host-side SQLite + TOML automation persistence and inbox records (`automations`, `automation_runs`, `inbox_items`) with Tauri automation/inbox commands.
-- [x] Added host terminal command channel with `terminal_create/attach/write/resize/close` and streaming events (`terminal-attached`, `terminal-data`, `terminal-error`, `terminal-exit`).
+- [x] Added host terminal command channel with `terminal_create/attach/write/resize/close` and streaming events (`terminal-attached`, `terminal-data`, `terminal-error`, `terminal-exit`), then upgraded frontend terminal parity with interactive xterm input/resize forwarding.
 - [x] Moved Automations page data authority from localStorage to host APIs, including one-time migration of legacy localStorage automations.
 - [x] Removed desktop mock fallback behavior in thread list/detail data hooks so desktop mode now uses real/cached backend data only.
 - [x] Added settings runtime reads for MCP/auth status via `mcpServerStatus/list` and `getAuthStatus`.
@@ -21,21 +21,28 @@ This document lists **everything I can confirm from the two screen recordings**:
 - [x] Added persisted sidebar UI state for thread list controls (`sort/filter`), expanded workspace folders, and scroll restoration.
 - [x] Added archived-thread row restore actions in Settings and automation create-sheet safety parity details (warning callout + backdrop close).
 - [x] Added verification coverage for these parity areas in frontend + Rust tests.
+- [x] Added missing Electron route affordances (`/inbox`, `/login`, `/welcome`, `/select-workspace`, `/local/$conversationId`, `/remote/$conversationId`, `/thread-overlay/$conversationId`) and app-shell route title parity.
+- [x] Closed sidebar parity gaps: no per-workspace truncation, pin/unpin, alias rename, archive/unarchive, open changes, workspace/recency grouping, and inbox badge/nav affordance.
+- [x] Closed MCP settings persistence gap with config-backed create/update/delete/enable/connect/reconnect flows and restart-stable writes using optimistic config versioning.
+- [x] Closed configuration validation gap with schema + runtime validation output (key-scoped errors/warnings), merged config preview, and layer/origin inspector.
+- [x] Added cloud lifecycle shim parity with host commands/events (`cloud_run_start`, `cloud_run_cancel`, `cloud_run_list`, plus `cloud-run-*` events) and real cancellation semantics.
+- [x] Added strict parity CI gate workflow and required aggregate status (`Parity gate results (required)`).
+- [x] Refreshed official audit artifact reference to `docs/custom/official-debug-audit-2026-02-10.json`.
 
 ---
 
-## Electron parity gaps still open (February 7, 2026)
+## Electron parity gaps still open (February 10, 2026)
 
-- [ ] **Cloud execution parity (still stubbed):** Implement full cloud orchestration so selecting cloud mode starts real runs, emits `thread/start` + `turn/start` lifecycle, and supports environment/branch/attempt options without throwing a placeholder error. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39601`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:22342`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39627`.
-- [ ] **Thread history/lifecycle RPC parity:** Replace local placeholders/stubs for listing/resuming threads with real app-server-backed `thread/list`, `thread/resume`, `thread/read`, archive/unarchive wiring and pagination/filter semantics matching Electron behavior. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:39601`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:12`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:14`.
-- [ ] **Terminal PTY parity (interactive shell):** Upgrade terminal host from stateless command streaming to true PTY-backed interactive sessions with resize support, long-lived shell state, and terminal capability parity with Electron. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:42041`.
-- [x] **Settings information architecture parity:** Added Account, Data controls, and Usage & analytics sections in settings navigation with live account actions, local data path controls, browser-open links, and runtime usage reads/refresh via `account/rateLimits/read` + `account/rateLimits/updated`. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2525`, `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2845`.
-- [ ] **MCP settings persistence parity:** Replace session-only MCP add/edit behavior with persisted config-backed mutation flows (create/update/delete, reconnect, validation, and status refresh) so changes survive restart like official app behavior. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:181`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:26`.
-- [ ] **Config validation parity:** Implement real validation against merged config schema and runtime constraints (not always-valid placeholders), including actionable per-key errors shown in Configuration settings. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2525`.
-- [x] **Worktrees management parity (row-level operations):** Added worktree inventory table in Settings with `git worktree list --porcelain` parsing, row-scoped actions (open folder, open linked conversation, remove), main-worktree delete guardrails, and explicit loading/empty/error states. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/worktrees-settings-page-Bx5YHGa_.js:1`.
-- [ ] **Sidebar interaction parity and polish:** Implement pinned threads, rename/archive thread actions, group-by workspace/recency parity, and automations inbox route affordance; remove truncating behavior that limits visible threads per workspace. Electron reference: `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:1624`.
-- [x] **Automation schedule semantics parity:** Recurrence now uses canonical daily/weekly/monthly RRULE semantics in frontend + backend scheduler with legacy monthly-hourly fallback support (`FREQ=HOURLY;INTERVAL=720`) and normalization on read/write. Electron reference: `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:15069`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:18360`, `third_party/CodexDesktop-Rebuild/tmp/codex-wakaru/unminify-safe/third_party/CodexDesktop-Rebuild/src/.vite/build/main-CQwPb0Th.js:21906`, `third_party/CodexDesktop-Rebuild/src/webview/assets/index-CgwAo6pj.js:2824`.
-- [ ] **Protocol parity map closure:** Resolve remaining `TBD` items in signal mapping (thread/turn/approval/auth surfaces), and close documented OAuth parity deferrals with implemented v2-compatible flows and audits. Electron reference: `third_party/CodexDesktop-Rebuild/signal-parity-map.md:12`, `third_party/CodexDesktop-Rebuild/signal-parity-map.md:32`, `third_party/CodexDesktop-Rebuild/README.md:131`.
+- [x] **Cloud execution parity:** Cloud submit now starts a real host-managed run, streams status/output into unified lifecycle model, carries environment/branch/attempt payload, and supports true cancellation.
+- [ ] **Thread history/lifecycle RPC parity:** Confirmed thread list/read/resume/archive surfaces are wired, but deeper pagination/filter parity and edge-case metadata parity still require side-by-side runtime verification against Electron.
+- [x] **Terminal PTY parity (interactive shell):** Terminal drawer now uses interactive xterm input with host resize/write wiring to PTY sessions.
+- [x] **Settings information architecture parity:** Account, Data controls, Usage/analytics, Environment, Worktree, and Archived thread settings sections are shipped.
+- [x] **MCP settings persistence parity:** MCP CRUD/enable/connect/reconnect mutations persist via config writes and survive restart.
+- [x] **Config validation parity:** Configuration screen now surfaces schema/runtime validation with key-level errors/warnings and merged-layer visibility.
+- [x] **Worktrees management parity (row-level operations):** Worktree inventory and row actions remain parity-complete.
+- [x] **Sidebar interaction parity and polish:** Pin/rename/archive/unarchive/open-changes controls shipped, thread truncation removed, and workspace/recency group control added.
+- [x] **Automation schedule semantics parity:** Canonical RRULE semantics remain parity-complete.
+- [x] **Protocol parity map closure:** Signal mapping and CI audit gating are tracked in `docs/custom/signal-parity-map-tauri.md` with latest report `docs/custom/official-debug-audit-2026-02-10.json`.
 
 ---
 

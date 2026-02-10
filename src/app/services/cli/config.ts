@@ -6,6 +6,8 @@ import {
 import { AppServerRpcError, requestAppServer } from "@/app/services/cli/rpc";
 import type { ProviderStatus } from "@/app/types";
 
+import configSchema from "../../../../codex-rs/core/config.schema.json";
+
 export interface CodexConfig {
   model?: string;
   effort?: "medium" | "high" | "extra_high";
@@ -85,16 +87,425 @@ export interface MappedMcpServer {
   id: string;
   name: string;
   endpoint: string;
+  enabled: boolean;
   status: "connected" | "disabled";
+  config: Record<string, unknown>;
 }
 
 export type MappedProviderStatus = ProviderStatus;
 
+export interface ConfigValidationIssue {
+  key: string;
+  message: string;
+  source: "schema" | "runtime" | "warning";
+}
+
 export interface ConfigValidationResult {
   valid: boolean;
-  errors: string[];
-  warnings: ConfigWarningEntry[];
-  keys: number;
+  errors: ConfigValidationIssue[];
+  warnings: ConfigValidationIssue[];
+  keys: string[];
+}
+
+interface JsonSchemaNode {
+  $ref?: string;
+  type?: string;
+  enum?: unknown[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  additionalProperties?: boolean | JsonSchemaNode;
+  properties?: Record<string, JsonSchemaNode>;
+  items?: JsonSchemaNode | JsonSchemaNode[];
+  oneOf?: JsonSchemaNode[];
+  anyOf?: JsonSchemaNode[];
+  allOf?: JsonSchemaNode[];
+  definitions?: Record<string, JsonSchemaNode>;
+}
+
+const rootConfigSchema = configSchema as JsonSchemaNode;
+
+function schemaDefinitions() {
+  return rootConfigSchema.definitions ?? {};
+}
+
+function resolveSchemaNode(
+  node: JsonSchemaNode,
+  seen = new Set<string>(),
+): JsonSchemaNode {
+  if (!node.$ref) {
+    return node;
+  }
+  if (!node.$ref.startsWith("#/definitions/")) {
+    return node;
+  }
+  const key = node.$ref.slice("#/definitions/".length);
+  if (!key || seen.has(key)) {
+    return node;
+  }
+  const definition = schemaDefinitions()[key];
+  if (!definition) {
+    return node;
+  }
+  seen.add(key);
+  return resolveSchemaNode(definition, seen);
+}
+
+function configWarningToIssue(
+  warning: ConfigWarningEntry,
+): ConfigValidationIssue {
+  const details = warning.details ? ` ${warning.details}` : "";
+  return {
+    key: warning.path ?? "config",
+    message: `${warning.summary}${details}`.trim(),
+    source: "warning",
+  };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function flattenConfigKeys(value: unknown, prefix = ""): string[] {
+  if (!isPlainObject(value)) {
+    return prefix ? [prefix] : [];
+  }
+  const keys: string[] = [];
+  Object.entries(value).forEach(([key, child]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    keys.push(path);
+    if (isPlainObject(child)) {
+      keys.push(...flattenConfigKeys(child, path));
+    }
+  });
+  return keys;
+}
+
+function pushConfigError(
+  errors: ConfigValidationIssue[],
+  key: string,
+  message: string,
+  source: ConfigValidationIssue["source"] = "schema",
+) {
+  errors.push({
+    key,
+    message,
+    source,
+  });
+}
+
+function schemaAllowsType(
+  schema: JsonSchemaNode,
+  value: unknown,
+): boolean | null {
+  const resolved = resolveSchemaNode(schema);
+  if (resolved.oneOf?.length) {
+    return resolved.oneOf.some((candidate) =>
+      schemaAllowsType(candidate, value),
+    );
+  }
+  if (resolved.anyOf?.length) {
+    return resolved.anyOf.some((candidate) =>
+      schemaAllowsType(candidate, value),
+    );
+  }
+  if (resolved.allOf?.length) {
+    return resolved.allOf.every((candidate) =>
+      schemaAllowsType(candidate, value),
+    );
+  }
+  if (!resolved.type) {
+    return null;
+  }
+  switch (resolved.type) {
+    case "string":
+      return typeof value === "string";
+    case "boolean":
+      return typeof value === "boolean";
+    case "number":
+      return typeof value === "number" && Number.isFinite(value);
+    case "integer":
+      return Number.isInteger(value);
+    case "array":
+      return Array.isArray(value);
+    case "object":
+      return isPlainObject(value);
+    default:
+      return null;
+  }
+}
+
+function validateValueBySchema(
+  value: unknown,
+  schema: JsonSchemaNode,
+  keyPath: string,
+  errors: ConfigValidationIssue[],
+) {
+  const resolved = resolveSchemaNode(schema);
+  if (resolved.oneOf?.length) {
+    const anyValid = resolved.oneOf.some((candidate) => {
+      const candidateErrors: ConfigValidationIssue[] = [];
+      validateValueBySchema(value, candidate, keyPath, candidateErrors);
+      return candidateErrors.length === 0;
+    });
+    if (!anyValid) {
+      pushConfigError(
+        errors,
+        keyPath,
+        "Value does not match any allowed shape.",
+      );
+    }
+    return;
+  }
+  if (resolved.anyOf?.length) {
+    const anyValid = resolved.anyOf.some((candidate) => {
+      const candidateErrors: ConfigValidationIssue[] = [];
+      validateValueBySchema(value, candidate, keyPath, candidateErrors);
+      return candidateErrors.length === 0;
+    });
+    if (!anyValid) {
+      pushConfigError(
+        errors,
+        keyPath,
+        "Value does not match any allowed variant.",
+      );
+    }
+    return;
+  }
+  if (resolved.allOf?.length) {
+    resolved.allOf.forEach((candidate) =>
+      validateValueBySchema(value, candidate, keyPath, errors),
+    );
+  }
+
+  const typeMatches = schemaAllowsType(resolved, value);
+  if (typeMatches === false) {
+    pushConfigError(errors, keyPath, `Expected ${resolved.type}.`);
+    return;
+  }
+
+  if (Array.isArray(resolved.enum) && resolved.enum.length > 0) {
+    const allowed = resolved.enum.some((entry) => entry === value);
+    if (!allowed) {
+      pushConfigError(
+        errors,
+        keyPath,
+        `Expected one of: ${resolved.enum.join(", ")}.`,
+      );
+    }
+  }
+
+  if (typeof value === "string") {
+    if (
+      typeof resolved.minLength === "number" &&
+      value.length < resolved.minLength
+    ) {
+      pushConfigError(
+        errors,
+        keyPath,
+        `Must be at least ${resolved.minLength} characters.`,
+      );
+    }
+    if (
+      typeof resolved.maxLength === "number" &&
+      value.length > resolved.maxLength
+    ) {
+      pushConfigError(
+        errors,
+        keyPath,
+        `Must be at most ${resolved.maxLength} characters.`,
+      );
+    }
+    if (typeof resolved.pattern === "string") {
+      try {
+        const expression = new RegExp(resolved.pattern);
+        if (!expression.test(value)) {
+          pushConfigError(errors, keyPath, "Value format is invalid.");
+        }
+      } catch {
+        // Ignore invalid schema regex patterns.
+      }
+    }
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (typeof resolved.minimum === "number" && value < resolved.minimum) {
+      pushConfigError(errors, keyPath, `Must be >= ${resolved.minimum}.`);
+    }
+    if (typeof resolved.maximum === "number" && value > resolved.maximum) {
+      pushConfigError(errors, keyPath, `Must be <= ${resolved.maximum}.`);
+    }
+  }
+
+  if (isPlainObject(value)) {
+    const properties = resolved.properties ?? {};
+    Object.entries(value).forEach(([propertyKey, propertyValue]) => {
+      const propertyPath = keyPath ? `${keyPath}.${propertyKey}` : propertyKey;
+      const propertySchema = properties[propertyKey];
+      if (propertySchema) {
+        validateValueBySchema(
+          propertyValue,
+          propertySchema,
+          propertyPath,
+          errors,
+        );
+        return;
+      }
+      if (resolved.additionalProperties === false) {
+        pushConfigError(errors, propertyPath, "Unknown config key.");
+        return;
+      }
+      if (
+        resolved.additionalProperties &&
+        typeof resolved.additionalProperties === "object"
+      ) {
+        validateValueBySchema(
+          propertyValue,
+          resolved.additionalProperties,
+          propertyPath,
+          errors,
+        );
+      }
+    });
+  }
+
+  if (Array.isArray(value)) {
+    if (!resolved.items) {
+      return;
+    }
+    if (Array.isArray(resolved.items)) {
+      const tupleItems: JsonSchemaNode[] = resolved.items;
+      value.forEach((entry, index) => {
+        const itemSchema = tupleItems[index];
+        if (itemSchema) {
+          validateValueBySchema(
+            entry,
+            itemSchema,
+            `${keyPath}[${index}]`,
+            errors,
+          );
+        }
+      });
+      return;
+    }
+    value.forEach((entry, index) => {
+      validateValueBySchema(
+        entry,
+        resolved.items as JsonSchemaNode,
+        `${keyPath}[${index}]`,
+        errors,
+      );
+    });
+  }
+}
+
+function validateRuntimeConstraints(config: CodexConfig) {
+  const errors: ConfigValidationIssue[] = [];
+  const warnings: ConfigValidationIssue[] = [];
+  const record = isRecord(config) ? config : {};
+
+  const mcpRecord =
+    (isRecord(record.mcp_servers) ? record.mcp_servers : null) ??
+    (isRecord(record.mcpServers) ? record.mcpServers : null);
+  if (mcpRecord) {
+    Object.entries(mcpRecord).forEach(([serverId, value]) => {
+      if (!isRecord(value)) {
+        pushConfigError(
+          errors,
+          `mcp_servers.${serverId}`,
+          "MCP server entry must be an object.",
+          "runtime",
+        );
+        return;
+      }
+      const hasEndpoint = Boolean(
+        (typeof value.url === "string" && value.url.trim()) ||
+          (typeof value.command === "string" && value.command.trim()) ||
+          (typeof value.endpoint === "string" && value.endpoint.trim()),
+      );
+      if (!hasEndpoint) {
+        pushConfigError(
+          errors,
+          `mcp_servers.${serverId}`,
+          "Provide one of: `url`, `command`, or `endpoint`.",
+          "runtime",
+        );
+      }
+    });
+  }
+
+  const timeoutCandidates: Array<{ key: string; value: unknown }> = [
+    { key: "mcp_request_timeout", value: record.mcp_request_timeout },
+    {
+      key: "mcp_request_timeout_seconds",
+      value: record.mcp_request_timeout_seconds,
+    },
+    { key: "mcpRequestTimeout", value: record.mcpRequestTimeout },
+  ];
+  timeoutCandidates.forEach((candidate) => {
+    if (candidate.value === undefined || candidate.value === null) {
+      return;
+    }
+    if (
+      typeof candidate.value !== "number" ||
+      !Number.isFinite(candidate.value)
+    ) {
+      pushConfigError(
+        errors,
+        candidate.key,
+        "Timeout must be a number.",
+        "runtime",
+      );
+      return;
+    }
+    if (candidate.value < 1 || candidate.value > 600) {
+      pushConfigError(
+        errors,
+        candidate.key,
+        "Timeout must be between 1 and 600 seconds.",
+        "runtime",
+      );
+    }
+  });
+
+  const defaultEnvironment = record.default_environment;
+  if (
+    typeof defaultEnvironment === "string" &&
+    !["local", "worktree", "cloud"].includes(defaultEnvironment)
+  ) {
+    pushConfigError(
+      errors,
+      "default_environment",
+      "Expected one of: local, worktree, cloud.",
+      "runtime",
+    );
+  }
+
+  const cloudConfig =
+    (isRecord(record.cloud) ? record.cloud : null) ??
+    (isRecord(record.cloud_exec) ? record.cloud_exec : null) ??
+    (isRecord(record.cloudExec) ? record.cloudExec : null);
+  if (defaultEnvironment === "cloud" && cloudConfig) {
+    const hasCloudContext = Boolean(
+      (typeof cloudConfig.region === "string" && cloudConfig.region.trim()) ||
+        (typeof cloudConfig.environment === "string" &&
+          cloudConfig.environment.trim()) ||
+        (typeof cloudConfig.environment_id === "string" &&
+          cloudConfig.environment_id.trim()),
+    );
+    if (!hasCloudContext) {
+      warnings.push({
+        key: "cloud",
+        message:
+          "Cloud is the default environment, but no explicit cloud region/environment is configured.",
+        source: "runtime",
+      });
+    }
+  }
+
+  return { errors, warnings };
 }
 
 function readLayerSource(value: unknown): ConfigLayerSource | null {
@@ -277,27 +688,62 @@ export function mapConfigWriteErrorMessage(
 }
 
 export async function validateConfig(cwd: string | null = null) {
-  const warnings = getConfigWarnings();
+  const configWarnings = getConfigWarnings().map(configWarningToIssue);
   try {
     const snapshot = await loadConfigSnapshot(cwd);
+    const schemaErrors: ConfigValidationIssue[] = [];
+    validateValueBySchema(
+      snapshot.config,
+      rootConfigSchema,
+      "config",
+      schemaErrors,
+    );
+    const runtime = validateRuntimeConstraints(snapshot.config);
+    const keys = flattenConfigKeys(snapshot.config);
+    const errors = [...schemaErrors, ...runtime.errors];
+    const warnings = [...configWarnings, ...runtime.warnings];
     return {
-      valid: true,
-      errors: [] as string[],
+      valid: errors.length === 0,
+      errors,
       warnings,
-      keys: Object.keys(snapshot.config).length,
+      keys,
     } satisfies ConfigValidationResult;
   } catch (error) {
     const message =
       error instanceof Error && error.message.trim().length > 0
         ? error.message
-        : "Failed to read config.";
+        : "Failed to read config snapshot.";
     return {
       valid: false,
-      errors: [message],
-      warnings,
-      keys: 0,
+      errors: [
+        {
+          key: "config",
+          message,
+          source: "runtime",
+        },
+      ],
+      warnings: configWarnings,
+      keys: [],
     } satisfies ConfigValidationResult;
   }
+}
+
+export async function writeMcpServersConfig(params: {
+  servers: Record<string, unknown>;
+  cwd?: string | null;
+}) {
+  const snapshot = await loadConfigSnapshot(params.cwd ?? null);
+  return batchWriteConfig({
+    edits: [
+      {
+        keyPath: "mcp_servers",
+        value: params.servers,
+        mergeStrategy: "replace",
+      },
+    ],
+    filePath: snapshot.writeTarget.filePath,
+    expectedVersion: snapshot.writeTarget.expectedVersion,
+  });
 }
 
 export async function writeMcpServerConfig(params: {
@@ -345,11 +791,14 @@ export function mcpServersFromConfig(config: CodexConfig): MappedMcpServer[] {
     const disabledValue =
       (typeof serverConfig.disabled === "boolean" && serverConfig.disabled) ||
       (typeof serverConfig.enabled === "boolean" && !serverConfig.enabled);
+    const enabled = !disabledValue;
     return {
       id,
       name: id.replace(/[-_]/g, " "),
       endpoint,
-      status: disabledValue ? "disabled" : "connected",
+      enabled,
+      status: enabled ? "connected" : "disabled",
+      config: serverConfig,
     } satisfies MappedMcpServer;
   });
 }

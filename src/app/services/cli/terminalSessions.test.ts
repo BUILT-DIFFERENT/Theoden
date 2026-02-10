@@ -37,6 +37,7 @@ async function loadTerminalSessionsModule(options: LoadTerminalModuleOptions) {
     updatedAt: 99,
   });
   const writeTerminalSession = vi.fn().mockResolvedValue(undefined);
+  const resizeTerminalSession = vi.fn().mockResolvedValue(undefined);
   const closeTerminalSession = vi.fn().mockResolvedValue(undefined);
   let subscribedHandlers: {
     onAttached?: (payload: {
@@ -71,7 +72,7 @@ async function loadTerminalSessionsModule(options: LoadTerminalModuleOptions) {
     attachTerminalSession,
     subscribeTerminalEvents,
     writeTerminalSession,
-    resizeTerminalSession: vi.fn().mockResolvedValue(undefined),
+    resizeTerminalSession,
     closeTerminalSession,
   }));
 
@@ -84,6 +85,7 @@ async function loadTerminalSessionsModule(options: LoadTerminalModuleOptions) {
       attachTerminalSession,
       subscribeTerminalEvents,
       writeTerminalSession,
+      resizeTerminalSession,
       closeTerminalSession,
       getHandlers: () => subscribedHandlers,
     },
@@ -137,6 +139,7 @@ describe("terminalSessions service", () => {
     expect(mocks.writeTerminalSession).toHaveBeenCalledWith(
       "session-existing",
       "echo hello",
+      false,
     );
 
     const handlers = mocks.getHandlers();
@@ -232,6 +235,36 @@ describe("terminalSessions service", () => {
       "second line",
       "command failed",
     ]);
+  });
+
+  it("forwards raw terminal input and resize events to host PTY sessions", async () => {
+    const { mod, mocks } = await loadTerminalSessionsModule({
+      isTauri: true,
+      listSessions: [
+        {
+          sessionId: "session-existing",
+          threadId: "thread-1",
+          workspacePath: null,
+          cwd: null,
+          isRunning: true,
+          updatedAt: 50,
+        },
+      ],
+    });
+
+    await mod.writeTerminalInput({ threadId: "thread-1" }, "a");
+    await mod.resizeTerminalViewport({ threadId: "thread-1" }, 120, 40);
+
+    expect(mocks.writeTerminalSession).toHaveBeenCalledWith(
+      "session-existing",
+      "a",
+      true,
+    );
+    expect(mocks.resizeTerminalSession).toHaveBeenCalledWith(
+      "session-existing",
+      120,
+      40,
+    );
   });
 
   it("clears terminal session and closes mapped host session", async () => {

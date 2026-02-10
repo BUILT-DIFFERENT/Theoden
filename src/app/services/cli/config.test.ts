@@ -145,28 +145,32 @@ describe("config service", () => {
       errors: [],
       warnings: [
         {
-          summary: "project config ignored",
-          details: "workspace is not trusted",
-          path: undefined,
-          range: undefined,
+          key: "config",
+          message: "project config ignored workspace is not trusted",
+          source: "warning",
         },
       ],
-      keys: 1,
+      keys: ["model"],
     });
 
     requestMock.mockRejectedValueOnce(new Error("invalid toml at line 2"));
     await expect(validateConfig("C:/repo/theoden")).resolves.toEqual({
       valid: false,
-      errors: ["invalid toml at line 2"],
-      warnings: [
+      errors: [
         {
-          summary: "project config ignored",
-          details: "workspace is not trusted",
-          path: undefined,
-          range: undefined,
+          key: "config",
+          message: "invalid toml at line 2",
+          source: "runtime",
         },
       ],
-      keys: 0,
+      warnings: [
+        {
+          key: "config",
+          message: "project config ignored workspace is not trusted",
+          source: "warning",
+        },
+      ],
+      keys: [],
     });
   });
 
@@ -289,19 +293,31 @@ describe("config service", () => {
         id: "buildkite",
         name: "buildkite",
         endpoint: "npx buildkite-mcp",
+        enabled: false,
         status: "disabled",
+        config: {
+          command: "npx buildkite-mcp",
+          enabled: false,
+        },
       },
       {
         id: "github_actions",
         name: "github actions",
         endpoint: "https://mcp.example",
+        enabled: true,
         status: "connected",
+        config: {
+          url: "https://mcp.example",
+          disabled: false,
+        },
       },
       {
         id: "fallback_only",
         name: "fallback only",
         endpoint: "mcp://fallback_only",
+        enabled: true,
         status: "connected",
+        config: {},
       },
     ]);
 

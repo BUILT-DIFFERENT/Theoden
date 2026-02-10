@@ -1,0 +1,429 @@
+{
+  "schemaVersion": "1.0",
+  "runId": "run-1",
+  "logPath": "C:\\Users\\gamer\\Documents\\Theoden\\third_party\\CodexDesktop-Rebuild\\logs\\test-audit.ndjson",
+  "summary": {
+    "totalChecks": 5,
+    "passed": 5,
+    "failed": 0,
+    "status": "pass",
+    "eventCount": 15,
+    "parseErrors": 0
+  },
+  "checks": [
+    {
+      "id": "schema-contract",
+      "status": "pass",
+      "requiredSignals": [
+        "schemaVersion:1.0",
+        "contract:required-keys"
+      ],
+      "matchedSignals": [
+        "schemaVersion:1.0",
+        "contract:required-keys"
+      ],
+      "missingSignals": [],
+      "evidence": [
+        {
+          "signal": "schemaVersion:1.0",
+          "details": []
+        },
+        {
+          "signal": "contract:required-keys",
+          "details": []
+        },
+        {
+          "signal": "parse-errors",
+          "details": []
+        }
+      ]
+    },
+    {
+      "id": "thread-lifecycle",
+      "status": "pass",
+      "requiredSignals": [
+        "method:thread/start",
+        "method:thread/resume",
+        "method:thread/list",
+        "method:thread/read",
+        "method:thread/archive",
+        "method:thread/unarchive"
+      ],
+      "matchedSignals": [
+        "method:thread/start",
+        "method:thread/resume",
+        "method:thread/list",
+        "method:thread/read",
+        "method:thread/archive",
+        "method:thread/unarchive"
+      ],
+      "missingSignals": [],
+      "evidence": [
+        {
+          "signal": "method:thread/start",
+          "lines": [
+            {
+              "line": 1,
+              "ts": "2026-02-06T00:00:00.000Z",
+              "method": "thread/start",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 1,
+              "ts": "2026-02-06T00:00:00.000Z",
+              "method": "thread/start",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "method:thread/resume",
+          "lines": [
+            {
+              "line": 2,
+              "ts": "2026-02-06T00:00:01.000Z",
+              "method": "thread/resume",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 2,
+              "ts": "2026-02-06T00:00:01.000Z",
+              "method": "thread/resume",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "method:thread/list",
+          "lines": [
+            {
+              "line": 3,
+              "ts": "2026-02-06T00:00:02.000Z",
+              "method": "thread/list",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 3,
+              "ts": "2026-02-06T00:00:02.000Z",
+              "method": "thread/list",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "method:thread/read",
+          "lines": [
+            {
+              "line": 4,
+              "ts": "2026-02-06T00:00:03.000Z",
+              "method": "thread/read",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 4,
+              "ts": "2026-02-06T00:00:03.000Z",
+              "method": "thread/read",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "method:thread/archive",
+          "lines": [
+            {
+              "line": 5,
+              "ts": "2026-02-06T00:00:04.000Z",
+              "method": "thread/archive",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 5,
+              "ts": "2026-02-06T00:00:04.000Z",
+              "method": "thread/archive",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "method:thread/unarchive",
+          "lines": [
+            {
+              "line": 6,
+              "ts": "2026-02-06T00:00:05.000Z",
+              "method": "thread/unarchive",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 6,
+              "ts": "2026-02-06T00:00:05.000Z",
+              "method": "thread/unarchive",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "turn-lifecycle",
+      "status": "pass",
+      "requiredSignals": [
+        "method:turn/start",
+        "method:turn/interrupt",
+        "method:turn/completed",
+        "method:item/agentMessage/delta"
+      ],
+      "matchedSignals": [
+        "method:turn/start",
+        "method:turn/interrupt",
+        "method:turn/completed",
+        "method:item/agentMessage/delta"
+      ],
+      "missingSignals": [],
+      "evidence": [
+        {
+          "signal": "method:turn/start",
+          "lines": [
+            {
+              "line": 7,
+              "ts": "2026-02-06T00:00:06.000Z",
+              "method": "turn/start",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 7,
+              "ts": "2026-02-06T00:00:06.000Z",
+              "method": "turn/start",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "method:turn/interrupt",
+          "lines": [
+            {
+              "line": 9,
+              "ts": "2026-02-06T00:00:08.000Z",
+              "method": "turn/interrupt",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 9,
+              "ts": "2026-02-06T00:00:08.000Z",
+              "method": "turn/interrupt",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "method:turn/completed",
+          "lines": [
+            {
+              "line": 10,
+              "ts": "2026-02-06T00:00:09.000Z",
+              "method": "turn/completed",
+              "type": "mcp-notification",
+              "status": "completed"
+            },
+            {
+              "line": 10,
+              "ts": "2026-02-06T00:00:09.000Z",
+              "method": "turn/completed",
+              "type": "mcp-notification",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "signal": "method:item/agentMessage/delta",
+          "lines": [
+            {
+              "line": 8,
+              "ts": "2026-02-06T00:00:07.000Z",
+              "method": "item/agentMessage/delta",
+              "type": "mcp-notification",
+              "status": "ok"
+            },
+            {
+              "line": 8,
+              "ts": "2026-02-06T00:00:07.000Z",
+              "method": "item/agentMessage/delta",
+              "type": "mcp-notification",
+              "status": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "approval-lifecycle",
+      "status": "pass",
+      "requiredSignals": [
+        "method:item/commandExecution/requestApproval",
+        "method:item/fileChange/requestApproval",
+        "response:approval"
+      ],
+      "matchedSignals": [
+        "method:item/commandExecution/requestApproval",
+        "method:item/fileChange/requestApproval",
+        "response:approval"
+      ],
+      "missingSignals": [],
+      "evidence": [
+        {
+          "signal": "method:item/commandExecution/requestApproval",
+          "lines": [
+            {
+              "line": 11,
+              "ts": "2026-02-06T00:00:10.000Z",
+              "method": "item/commandExecution/requestApproval",
+              "type": "mcp-request",
+              "status": "pending"
+            },
+            {
+              "line": 11,
+              "ts": "2026-02-06T00:00:10.000Z",
+              "method": "item/commandExecution/requestApproval",
+              "type": "mcp-request",
+              "status": "pending"
+            }
+          ]
+        },
+        {
+          "signal": "method:item/fileChange/requestApproval",
+          "lines": [
+            {
+              "line": 12,
+              "ts": "2026-02-06T00:00:11.000Z",
+              "method": "item/fileChange/requestApproval",
+              "type": "mcp-request",
+              "status": "pending"
+            },
+            {
+              "line": 12,
+              "ts": "2026-02-06T00:00:11.000Z",
+              "method": "item/fileChange/requestApproval",
+              "type": "mcp-request",
+              "status": "pending"
+            }
+          ]
+        },
+        {
+          "signal": "response:approval",
+          "lines": [
+            {
+              "line": 13,
+              "ts": "2026-02-06T00:00:12.000Z",
+              "method": null,
+              "type": "mcp-response",
+              "status": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mcp-auth-status",
+      "status": "pass",
+      "requiredSignals": [
+        "method:getAuthStatus",
+        "method:mcpServerStatus/list",
+        "token:mcp-auth-authorized",
+        "token:mcp-auth-unauthorized"
+      ],
+      "matchedSignals": [
+        "method:getAuthStatus",
+        "method:mcpServerStatus/list",
+        "token:mcp-auth-authorized",
+        "token:mcp-auth-unauthorized"
+      ],
+      "missingSignals": [],
+      "evidence": [
+        {
+          "signal": "method:getAuthStatus",
+          "lines": [
+            {
+              "line": 14,
+              "ts": "2026-02-06T00:00:13.000Z",
+              "method": "getAuthStatus",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 14,
+              "ts": "2026-02-06T00:00:13.000Z",
+              "method": "getAuthStatus",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "method:mcpServerStatus/list",
+          "lines": [
+            {
+              "line": 15,
+              "ts": "2026-02-06T00:00:14.000Z",
+              "method": "mcpServerStatus/list",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 15,
+              "ts": "2026-02-06T00:00:14.000Z",
+              "method": "mcpServerStatus/list",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "token:mcp-auth-authorized",
+          "lines": [
+            {
+              "line": 14,
+              "ts": "2026-02-06T00:00:13.000Z",
+              "method": "getAuthStatus",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 15,
+              "ts": "2026-02-06T00:00:14.000Z",
+              "method": "mcpServerStatus/list",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        },
+        {
+          "signal": "token:mcp-auth-unauthorized",
+          "lines": [
+            {
+              "line": 15,
+              "ts": "2026-02-06T00:00:14.000Z",
+              "method": "mcpServerStatus/list",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

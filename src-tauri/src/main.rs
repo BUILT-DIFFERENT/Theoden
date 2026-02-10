@@ -2,6 +2,7 @@
 
 mod app_server_bridge;
 mod automation_store;
+mod cloud_host;
 mod paths;
 mod state_store;
 mod terminal_host;
@@ -14,6 +15,7 @@ use automation_store::{
     now_ts, AutomationCreateParams, AutomationRecord, AutomationRunRecord, AutomationStore,
     AutomationUpdateParams, RunArchiveParams, RunNowParams,
 };
+use cloud_host::{CloudRunCancelParams, CloudRunDescriptor, CloudRunHost, CloudRunStartParams};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use state_store::StateStore;
@@ -378,6 +380,31 @@ async fn terminal_close(
     terminal_host.close(params).await
 }
 
+#[tauri::command]
+async fn cloud_run_start(
+    app: AppHandle,
+    cloud_host: tauri::State<'_, Arc<CloudRunHost>>,
+    params: CloudRunStartParams,
+) -> Result<CloudRunDescriptor, String> {
+    cloud_host.start(app, params).await
+}
+
+#[tauri::command]
+async fn cloud_run_cancel(
+    app: AppHandle,
+    cloud_host: tauri::State<'_, Arc<CloudRunHost>>,
+    params: CloudRunCancelParams,
+) -> Result<bool, String> {
+    cloud_host.cancel(app, params).await
+}
+
+#[tauri::command]
+async fn cloud_run_list(
+    cloud_host: tauri::State<'_, Arc<CloudRunHost>>,
+) -> Result<Vec<CloudRunDescriptor>, String> {
+    Ok(cloud_host.list().await)
+}
+
 fn next_request_id() -> u64 {
     REQUEST_NONCE.fetch_add(1, Ordering::Relaxed)
 }
@@ -563,6 +590,7 @@ fn main() {
         ))
         .manage(Arc::new(Notify::new()))
         .manage(Arc::new(TerminalHost::new()))
+        .manage(Arc::new(CloudRunHost::new()))
         .setup(|app| {
             #[cfg(target_os = "windows")]
             {
@@ -674,7 +702,10 @@ fn main() {
             terminal_attach,
             terminal_write,
             terminal_resize,
-            terminal_close
+            terminal_close,
+            cloud_run_start,
+            cloud_run_cancel,
+            cloud_run_list
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

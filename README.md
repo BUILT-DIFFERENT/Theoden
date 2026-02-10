@@ -43,6 +43,13 @@ The goal of this repository is to deliver a parity-focused Tauri implementation 
 
 - `/`: new thread onboarding + composer
 - `/t/$threadId`: active thread, messages, run timeline, approvals, review panel
+- `/inbox`: automation inbox items and unread state
+- `/login`: login handoff/entry route
+- `/welcome`: onboarding welcome surface
+- `/select-workspace`: workspace selector route
+- `/local/$conversationId`: legacy/local alias that redirects to `/t/$threadId`
+- `/remote/$conversationId`: remote conversation alias with task-link fallback
+- `/thread-overlay/$conversationId`: thread route alias that opens review panel
 - `/automations`: automation rules and runs
 - `/skills`: local/remote skill management
 - `/settings/$section`: runtime/config/settings surfaces
@@ -89,16 +96,34 @@ pnpm build
 - `pnpm frontend:test`
 - `pnpm frontend:build`
 - `pnpm desktop:build`
+- `pnpm parity:test:routes`
+- `pnpm parity:test:cloud-sidebar-settings`
+- `pnpm parity:audit:check`
 
 ## Command Map
 
-| Goal | Command |
-| --- | --- |
-| Web dev server | `pnpm frontend:dev` |
-| Desktop dev app | `pnpm desktop:dev` |
-| Frontend production bundle | `pnpm frontend:build` |
-| Desktop production build | `pnpm build` (or `pnpm desktop:build`) |
-| Frontend tests | `pnpm frontend:test` |
+| Goal                                | Command                                   |
+| ----------------------------------- | ----------------------------------------- |
+| Web dev server                      | `pnpm frontend:dev`                       |
+| Desktop dev app                     | `pnpm desktop:dev`                        |
+| Frontend production bundle          | `pnpm frontend:build`                     |
+| Desktop production build            | `pnpm build` (or `pnpm desktop:build`)    |
+| Frontend tests                      | `pnpm frontend:test`                      |
+| Route parity snapshot               | `pnpm parity:test:routes`                 |
+| Cloud/sidebar/settings parity suite | `pnpm parity:test:cloud-sidebar-settings` |
+| Official audit artifact gate        | `pnpm parity:audit:check`                 |
+
+## Parity CI Gate
+
+Parity-touching pull requests now run `.github/workflows/tauri-parity-gates.yml` with:
+
+- frontend lint/test/build
+- Rust tests for `src-tauri`
+- route parity snapshot test
+- focused cloud/sidebar/settings parity suite
+- official audit artifact pass check
+
+Use `Parity gate results (required)` as the branch protection required status to enforce merge blocking on parity regressions.
 
 ## Official Desktop Debug Harness (Submodule)
 

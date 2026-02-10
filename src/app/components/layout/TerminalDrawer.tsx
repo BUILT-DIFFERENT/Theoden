@@ -1,17 +1,24 @@
 import { useMatchRoute } from "@tanstack/react-router";
+import { FitAddon } from "@xterm/addon-fit";
+import { Terminal as XTerm } from "@xterm/xterm";
 import { Check, Copy, Loader2, Terminal, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   clearTerminalSession,
+  resizeTerminalViewport,
   runTerminalCommand,
   sessionOutputText,
+  writeTerminalInput,
 } from "@/app/services/cli/terminalSessions";
 import { useTerminalSession } from "@/app/services/cli/useTerminalSession";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
+import { isTauri } from "@/app/utils/tauri";
 import { workspaceNameFromPath } from "@/app/utils/workspace";
+
+import "@xterm/xterm/css/xterm.css";
 
 interface TerminalDrawerProps {
   isOpen: boolean;
@@ -24,7 +31,10 @@ export function TerminalDrawer({ isOpen }: TerminalDrawerProps) {
   const { thread } = useThreadDetail(threadId);
   const { workspaces } = useWorkspaces();
   const { selectedWorkspace } = useWorkspaceUi();
-  const outputRef = useRef<HTMLDivElement | null>(null);
+  const terminalContainerRef = useRef<HTMLDivElement | null>(null);
+  const xtermRef = useRef<XTerm | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const writtenEntryIdsRef = useRef<Set<string>>(new Set());
   const [commandInput, setCommandInput] = useState("");
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -38,6 +48,7 @@ export function TerminalDrawer({ isOpen }: TerminalDrawerProps) {
     }),
     [resolvedWorkspacePath, threadId],
   );
+  const scopeKey = `${scope.threadId ?? ""}|${scope.workspacePath ?? ""}`;
   const session = useTerminalSession(scope);
   const sessionLabel = threadId
     ? `Thread ${threadId.slice(0, 8)}`
@@ -54,12 +65,85 @@ export function TerminalDrawer({ isOpen }: TerminalDrawerProps) {
   }, [copyMessage]);
 
   useEffect(() => {
-    const container = outputRef.current;
-    if (!container) {
+    if (!isOpen || !terminalContainerRef.current || xtermRef.current) {
       return;
     }
-    container.scrollTop = container.scrollHeight;
-  }, [session.entries.length]);
+    const terminal = new XTerm({
+      convertEol: true,
+      cursorBlink: true,
+      fontFamily:
+        '"JetBrains Mono", "Cascadia Mono", "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace',
+      fontSize: 12,
+      lineHeight: 1.2,
+      theme: {
+        background: "#0a0f1f",
+      },
+    });
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.open(terminalContainerRef.current);
+    fitAddon.fit();
+    xtermRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+    if (isTauri()) {
+      terminal.onData((data) => {
+        void writeTerminalInput(scope, data);
+      });
+    }
+    return () => {
+      terminal.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
+    };
+  }, [isOpen, scope]);
+
+  useEffect(() => {
+    if (!isOpen || !xtermRef.current) {
+      return;
+    }
+    xtermRef.current.clear();
+    writtenEntryIdsRef.current = new Set();
+  }, [isOpen, scopeKey]);
+
+  useEffect(() => {
+    if (!isOpen || !xtermRef.current) {
+      return;
+    }
+    session.entries.forEach((entry) => {
+      if (writtenEntryIdsRef.current.has(entry.id)) {
+        return;
+      }
+      writtenEntryIdsRef.current.add(entry.id);
+      xtermRef.current?.writeln(entry.text);
+    });
+  }, [isOpen, session.entries]);
+
+  useEffect(() => {
+    if (!isOpen || !terminalContainerRef.current || !fitAddonRef.current) {
+      return;
+    }
+    const fit = () => {
+      const fitAddon = fitAddonRef.current;
+      const terminal = xtermRef.current;
+      if (!fitAddon || !terminal) {
+        return;
+      }
+      fitAddon.fit();
+      if (fitAddon.proposeDimensions()) {
+        void resizeTerminalViewport(
+          scope,
+          Math.max(terminal.cols, 1),
+          Math.max(terminal.rows, 1),
+        );
+      }
+    };
+    fit();
+    const observer = new ResizeObserver(() => {
+      fit();
+    });
+    observer.observe(terminalContainerRef.current);
+    return () => observer.disconnect();
+  }, [isOpen, scope]);
 
   if (!isOpen) {
     return null;
@@ -83,22 +167,27 @@ export function TerminalDrawer({ isOpen }: TerminalDrawerProps) {
 
   const handleClear = () => {
     void clearTerminalSession(scope);
+    xtermRef.current?.clear();
+    writtenEntryIdsRef.current = new Set();
     setCommandError(null);
   };
 
   const handleCopy = async () => {
-    const selectedText = window.getSelection()?.toString().trim();
+    const xtermSelection = xtermRef.current?.getSelection().trim() ?? "";
+    const selectedText = window.getSelection()?.toString().trim() ?? "";
     const text =
-      selectedText && selectedText.length
-        ? selectedText
-        : sessionOutputText(scope).trim();
+      xtermSelection.length > 0
+        ? xtermSelection
+        : selectedText.length > 0
+          ? selectedText
+          : sessionOutputText(scope).trim();
     if (!text.length) {
       setCopyMessage("Nothing to copy.");
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      setCopyMessage(selectedText ? "Selection copied." : "Output copied.");
+      setCopyMessage("Copied.");
     } catch (error) {
       console.warn("Failed to copy terminal output", error);
       setCopyMessage("Copy failed.");
@@ -134,7 +223,7 @@ export function TerminalDrawer({ isOpen }: TerminalDrawerProps) {
               ) : (
                 <Copy className="h-3 w-3" />
               )}
-              {copyMessage ?? "Copy selection"}
+              {copyMessage ?? "Copy"}
             </button>
             <button
               className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-[0.65rem] hover:border-flare-300"
@@ -145,33 +234,11 @@ export function TerminalDrawer({ isOpen }: TerminalDrawerProps) {
             </button>
           </div>
         </div>
-        <div
-          ref={outputRef}
-          className="codex-scrollbar max-h-44 space-y-1 overflow-auto px-4 py-3 font-mono text-[0.7rem] text-ink-300"
-        >
-          {session.entries.length ? (
-            session.entries.map((entry) => (
-              <p
-                key={entry.id}
-                className={
-                  entry.kind === "stderr"
-                    ? "whitespace-pre-wrap text-rose-300"
-                    : entry.kind === "input"
-                      ? "whitespace-pre-wrap text-ink-500"
-                      : entry.kind === "system"
-                        ? "whitespace-pre-wrap text-ink-500"
-                        : "whitespace-pre-wrap"
-                }
-              >
-                {entry.text}
-              </p>
-            ))
-          ) : (
-            <p className="text-ink-500">
-              Run a command here or execute tasks in-thread to stream command
-              output.
-            </p>
-          )}
+        <div className="h-52 px-2 py-2">
+          <div
+            ref={terminalContainerRef}
+            className="h-full w-full overflow-hidden"
+          />
         </div>
         <div className="border-t border-white/10 px-4 py-3">
           <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-[0.75rem] text-ink-300">

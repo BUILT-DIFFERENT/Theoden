@@ -60,11 +60,16 @@ export async function attachTerminalSession(sessionId: string) {
   });
 }
 
-export async function writeTerminalSession(sessionId: string, input: string) {
+export async function writeTerminalSession(
+  sessionId: string,
+  input: string,
+  raw = false,
+) {
   await invoke("terminal_write", {
     params: {
       sessionId,
       input,
+      raw,
     },
   });
 }

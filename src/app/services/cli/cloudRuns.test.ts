@@ -2,55 +2,129 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 async function loadCloudRunsModule() {
   vi.resetModules();
-  const runCliMock = vi.fn().mockResolvedValue({
-    code: 0,
-    stdout: "https://cloud.example/tasks/task-123\n",
-    stderr: "",
-  });
-  const listCloudTasksMock = vi
-    .fn()
-    .mockResolvedValue({ tasks: [], cursor: null });
 
-  vi.doMock("@/app/services/cli/runner", () => ({
-    runCli: runCliMock,
+  const startHostCloudRun = vi.fn().mockResolvedValue({
+    runId: "run-1",
+    threadId: "thread-1",
+    taskId: "task-1",
+    url: "https://cloud.example/tasks/task-1",
+    environmentId: "env-a",
+    branch: "main",
+    attempts: 2,
+    cwd: "/repo",
+    status: "queued",
+    startedAt: 1,
+    updatedAt: 1,
+  });
+  const cancelHostCloudRun = vi.fn().mockResolvedValue(true);
+  const listHostCloudRuns = vi.fn().mockResolvedValue([]);
+  let handlers: {
+    onStarted?: (event: Record<string, unknown>) => void;
+    onStatus?: (event: Record<string, unknown>) => void;
+    onOutput?: (event: Record<string, unknown>) => void;
+    onCompleted?: (event: Record<string, unknown>) => void;
+  } | null = null;
+  const subscribeHostCloudRunEvents = vi.fn().mockImplementation(
+    (
+      next: NonNullable<{
+        onStarted?: (event: Record<string, unknown>) => void;
+        onStatus?: (event: Record<string, unknown>) => void;
+        onOutput?: (event: Record<string, unknown>) => void;
+        onCompleted?: (event: Record<string, unknown>) => void;
+      }>,
+    ) => {
+      handlers = next;
+      return Promise.resolve(() => {});
+    },
+  );
+
+  vi.doMock("@/app/utils/tauri", () => ({
+    isTauri: () => true,
   }));
-  vi.doMock("@/app/services/cli/cloudTasks", () => ({
-    listCloudTasks: listCloudTasksMock,
+  vi.doMock("@/app/services/host/cloudRuns", () => ({
+    startHostCloudRun,
+    cancelHostCloudRun,
+    listHostCloudRuns,
+    subscribeHostCloudRunEvents,
   }));
 
   const mod = await import("@/app/services/cli/cloudRuns");
-  return { mod, runCliMock, listCloudTasksMock };
+  return {
+    mod,
+    mocks: {
+      startHostCloudRun,
+      cancelHostCloudRun,
+      listHostCloudRuns,
+      subscribeHostCloudRunEvents,
+      handlers: () => handlers,
+    },
+  };
 }
 
 describe("cloudRuns service", () => {
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it("times out cloud polling and marks the run as failed", async () => {
-    vi.useFakeTimers();
-    const { mod, runCliMock, listCloudTasksMock } = await loadCloudRunsModule();
+  it("starts cloud runs via host lifecycle and records completion", async () => {
+    const { mod, mocks } = await loadCloudRunsModule();
 
     await mod.startCloudRun({
-      threadId: "thread-timeout",
+      threadId: "thread-1",
+      prompt: "Run checks",
+      environmentId: "env-a",
+      branch: "main",
+      attempts: 2,
+      cwd: "/repo",
+    });
+
+    expect(mocks.startHostCloudRun).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      prompt: "Run checks",
+      environmentId: "env-a",
+      branch: "main",
+      attempts: 2,
+      cwd: "/repo",
+    });
+    expect(mod.hasActiveCloudRun("thread-1")).toBe(true);
+
+    mocks.handlers()?.onCompleted?.({
+      runId: "run-1",
+      threadId: "thread-1",
+      status: "completed",
+      code: 0,
+      error: null,
+      taskId: "task-1",
+      url: "https://cloud.example/tasks/task-1",
+      completedAt: 2,
+    });
+
+    expect(mod.hasActiveCloudRun("thread-1")).toBe(false);
+    const events = mod.cloudRunEvents("thread-1");
+    expect(events.at(-1)).toMatchObject({
+      label: "Cloud task completed",
+      status: "done",
+    });
+  });
+
+  it("cancels active cloud runs through host command", async () => {
+    const { mod, mocks } = await loadCloudRunsModule();
+
+    await mod.startCloudRun({
+      threadId: "thread-1",
       prompt: "Run checks",
       environmentId: "env-a",
     });
+    await mod.cancelCloudRun("thread-1");
 
-    expect(runCliMock).toHaveBeenCalledTimes(1);
-    expect(mod.hasActiveCloudRun("thread-timeout")).toBe(true);
-
-    await vi.advanceTimersByTimeAsync(120000);
-    await Promise.resolve();
-
-    expect(listCloudTasksMock).toHaveBeenCalled();
-    expect(mod.hasActiveCloudRun("thread-timeout")).toBe(false);
-    const events = mod.cloudRunEvents("thread-timeout");
+    expect(mocks.cancelHostCloudRun).toHaveBeenCalledWith({
+      runId: "run-1",
+      threadId: "thread-1",
+    });
+    const events = mod.cloudRunEvents("thread-1");
     expect(events.at(-1)).toMatchObject({
-      label: "Cloud task polling timed out",
+      label: "Cloud task interrupted",
       status: "failed",
     });
-    expect(events.at(-1)?.detail).toContain("120s");
   });
 });

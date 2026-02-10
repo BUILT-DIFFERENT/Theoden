@@ -1,27 +1,32 @@
-import { listCloudTasks } from "@/app/services/cli/cloudTasks";
-import { runCli } from "@/app/services/cli/runner";
+import {
+  cancelHostCloudRun,
+  listHostCloudRuns,
+  startHostCloudRun,
+  subscribeHostCloudRunEvents,
+  type HostCloudRunCompletedEvent,
+  type HostCloudRunDescriptor,
+  type HostCloudRunOutputEvent,
+  type HostCloudRunStatusEvent,
+} from "@/app/services/host/cloudRuns";
 import type { RunEvent, RunStatus } from "@/app/types";
+import { isTauri } from "@/app/utils/tauri";
 
-const MAX_EVENTS = 200;
-const POLL_INTERVAL_MS = 5000;
-const MAX_POLL_DURATION_MS = 120000;
-const MAX_POLL_ATTEMPTS = Math.max(
-  1,
-  Math.ceil(MAX_POLL_DURATION_MS / POLL_INTERVAL_MS),
-);
+const MAX_EVENTS = 300;
 
 interface CloudRunEntry {
+  runId: string;
   threadId: string;
   taskId: string | null;
   url: string | null;
   environmentId: string;
-  status: "queued" | "running";
+  status: "queued" | "running" | "completed" | "failed" | "interrupted";
 }
 
 const activeRuns = new Map<string, CloudRunEntry>();
 const eventsByThread = new Map<string, RunEvent[]>();
 const listeners = new Set<() => void>();
 let eventNonce = 0;
+let cloudSubscriptionsReady = false;
 
 function nowLabel() {
   return new Date().toLocaleTimeString([], {
@@ -39,129 +44,122 @@ function emit() {
   listeners.forEach((listener) => listener());
 }
 
+function mapCloudStatus(status: CloudRunEntry["status"]): RunStatus {
+  if (status === "completed") {
+    return "done";
+  }
+  if (status === "interrupted" || status === "failed") {
+    return "failed";
+  }
+  return "running";
+}
+
 function appendCloudEvent(
   threadId: string,
   label: string,
   status: RunStatus,
-  detail?: string,
+  detail?: string | null,
 ) {
   const current = eventsByThread.get(threadId) ?? [];
   const nextEvent: RunEvent = {
     id: nextEventId("cloud"),
     timestamp: nowLabel(),
     label,
-    detail,
+    detail: detail ?? undefined,
     status,
   };
   eventsByThread.set(threadId, [...current, nextEvent].slice(-MAX_EVENTS));
   emit();
 }
 
-function taskIdFromCloudUrl(url: string) {
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-  try {
-    const parsed = new URL(trimmed);
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    const last = parts[parts.length - 1];
-    return last || null;
-  } catch {
-    return null;
-  }
+function updateEntryFromDescriptor(descriptor: HostCloudRunDescriptor) {
+  activeRuns.set(descriptor.threadId, {
+    runId: descriptor.runId,
+    threadId: descriptor.threadId,
+    taskId: descriptor.taskId,
+    url: descriptor.url,
+    environmentId: descriptor.environmentId,
+    status: descriptor.status,
+  });
 }
 
-function mapTaskStatus(status: "queued" | "running" | "completed" | "failed") {
-  if (status === "completed") return "done" as const;
-  if (status === "failed") return "failed" as const;
-  return "running" as const;
+function handleStatusEvent(event: HostCloudRunStatusEvent) {
+  const current = activeRuns.get(event.threadId);
+  const next: CloudRunEntry = {
+    runId: event.runId,
+    threadId: event.threadId,
+    taskId: event.taskId,
+    url: event.url,
+    environmentId: current?.environmentId ?? "cloud",
+    status: event.status,
+  };
+  activeRuns.set(event.threadId, next);
+  appendCloudEvent(
+    event.threadId,
+    `Cloud task ${event.status}`,
+    mapCloudStatus(event.status),
+    event.detail,
+  );
 }
 
-async function pollCloudRunStatus(threadId: string) {
-  let attempts = 0;
-  while (true) {
-    const run = activeRuns.get(threadId);
-    if (!run) {
-      return;
-    }
-    attempts += 1;
-    if (attempts > MAX_POLL_ATTEMPTS) {
-      activeRuns.delete(threadId);
-      appendCloudEvent(
-        threadId,
-        "Cloud task polling timed out",
-        "failed",
-        `No terminal cloud status after ${MAX_POLL_DURATION_MS / 1000}s.`,
-      );
-      return;
-    }
-    try {
-      const { tasks } = await listCloudTasks({
-        environment: run.environmentId,
-        limit: 20,
-      });
-      const task = run.taskId
-        ? tasks.find((candidate) => candidate.id === run.taskId)
-        : tasks.find((candidate) => candidate.url === run.url);
-
-      if (!task) {
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, POLL_INTERVAL_MS),
-        );
-        continue;
-      }
-
-      const mappedStatus = mapTaskStatus(task.status);
-      if (task.status === "queued" && run.status !== "queued") {
-        activeRuns.set(threadId, { ...run, status: "queued" });
-        appendCloudEvent(
-          threadId,
-          "Cloud task queued",
-          "running",
-          task.updatedAt,
-        );
-      } else if (task.status === "running" && run.status !== "running") {
-        activeRuns.set(threadId, { ...run, status: "running" });
-        appendCloudEvent(
-          threadId,
-          "Cloud task running",
-          "running",
-          task.updatedAt,
-        );
-      }
-
-      if (task.status === "completed" || task.status === "failed") {
-        activeRuns.delete(threadId);
-        appendCloudEvent(
-          threadId,
-          task.status === "completed"
-            ? "Cloud task completed"
-            : "Cloud task failed",
-          mappedStatus,
-          task.url ?? task.updatedAt,
-        );
-        return;
-      }
-    } catch (error) {
-      activeRuns.delete(threadId);
-      appendCloudEvent(
-        threadId,
-        "Cloud task polling failed",
-        "failed",
-        error instanceof Error
-          ? error.message
-          : "Unable to poll cloud task status.",
-      );
-      return;
-    }
-
-    await new Promise((resolve) =>
-      window.setTimeout(resolve, POLL_INTERVAL_MS),
-    );
+function handleOutputEvent(event: HostCloudRunOutputEvent) {
+  const trimmed = event.data.trim();
+  if (!trimmed.length) {
+    return;
   }
+  appendCloudEvent(event.threadId, "Cloud output", "running", trimmed);
+}
+
+function handleCompletedEvent(event: HostCloudRunCompletedEvent) {
+  activeRuns.delete(event.threadId);
+  appendCloudEvent(
+    event.threadId,
+    `Cloud task ${event.status}`,
+    mapCloudStatus(event.status),
+    event.error ?? event.url ?? null,
+  );
+}
+
+async function ensureSubscribedToHostCloudEvents() {
+  if (!isTauri()) {
+    return;
+  }
+  if (cloudSubscriptionsReady) {
+    return;
+  }
+  cloudSubscriptionsReady = true;
+  const snapshots = await listHostCloudRuns().catch(() => []);
+  snapshots.forEach((snapshot) => {
+    if (snapshot.status === "completed" || snapshot.status === "failed") {
+      return;
+    }
+    updateEntryFromDescriptor(snapshot);
+  });
+  await subscribeHostCloudRunEvents({
+    onStarted: (event) => {
+      updateEntryFromDescriptor(event);
+      appendCloudEvent(
+        event.threadId,
+        "Cloud task queued",
+        "running",
+        event.url,
+      );
+    },
+    onStatus: (event) => {
+      handleStatusEvent(event);
+    },
+    onOutput: (event) => {
+      handleOutputEvent(event);
+    },
+    onCompleted: (event) => {
+      handleCompletedEvent(event);
+    },
+  });
 }
 
 export function subscribeCloudRunEvents(listener: () => void) {
   listeners.add(listener);
+  void ensureSubscribedToHostCloudEvents();
   return () => {
     listeners.delete(listener);
   };
@@ -177,11 +175,18 @@ export function hasActiveCloudRun(threadId?: string) {
   return activeRuns.has(threadId);
 }
 
-export function cancelCloudRun(threadId: string) {
-  if (!activeRuns.has(threadId)) {
+export async function cancelCloudRun(threadId: string) {
+  const run = activeRuns.get(threadId);
+  if (!run) {
     return false;
   }
-  activeRuns.delete(threadId);
+  await ensureSubscribedToHostCloudEvents();
+  if (isTauri()) {
+    await cancelHostCloudRun({
+      runId: run.runId,
+      threadId,
+    });
+  }
   appendCloudEvent(threadId, "Cloud task interrupted", "failed");
   return true;
 }
@@ -198,62 +203,39 @@ export async function startCloudRun(params: {
   if (!environmentId) {
     throw new Error("Cloud environment is required.");
   }
-  if (activeRuns.has(params.threadId)) {
-    cancelCloudRun(params.threadId);
-  }
+  await ensureSubscribedToHostCloudEvents();
 
-  const attempts = Math.min(Math.max(params.attempts ?? 1, 1), 4);
-  appendCloudEvent(params.threadId, "Cloud task queued", "running");
-
-  const args = [
-    "cloud",
-    "exec",
-    "--env",
-    environmentId,
-    "--attempts",
-    String(attempts),
-    ...(params.branch?.trim() ? ["--branch", params.branch.trim()] : []),
-    params.prompt,
-  ];
-  const result = await runCli({
-    args,
-    cwd: params.cwd,
-  });
-  if (result.code !== 0) {
+  if (!isTauri()) {
     appendCloudEvent(
       params.threadId,
-      "Cloud task failed to start",
+      "Cloud run unavailable",
       "failed",
-      result.stderr.trim() || result.stdout.trim() || "Unknown cloud error.",
+      "Cloud execution is available in the desktop app.",
     );
-    throw new Error(
-      result.stderr.trim() ||
-        result.stdout.trim() ||
-        "Failed to start cloud run.",
-    );
+    throw new Error("Cloud execution is available in the desktop app.");
   }
 
-  const cloudUrl = result.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line.length > 0);
-  const taskId = cloudUrl ? taskIdFromCloudUrl(cloudUrl) : null;
-  activeRuns.set(params.threadId, {
+  if (activeRuns.has(params.threadId)) {
+    await cancelCloudRun(params.threadId);
+  }
+
+  const descriptor = await startHostCloudRun({
     threadId: params.threadId,
-    taskId,
-    url: cloudUrl ?? null,
+    prompt: params.prompt,
     environmentId,
-    status: "running",
+    branch: params.branch,
+    attempts: params.attempts,
+    cwd: params.cwd,
   });
+  updateEntryFromDescriptor(descriptor);
   appendCloudEvent(
     params.threadId,
-    "Cloud task started",
+    "Cloud task queued",
     "running",
-    cloudUrl ?? "Task accepted by cloud backend.",
+    descriptor.url,
   );
-  void pollCloudRunStatus(params.threadId);
   return {
-    taskId,
-    url: cloudUrl ?? null,
+    taskId: descriptor.taskId,
+    url: descriptor.url,
   };
 }

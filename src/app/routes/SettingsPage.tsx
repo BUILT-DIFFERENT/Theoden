@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -12,12 +13,18 @@ import {
 import { subscribeAppServerNotifications } from "@/app/services/cli/appServerEventHub";
 import { execCommand } from "@/app/services/cli/commands";
 import {
+  batchWriteConfig,
   loadAuthStatus,
-  loadMergedConfig,
+  loadConfigSnapshot,
   loadMcpServerStatuses,
+  mapConfigWriteErrorMessage,
   mcpServersFromConfig,
   providersFromConfig,
+  reloadMcpServerConfig,
+  startMcpServerOauthLogin,
   validateConfig,
+  type ConfigReadSnapshot,
+  type ConfigValidationResult,
   type MappedMcpServer,
   type MappedProviderStatus,
 } from "@/app/services/cli/config";
@@ -79,6 +86,16 @@ const actionButtonClass =
 const formInputClass =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none";
 
+type McpServerTransport = "url" | "command";
+
+interface McpServerFormState {
+  originalId: string | null;
+  id: string;
+  transport: McpServerTransport;
+  endpointValue: string;
+  enabled: boolean;
+}
+
 function environmentProfilesMatch(
   current: EnvironmentProfile[],
   next: EnvironmentProfile[],
@@ -120,7 +137,69 @@ function formatRateLimitResetAt(value: number | null) {
   return new Date(value * 1000).toLocaleString();
 }
 
+function mcpServerMapFromConfig(config: Record<string, unknown>) {
+  const mcpServersRaw =
+    (typeof config.mcp_servers === "object" &&
+    config.mcp_servers &&
+    !Array.isArray(config.mcp_servers)
+      ? (config.mcp_servers as Record<string, unknown>)
+      : null) ??
+    (typeof config.mcpServers === "object" &&
+    config.mcpServers &&
+    !Array.isArray(config.mcpServers)
+      ? (config.mcpServers as Record<string, unknown>)
+      : null);
+  const output: Record<string, Record<string, unknown>> = {};
+  if (!mcpServersRaw) {
+    return output;
+  }
+  Object.entries(mcpServersRaw).forEach(([id, value]) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return;
+    }
+    output[id] = value as Record<string, unknown>;
+  });
+  return output;
+}
+
+function createMcpServerFormState(
+  server?: MappedMcpServer | null,
+): McpServerFormState {
+  if (!server) {
+    return {
+      originalId: null,
+      id: "",
+      transport: "url",
+      endpointValue: "",
+      enabled: true,
+    };
+  }
+  const config = server.config ?? {};
+  const transport: McpServerTransport =
+    typeof config.command === "string" && config.command.trim().length
+      ? "command"
+      : "url";
+  const endpointValue =
+    transport === "command"
+      ? typeof config.command === "string"
+        ? config.command
+        : server.endpoint
+      : typeof config.url === "string"
+        ? config.url
+        : typeof config.endpoint === "string"
+          ? config.endpoint
+          : server.endpoint;
+  return {
+    originalId: server.id,
+    id: server.id,
+    transport,
+    endpointValue,
+    enabled: server.enabled,
+  };
+}
+
 export function SettingsPage() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { selectedWorkspace, setSelectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
@@ -239,6 +318,15 @@ export function SettingsPage() {
     MappedProviderStatus[]
   >(fallbackProviderStatuses);
   const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpMutating, setMcpMutating] = useState(false);
+  const [mcpFormState, setMcpFormState] = useState<McpServerFormState>(
+    createMcpServerFormState(),
+  );
+  const [mcpFormOpen, setMcpFormOpen] = useState(false);
+  const [configSnapshot, setConfigSnapshot] =
+    useState<ConfigReadSnapshot | null>(null);
+  const [configValidationResult, setConfigValidationResult] =
+    useState<ConfigValidationResult | null>(null);
   const [archivedThreads, setArchivedThreads] = useState<
     Array<{ id: string; preview: string; updatedAt: number }>
   >([]);
@@ -281,6 +369,15 @@ export function SettingsPage() {
   const [activeEnvironmentProfileId, setActiveEnvironmentProfileId] = useState<
     string | null
   >(loadedEnvironmentProfiles.activeProfileId);
+  const configPreviewText = useMemo(
+    () =>
+      configSnapshot
+        ? JSON.stringify(configSnapshot.config, null, 2)
+        : "Loading merged config…",
+    [configSnapshot],
+  );
+  const configErrors = configValidationResult?.errors ?? [];
+  const configWarnings = configValidationResult?.warnings ?? [];
 
   useEffect(() => {
     if (!saveMessage) {
@@ -537,14 +634,16 @@ export function SettingsPage() {
   const refreshMcpServers = useCallback(async () => {
     setMcpLoading(true);
     try {
-      const [config, runtimeStatuses, authStatus] = await Promise.all([
-        loadMergedConfig(resolvedWorkspace),
+      const [snapshot, runtimeStatuses, authStatus] = await Promise.all([
+        loadConfigSnapshot(resolvedWorkspace),
         loadMcpServerStatuses().catch(() => []),
         loadAuthStatus().catch(() => ({
           status: "unknown",
           requiresOpenaiAuth: null,
         })),
       ]);
+      const config = snapshot.config;
+      setConfigSnapshot(snapshot);
       const runtimeStatusById = new Map(
         runtimeStatuses.map((status) => [status.id, status.status]),
       );
@@ -563,7 +662,9 @@ export function SettingsPage() {
           id: status.id,
           name: status.id,
           endpoint: "mcp://unknown",
+          enabled: status.status !== "disabled",
           status: status.status,
+          config: {},
         }));
       }
       setMcpServers(parsedServers);
@@ -590,6 +691,16 @@ export function SettingsPage() {
     } finally {
       setMcpLoading(false);
     }
+  }, [resolvedWorkspace]);
+
+  const refreshConfigDiagnostics = useCallback(async () => {
+    const [snapshot, validation] = await Promise.all([
+      loadConfigSnapshot(resolvedWorkspace),
+      validateConfig(resolvedWorkspace),
+    ]);
+    setConfigSnapshot(snapshot);
+    setConfigValidationResult(validation);
+    return { snapshot, validation };
   }, [resolvedWorkspace]);
 
   const handleOpenConfigFile = () =>
@@ -635,45 +746,163 @@ export function SettingsPage() {
 
   const handleValidateConfig = () =>
     runAction(async () => {
-      const result = await validateConfig(resolvedWorkspace);
+      const { validation } = await refreshConfigDiagnostics();
+      const result = validation;
       if (!result.valid) {
-        throw new Error(result.errors.join("; ") || "Config is invalid.");
+        throw new Error(
+          result.errors
+            .map((entry) => `${entry.key}: ${entry.message}`)
+            .join("; ") || "Config is invalid.",
+        );
       }
-      return `Config loaded successfully (${result.keys} top-level keys).`;
+      return `Config loaded successfully (${result.keys.length} keys).`;
     }, "Config validation failed.");
-
-  const handleAddMcpServer = () =>
-    runAction(() => {
-      const id = window.prompt("MCP server ID (example: github)");
-      if (!id?.trim()) {
-        throw new Error("MCP server ID is required.");
-      }
-      const endpoint =
-        window.prompt(
-          "MCP endpoint or command",
-          `mcp://${id.trim().toLowerCase()}`,
-        ) ?? "";
-      if (!endpoint.trim()) {
-        throw new Error("MCP endpoint is required.");
-      }
-      const server: MappedMcpServer = {
-        id: id.trim(),
-        name: id.trim(),
-        endpoint: endpoint.trim(),
-        status: "connected",
-      };
-      setMcpServers((current) => {
-        const deduped = current.filter((entry) => entry.id !== server.id);
-        return [server, ...deduped];
-      });
-      return `Added MCP server ${server.id} (session-only).`;
-    }, "Failed to add MCP server.");
 
   const handleReloadMcpServers = () =>
     runAction(
       () => refreshMcpServers(),
       "Failed to reload MCP server connections.",
     );
+
+  const persistMcpServerMap = useCallback(
+    async (
+      nextMap: Record<string, Record<string, unknown>>,
+      successMessage: string,
+    ) => {
+      setMcpMutating(true);
+      try {
+        const snapshot = await loadConfigSnapshot(resolvedWorkspace);
+        await batchWriteConfig({
+          edits: [
+            {
+              keyPath: "mcp_servers",
+              value: nextMap,
+              mergeStrategy: "replace",
+            },
+          ],
+          filePath: snapshot.writeTarget.filePath,
+          expectedVersion: snapshot.writeTarget.expectedVersion,
+        });
+        await reloadMcpServerConfig();
+        await Promise.all([refreshMcpServers(), refreshConfigDiagnostics()]);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["settings", "mcp"] }),
+          queryClient.invalidateQueries({ queryKey: ["providers", "status"] }),
+        ]);
+        return successMessage;
+      } catch (error) {
+        throw new Error(mapConfigWriteErrorMessage(error));
+      } finally {
+        setMcpMutating(false);
+      }
+    },
+    [
+      queryClient,
+      refreshConfigDiagnostics,
+      refreshMcpServers,
+      resolvedWorkspace,
+    ],
+  );
+
+  const openCreateMcpForm = () => {
+    setMcpFormState(createMcpServerFormState());
+    setMcpFormOpen(true);
+  };
+
+  const openEditMcpForm = (server: MappedMcpServer) => {
+    setMcpFormState(createMcpServerFormState(server));
+    setMcpFormOpen(true);
+  };
+
+  const handleSubmitMcpForm = () =>
+    runAction(async () => {
+      const nextId = mcpFormState.id.trim();
+      const endpoint = mcpFormState.endpointValue.trim();
+      if (!nextId) {
+        throw new Error("MCP server ID is required.");
+      }
+      if (!/^[A-Za-z0-9_-]+$/.test(nextId)) {
+        throw new Error(
+          "MCP server ID can only include letters, numbers, underscores, and hyphens.",
+        );
+      }
+      if (!endpoint) {
+        throw new Error("MCP endpoint is required.");
+      }
+
+      const baseMap = mcpServerMapFromConfig(configSnapshot?.config ?? {});
+      const previousId = mcpFormState.originalId;
+      if (previousId && previousId !== nextId) {
+        delete baseMap[previousId];
+      }
+      const existingServerConfig =
+        typeof baseMap[nextId] === "object" && baseMap[nextId]
+          ? { ...baseMap[nextId] }
+          : {};
+      delete existingServerConfig.url;
+      delete existingServerConfig.command;
+      delete existingServerConfig.endpoint;
+      const nextServerConfig: Record<string, unknown> = {
+        ...existingServerConfig,
+        enabled: mcpFormState.enabled,
+        disabled: !mcpFormState.enabled,
+      };
+      if (mcpFormState.transport === "command") {
+        nextServerConfig.command = endpoint;
+      } else {
+        nextServerConfig.url = endpoint;
+      }
+      baseMap[nextId] = nextServerConfig;
+      const message = await persistMcpServerMap(
+        baseMap,
+        previousId
+          ? `Updated MCP server ${nextId}.`
+          : `Added MCP server ${nextId}.`,
+      );
+      setMcpFormOpen(false);
+      return message;
+    }, "Failed to persist MCP server settings.");
+
+  const handleDeleteMcpServer = (serverId: string) =>
+    runAction(async () => {
+      const baseMap = mcpServerMapFromConfig(configSnapshot?.config ?? {});
+      if (!baseMap[serverId]) {
+        return "MCP server already removed.";
+      }
+      delete baseMap[serverId];
+      return persistMcpServerMap(baseMap, `Deleted MCP server ${serverId}.`);
+    }, "Failed to delete MCP server.");
+
+  const handleToggleMcpServer = (server: MappedMcpServer) =>
+    runAction(async () => {
+      const baseMap = mcpServerMapFromConfig(configSnapshot?.config ?? {});
+      const current = baseMap[server.id] ?? server.config ?? {};
+      baseMap[server.id] = {
+        ...current,
+        enabled: !server.enabled,
+        disabled: server.enabled,
+      };
+      return persistMcpServerMap(
+        baseMap,
+        `${server.enabled ? "Disabled" : "Enabled"} MCP server ${server.id}.`,
+      );
+    }, "Failed to update MCP server status.");
+
+  const handleConnectMcpServer = (
+    server: MappedMcpServer,
+    reconnect: boolean,
+  ) =>
+    runAction(async () => {
+      const result = await startMcpServerOauthLogin({
+        name: server.id,
+      });
+      window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
+      await reloadMcpServerConfig();
+      await refreshMcpServers();
+      return reconnect
+        ? `Reconnect flow opened for ${server.id}.`
+        : `Connect flow opened for ${server.id}.`;
+    }, "Failed to start MCP OAuth flow.");
 
   const handleRunPruneNow = () =>
     runAction(async () => {
@@ -792,14 +1021,16 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (
-      activeSectionId !== "mcp-servers" &&
-      activeSectionId !== "configuration" &&
-      activeSectionId !== "environments"
+      activeSectionId === "mcp-servers" ||
+      activeSectionId === "environments"
     ) {
+      void refreshMcpServers();
       return;
     }
-    void refreshMcpServers();
-  }, [activeSectionId, refreshMcpServers]);
+    if (activeSectionId === "configuration") {
+      void refreshConfigDiagnostics();
+    }
+  }, [activeSectionId, refreshConfigDiagnostics, refreshMcpServers]);
 
   useEffect(() => {
     if (activeSectionId !== "usage-analytics") {
@@ -1184,9 +1415,6 @@ export function SettingsPage() {
               Review merged `config.toml` values for this workspace and global
               defaults.
             </p>
-            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-ink-300">
-              config.toml preview will live here.
-            </div>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               <button
                 className={actionButtonClass}
@@ -1204,6 +1432,101 @@ export function SettingsPage() {
               >
                 Validate TOML
               </button>
+              <button
+                className={actionButtonClass}
+                onClick={() => {
+                  void runAction(async () => {
+                    await refreshConfigDiagnostics();
+                    return "Configuration snapshot refreshed.";
+                  }, "Failed to refresh configuration snapshot.");
+                }}
+              >
+                Refresh snapshot
+              </button>
+            </div>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                  Merged config preview
+                </p>
+                <pre className="codex-scrollbar mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-[0.7rem] text-ink-200">
+                  {configPreviewText}
+                </pre>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                  Layer origins
+                </p>
+                {configSnapshot?.layers.length ? (
+                  <div className="mt-2 max-h-72 overflow-auto">
+                    <table className="min-w-full text-left text-[0.7rem] text-ink-200">
+                      <thead className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                        <tr>
+                          <th className="px-2 py-1 font-medium">Layer</th>
+                          <th className="px-2 py-1 font-medium">Version</th>
+                          <th className="px-2 py-1 font-medium">File</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {configSnapshot.layers.map((layer) => (
+                          <tr key={`${layer.name.type}-${layer.version}`}>
+                            <td className="px-2 py-1">{layer.name.type}</td>
+                            <td className="px-2 py-1">{layer.version}</td>
+                            <td className="px-2 py-1 break-all">
+                              {layer.name.file ?? "n/a"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-ink-500">
+                    No layer metadata loaded.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                Validation
+              </p>
+              <p className="mt-1 text-xs text-ink-400">
+                Keys checked: {configValidationResult?.keys.length ?? 0}
+              </p>
+              {!configErrors.length && !configWarnings.length ? (
+                <p className="mt-2 text-xs text-emerald-300">
+                  No schema/runtime validation issues detected.
+                </p>
+              ) : (
+                <div className="mt-2 max-h-48 overflow-auto">
+                  <table className="min-w-full text-left text-[0.7rem] text-ink-200">
+                    <thead className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                      <tr>
+                        <th className="px-2 py-1 font-medium">Severity</th>
+                        <th className="px-2 py-1 font-medium">Key</th>
+                        <th className="px-2 py-1 font-medium">Message</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {configErrors.map((entry, index) => (
+                        <tr key={`error-${entry.key}-${index}`}>
+                          <td className="px-2 py-1 text-rose-300">Error</td>
+                          <td className="px-2 py-1 font-mono">{entry.key}</td>
+                          <td className="px-2 py-1">{entry.message}</td>
+                        </tr>
+                      ))}
+                      {configWarnings.map((entry, index) => (
+                        <tr key={`warning-${entry.key}-${index}`}>
+                          <td className="px-2 py-1 text-amber-300">Warning</td>
+                          <td className="px-2 py-1 font-mono">{entry.key}</td>
+                          <td className="px-2 py-1">{entry.message}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
             <div className="mt-4 space-y-2 text-xs text-ink-300">
               <label className="flex items-center gap-2">
@@ -1340,18 +1663,75 @@ export function SettingsPage() {
             </p>
             <h2 className="font-display text-xl">Tool endpoints</h2>
             <div className="mt-4 space-y-2">
-              {mcpServers.map((server) => (
-                <div
-                  key={server.id}
-                  className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
-                >
-                  <div>
-                    <p className="text-ink-100">{server.name}</p>
-                    <p className="text-xs text-ink-500">{server.endpoint}</p>
+              {mcpServers.length ? (
+                mcpServers.map((server) => (
+                  <div
+                    key={server.id}
+                    className="rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-ink-100">{server.name}</p>
+                        <p className="truncate text-xs text-ink-500">
+                          {server.endpoint}
+                        </p>
+                      </div>
+                      <span className="text-xs text-ink-300">
+                        {server.status}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      <button
+                        className={actionButtonClass}
+                        onClick={() => openEditMcpForm(server)}
+                        disabled={mcpMutating}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className={actionButtonClass}
+                        onClick={() => {
+                          void handleDeleteMcpServer(server.id);
+                        }}
+                        disabled={mcpMutating}
+                      >
+                        Delete
+                      </button>
+                      <button
+                        className={actionButtonClass}
+                        onClick={() => {
+                          void handleToggleMcpServer(server);
+                        }}
+                        disabled={mcpMutating}
+                      >
+                        {server.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        className={actionButtonClass}
+                        onClick={() => {
+                          void handleConnectMcpServer(server, false);
+                        }}
+                        disabled={mcpMutating}
+                      >
+                        Connect
+                      </button>
+                      <button
+                        className={actionButtonClass}
+                        onClick={() => {
+                          void handleConnectMcpServer(server, true);
+                        }}
+                        disabled={mcpMutating}
+                      >
+                        Reconnect
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-xs text-ink-300">{server.status}</span>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-500">
+                  No MCP servers configured.
+                </p>
+              )}
             </div>
             <div className="mt-4 max-w-sm space-y-2">
               <label
@@ -1371,8 +1751,9 @@ export function SettingsPage() {
               <button
                 className={actionButtonClass}
                 onClick={() => {
-                  void handleAddMcpServer();
+                  openCreateMcpForm();
                 }}
+                disabled={mcpMutating}
               >
                 + Add MCP server
               </button>
@@ -1392,6 +1773,104 @@ export function SettingsPage() {
                 Save MCP settings
               </button>
             </div>
+            {mcpFormOpen ? (
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                  {mcpFormState.originalId
+                    ? "Edit MCP server"
+                    : "Add MCP server"}
+                </p>
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                      Server ID
+                    </p>
+                    <input
+                      className={formInputClass}
+                      value={mcpFormState.id}
+                      onChange={(event) =>
+                        setMcpFormState((current) => ({
+                          ...current,
+                          id: event.target.value,
+                        }))
+                      }
+                      placeholder="github"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                      Transport
+                    </p>
+                    <select
+                      className={formInputClass}
+                      value={mcpFormState.transport}
+                      onChange={(event) =>
+                        setMcpFormState((current) => ({
+                          ...current,
+                          transport: event.target.value as McpServerTransport,
+                        }))
+                      }
+                    >
+                      <option value="url">URL endpoint</option>
+                      <option value="command">Command</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 lg:col-span-2">
+                    <p className="text-xs uppercase tracking-[0.2em] text-ink-500">
+                      {mcpFormState.transport === "command"
+                        ? "Command"
+                        : "URL endpoint"}
+                    </p>
+                    <input
+                      className={formInputClass}
+                      value={mcpFormState.endpointValue}
+                      onChange={(event) =>
+                        setMcpFormState((current) => ({
+                          ...current,
+                          endpointValue: event.target.value,
+                        }))
+                      }
+                      placeholder={
+                        mcpFormState.transport === "command"
+                          ? "npx -y @modelcontextprotocol/server-github"
+                          : "https://example.mcp.local"
+                      }
+                    />
+                  </div>
+                </div>
+                <label className="mt-3 flex items-center gap-2 text-xs text-ink-300">
+                  <input
+                    type="checkbox"
+                    checked={mcpFormState.enabled}
+                    onChange={(event) =>
+                      setMcpFormState((current) => ({
+                        ...current,
+                        enabled: event.target.checked,
+                      }))
+                    }
+                  />
+                  Enabled
+                </label>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    className={actionButtonClass}
+                    onClick={() => {
+                      void handleSubmitMcpForm();
+                    }}
+                    disabled={mcpMutating}
+                  >
+                    {mcpMutating ? "Saving…" : "Save MCP server"}
+                  </button>
+                  <button
+                    className={actionButtonClass}
+                    onClick={() => setMcpFormOpen(false)}
+                    disabled={mcpMutating}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </section>
         );
       case "skills":

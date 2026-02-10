@@ -62,6 +62,7 @@ describe("sidebarUi state helpers", () => {
     storeSidebarUi({
       threadSort: "title",
       threadVisibility: "active",
+      groupMode: "recency",
       expandedWorkspaceKeys: ["a", "b", "a", "", " "],
       scrollTop: -20,
     });
@@ -69,6 +70,7 @@ describe("sidebarUi state helpers", () => {
     expect(updatePersistedAtomMock).toHaveBeenCalledWith("sidebar.ui", {
       threadSort: "title",
       threadVisibility: "active",
+      groupMode: "recency",
       expandedWorkspaceKeys: ["a", "b"],
       scrollTop: 0,
     });
@@ -77,6 +79,7 @@ describe("sidebarUi state helpers", () => {
     ).toEqual({
       threadSort: "title",
       threadVisibility: "active",
+      groupMode: "recency",
       expandedWorkspaceKeys: ["a", "b"],
       scrollTop: 0,
     });
@@ -88,6 +91,7 @@ describe("sidebarUi state helpers", () => {
       JSON.stringify({
         threadSort: "invalid",
         threadVisibility: "invalid",
+        groupMode: "invalid",
         expandedWorkspaceKeys: ["workspace-a", 7],
         scrollTop: "NaN",
       }),
@@ -106,6 +110,7 @@ describe("sidebarUi state helpers", () => {
     syncPersistedAtomMock.mockResolvedValue({
       threadSort: "title",
       threadVisibility: "active",
+      groupMode: "recency",
       expandedWorkspaceKeys: ["workspace-z"],
       scrollTop: 144,
     });
@@ -126,6 +131,7 @@ describe("sidebarUi state helpers", () => {
     ).toEqual({
       threadSort: "title",
       threadVisibility: "active",
+      groupMode: "recency",
       expandedWorkspaceKeys: ["workspace-z"],
       scrollTop: 144,
     });

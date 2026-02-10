@@ -532,7 +532,7 @@ export function ThreadComposer({
       setIsStopping(true);
       setError(null);
       try {
-        cancelCloudRun(threadId);
+        await cancelCloudRun(threadId);
         await queryClient.invalidateQueries({
           queryKey: ["threads", "read", threadId],
         });

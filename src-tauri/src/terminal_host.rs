@@ -23,6 +23,7 @@ pub struct TerminalCreateParams {
 pub struct TerminalWriteParams {
     pub session_id: String,
     pub input: String,
+    pub raw: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -154,6 +155,20 @@ impl TerminalHost {
                 .cloned()
                 .ok_or_else(|| "terminal session not found".to_string())?
         };
+
+        if params.raw.unwrap_or(false) {
+            if params.input.is_empty() {
+                return Ok(());
+            }
+            session
+                .writer_tx
+                .send(params.input.into_bytes())
+                .map_err(|_| "terminal session writer is closed".to_string())?;
+            if let Ok(mut state) = session.state.lock() {
+                state.updated_at = now_ts();
+            }
+            return Ok(());
+        }
 
         if params.input.trim().is_empty() {
             return Err("command input was empty".to_string());
@@ -469,7 +484,7 @@ fn marker_command(shell_kind: ShellKind, marker: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_exit_marker, EXIT_MARKER_PREFIX};
+    use super::{build_write_payload, parse_exit_marker, ShellKind, EXIT_MARKER_PREFIX};
 
     #[test]
     fn parses_exit_markers_with_prefix() {
@@ -485,6 +500,24 @@ mod tests {
             parse_exit_marker(&format!("{EXIT_MARKER_PREFIX}abc:not-a-number")),
             None
         );
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn write_payload_contains_command_and_exit_marker() {
+        let payload = build_write_payload("echo parity", ShellKind::Posix, "token-1");
+        let output = String::from_utf8(payload).expect("payload should be UTF-8");
+        assert!(output.contains("echo parity"));
+        assert!(output.contains(&format!("{EXIT_MARKER_PREFIX}token-1")));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn write_payload_contains_command_and_exit_marker() {
+        let payload = build_write_payload("echo parity", ShellKind::Cmd, "token-1");
+        let output = String::from_utf8(payload).expect("payload should be UTF-8");
+        assert!(output.contains("echo parity"));
+        assert!(output.contains(&format!("{EXIT_MARKER_PREFIX}token-1")));
     }
 }
 

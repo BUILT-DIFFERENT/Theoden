@@ -40,6 +40,10 @@ export function AppShell() {
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const newThreadMatch = matchRoute({ to: "/" });
   const automationsMatch = matchRoute({ to: "/automations" });
+  const inboxMatch = matchRoute({ to: "/inbox" });
+  const loginMatch = matchRoute({ to: "/login" });
+  const welcomeMatch = matchRoute({ to: "/welcome" });
+  const selectWorkspaceMatch = matchRoute({ to: "/select-workspace" });
   const skillsMatch = matchRoute({ to: "/skills" });
   const settingsMatch = matchRoute({ to: "/settings/$section" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
@@ -310,13 +314,21 @@ export function AppShell() {
 
   const topBarTitle = automationsMatch
     ? "Automations"
-    : skillsMatch
-      ? "Skills"
-      : settingsMatch
-        ? "Settings"
-        : threadMatch
-          ? "Thread"
-          : "Codex";
+    : inboxMatch
+      ? "Inbox"
+      : loginMatch
+        ? "Login"
+        : welcomeMatch
+          ? "Welcome"
+          : selectWorkspaceMatch
+            ? "Select workspace"
+            : skillsMatch
+              ? "Skills"
+              : settingsMatch
+                ? "Settings"
+                : threadMatch
+                  ? "Thread"
+                  : "Codex";
   const topBarVariant = threadMatch
     ? "thread"
     : newThreadMatch

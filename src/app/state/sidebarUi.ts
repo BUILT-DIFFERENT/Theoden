@@ -9,10 +9,12 @@ const SIDEBAR_UI_ATOM_KEY = "sidebar.ui";
 
 export type SidebarThreadSort = "updated" | "title";
 export type SidebarThreadVisibility = "all" | "active";
+export type SidebarGroupMode = "workspace" | "recency";
 
 export interface SidebarUiSnapshot {
   threadSort: SidebarThreadSort;
   threadVisibility: SidebarThreadVisibility;
+  groupMode: SidebarGroupMode;
   expandedWorkspaceKeys: string[];
   scrollTop: number;
 }
@@ -20,6 +22,7 @@ export interface SidebarUiSnapshot {
 export const defaultSidebarUiSnapshot: SidebarUiSnapshot = {
   threadSort: "updated",
   threadVisibility: "all",
+  groupMode: "workspace",
   expandedWorkspaceKeys: [],
   scrollTop: 0,
 };
@@ -36,6 +39,8 @@ function normalizeSidebarUiSnapshot(
     record.threadSort === "title" ? "title" : fallback.threadSort;
   const threadVisibility =
     record.threadVisibility === "active" ? "active" : fallback.threadVisibility;
+  const groupMode =
+    record.groupMode === "recency" ? "recency" : fallback.groupMode;
   const expandedWorkspaceKeys = Array.isArray(record.expandedWorkspaceKeys)
     ? record.expandedWorkspaceKeys.filter(
         (entry): entry is string =>
@@ -50,6 +55,7 @@ function normalizeSidebarUiSnapshot(
   return {
     threadSort,
     threadVisibility,
+    groupMode,
     expandedWorkspaceKeys: Array.from(new Set(expandedWorkspaceKeys)),
     scrollTop,
   };

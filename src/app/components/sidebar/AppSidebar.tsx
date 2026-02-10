@@ -1,14 +1,19 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  Archive,
+  ArchiveRestore,
   BookOpen,
   Check,
   ChevronDown,
   ChevronRight,
+  EllipsisVertical,
   Filter,
   Folder,
+  Inbox,
   LogOut,
+  Pin,
   Plus,
   SquarePen,
   Settings,
@@ -22,12 +27,23 @@ import {
   AccountActionCancelledError,
   runAccountAction as performAccountAction,
 } from "@/app/services/cli/accountActions";
+import { archiveThread, unarchiveThread } from "@/app/services/cli/threads";
 import { useAccount } from "@/app/services/cli/useAccount";
 import { useThreadList } from "@/app/services/cli/useThreads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
+import {
+  listInboxItems,
+  subscribeAutomationStoreUpdates,
+} from "@/app/services/host/automations";
 import { useAppUi } from "@/app/state/appUi";
 import {
+  setSidebarThreadAlias,
+  toggleSidebarThreadPinned,
+  useSidebarThreadMetadataMap,
+} from "@/app/state/sidebarThreadMetadata";
+import {
   loadStoredSidebarUi,
+  type SidebarGroupMode,
   storeSidebarUi,
   type SidebarThreadSort,
   type SidebarThreadVisibility,
@@ -35,6 +51,7 @@ import {
 import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { ThreadSummary } from "@/app/types";
+import { isTauri } from "@/app/utils/tauri";
 import {
   normalizeWorkspacePath,
   workspaceNameFromPath,
@@ -46,7 +63,36 @@ type WorkspaceGroup = {
   path: string;
   key: string;
   threads: ThreadSummary[];
+  kind: "workspace" | "recency";
 };
+
+function threadDisplayTitle(
+  thread: ThreadSummary,
+  metadataMap: Record<string, { alias?: string }>,
+) {
+  const alias = metadataMap[thread.id]?.alias?.trim();
+  return alias && alias.length ? alias : thread.title;
+}
+
+function sortThreadsForSidebar(
+  threads: ThreadSummary[],
+  threadSort: SidebarThreadSort,
+  metadataMap: Record<string, { pinned?: boolean; alias?: string }>,
+) {
+  return threads.slice().sort((left, right) => {
+    const leftPinned = metadataMap[left.id]?.pinned === true ? 1 : 0;
+    const rightPinned = metadataMap[right.id]?.pinned === true ? 1 : 0;
+    if (leftPinned !== rightPinned) {
+      return rightPinned - leftPinned;
+    }
+    if (threadSort === "title") {
+      return threadDisplayTitle(left, metadataMap).localeCompare(
+        threadDisplayTitle(right, metadataMap),
+      );
+    }
+    return 0;
+  });
+}
 
 export function AppSidebar() {
   const queryClient = useQueryClient();
@@ -57,6 +103,7 @@ export function AppSidebar() {
   const matchRoute = useMatchRoute();
   const threadMatch = matchRoute({ to: "/t/$threadId" });
   const newThreadMatch = matchRoute({ to: "/" });
+  const inboxMatch = matchRoute({ to: "/inbox" });
   const automationsMatch = matchRoute({ to: "/automations" });
   const skillsMatch = matchRoute({ to: "/skills" });
   const selectedThreadId = threadMatch ? threadMatch.threadId : undefined;
@@ -84,6 +131,9 @@ export function AppSidebar() {
   );
   const [threadVisibility, setThreadVisibility] =
     useState<SidebarThreadVisibility>(initialSidebarState.threadVisibility);
+  const [groupMode, setGroupMode] = useState<SidebarGroupMode>(
+    initialSidebarState.groupMode,
+  );
   const [threadListScrollTop, setThreadListScrollTop] = useState(
     initialSidebarState.scrollTop,
   );
@@ -98,10 +148,25 @@ export function AppSidebar() {
   const [accountAction, setAccountAction] = useState<
     "login-chatgpt" | "login-api-key" | "logout" | null
   >(null);
+  const [threadActionError, setThreadActionError] = useState<string | null>(
+    null,
+  );
+  const [openThreadMenuId, setOpenThreadMenuId] = useState<string | null>(null);
   const filterMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const threadListParentRef = useRef<HTMLDivElement | null>(null);
   const restoredScrollRef = useRef(false);
+  const sidebarThreadMetadata = useSidebarThreadMetadataMap();
+  const isDesktop = isTauri();
+  const inboxItemsQuery = useQuery({
+    queryKey: ["host", "inbox-items"],
+    queryFn: listInboxItems,
+    enabled: isDesktop,
+    refetchOnWindowFocus: isDesktop,
+  });
+  const unreadInboxCount = (inboxItemsQuery.data ?? []).filter(
+    (item) => item.readAt === null,
+  ).length;
 
   const workspaceEntries = useMemo<
     Array<{ id: string; name: string; path: string }>
@@ -142,6 +207,7 @@ export function AppSidebar() {
         ...workspace,
         key,
         threads: workspaceThreadsMap.get(key) ?? [],
+        kind: "workspace" as const,
       };
     });
     workspaceThreadsMap.forEach((threadsForWorkspace, key) => {
@@ -158,39 +224,61 @@ export function AppSidebar() {
         key,
         name: workspaceNameFromPath(path),
         threads: threadsForWorkspace,
+        kind: "workspace",
       });
     });
     return entries;
   }, [workspaceEntries, workspaceThreadsMap]);
+  const recencyTree = useMemo<WorkspaceGroup[]>(() => {
+    return [
+      {
+        id: "recency",
+        name: "Recent threads",
+        path: "recency",
+        key: "recency",
+        threads: allThreads,
+        kind: "recency",
+      },
+    ];
+  }, [allThreads]);
   const visibleWorkspaceTree = useMemo<WorkspaceGroup[]>(() => {
-    return workspaceTree
+    const sourceTree = groupMode === "recency" ? recencyTree : workspaceTree;
+    const filterByVisibility = (thread: ThreadSummary) => {
+      if (threadVisibility === "all") {
+        return true;
+      }
+      return (
+        thread.status === "running" ||
+        thread.status === "needs_review" ||
+        thread.id === selectedThreadId
+      );
+    };
+
+    return sourceTree
       .map((workspace) => {
-        const filteredThreads = workspace.threads.filter((thread) => {
-          if (threadVisibility === "all") {
-            return true;
-          }
-          return (
-            thread.status === "running" ||
-            thread.status === "needs_review" ||
-            thread.id === selectedThreadId
-          );
-        });
-        const sortedThreads =
-          threadSort === "title"
-            ? filteredThreads
-                .slice()
-                .sort((a, b) => a.title.localeCompare(b.title))
-            : filteredThreads;
+        const filteredThreads = workspace.threads.filter(filterByVisibility);
         return {
           ...workspace,
-          threads: sortedThreads,
+          threads: sortThreadsForSidebar(
+            filteredThreads,
+            threadSort,
+            sidebarThreadMetadata,
+          ),
         };
       })
       .filter(
         (workspace) =>
           workspace.threads.length > 0 || threadVisibility === "all",
       );
-  }, [selectedThreadId, threadSort, threadVisibility, workspaceTree]);
+  }, [
+    groupMode,
+    recencyTree,
+    selectedThreadId,
+    sidebarThreadMetadata,
+    threadSort,
+    threadVisibility,
+    workspaceTree,
+  ]);
   const expandedWorkspaceKeys = useMemo(
     () =>
       Object.entries(expandedWorkspaces)
@@ -250,6 +338,38 @@ export function AppSidebar() {
   }, [accountMenuOpen]);
 
   useEffect(() => {
+    if (!openThreadMenuId) {
+      return;
+    }
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-thread-menu='true']")) {
+        return;
+      }
+      setOpenThreadMenuId(null);
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [openThreadMenuId]);
+
+  useEffect(() => {
+    if (!isDesktop) {
+      return;
+    }
+    let unlisten: (() => void) | null = null;
+    void subscribeAutomationStoreUpdates(() => {
+      void queryClient.invalidateQueries({
+        queryKey: ["host", "inbox-items"],
+      });
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [isDesktop, queryClient]);
+
+  useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       rowVirtualizer.measure();
     });
@@ -277,11 +397,13 @@ export function AppSidebar() {
     storeSidebarUi({
       threadSort,
       threadVisibility,
+      groupMode,
       expandedWorkspaceKeys,
       scrollTop: threadListScrollTop,
     });
   }, [
     expandedWorkspaceKeys,
+    groupMode,
     threadListScrollTop,
     threadSort,
     threadVisibility,
@@ -330,6 +452,55 @@ export function AppSidebar() {
     }
   };
 
+  const openThread = async (
+    threadId: string,
+    workspacePath: string | null,
+    withChanges = false,
+  ) => {
+    if (workspacePath) {
+      setSelectedWorkspace(workspacePath);
+    }
+    setReviewOpen(withChanges);
+    await navigate({
+      to: "/t/$threadId",
+      params: { threadId },
+    });
+  };
+
+  const handleThreadActionError = (
+    error: unknown,
+    fallback: string,
+  ): string => {
+    if (error instanceof Error && error.message.trim().length > 0) {
+      return error.message;
+    }
+    return fallback;
+  };
+
+  const handleToggleArchive = async (
+    thread: ThreadSummary,
+    isArchived: boolean,
+  ) => {
+    setThreadActionError(null);
+    try {
+      if (isArchived) {
+        await unarchiveThread(thread.id);
+      } else {
+        await archiveThread(thread.id);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["threads", "list"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["threads", "read", thread.id],
+      });
+    } catch (error) {
+      setThreadActionError(
+        handleThreadActionError(error, "Failed to update archive status."),
+      );
+    } finally {
+      setOpenThreadMenuId(null);
+    }
+  };
+
   const isAuthenticated = account?.isAuthenticated ?? false;
   const accountEmail =
     account?.email ?? (isAuthenticated ? "Signed in" : "Not signed in");
@@ -356,6 +527,24 @@ export function AppSidebar() {
         >
           <SquarePen className="h-4 w-4 text-ink-400" />
           <span>New thread</span>
+        </Link>
+        <Link
+          to="/inbox"
+          className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 transition ${
+            inboxMatch
+              ? "bg-white/14 text-ink-50"
+              : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
+          }`}
+        >
+          <span className="flex items-center gap-3">
+            <Inbox className="h-4 w-4 text-ink-400" />
+            <span>Inbox</span>
+          </span>
+          {unreadInboxCount > 0 ? (
+            <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[0.65rem] text-sky-100">
+              {unreadInboxCount}
+            </span>
+          ) : null}
         </Link>
         <Link
           to="/automations"
@@ -458,6 +647,33 @@ export function AppSidebar() {
                       <Check className="h-3.5 w-3.5 text-emerald-300" />
                     ) : null}
                   </button>
+                  <p className="px-2 pb-1 pt-2 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+                    Group
+                  </p>
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    onClick={() => {
+                      setGroupMode("workspace");
+                      setFilterMenuOpen(false);
+                    }}
+                  >
+                    Group by workspace
+                    {groupMode === "workspace" ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-300" />
+                    ) : null}
+                  </button>
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    onClick={() => {
+                      setGroupMode("recency");
+                      setFilterMenuOpen(false);
+                    }}
+                  >
+                    Group by recency
+                    {groupMode === "recency" ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-300" />
+                    ) : null}
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -480,6 +696,7 @@ export function AppSidebar() {
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const workspace = visibleWorkspaceTree[virtualRow.index];
                 const isSelected =
+                  workspace.kind === "workspace" &&
                   selectedWorkspace &&
                   workspace.path.toLowerCase() ===
                     selectedWorkspace.toLowerCase();
@@ -511,7 +728,9 @@ export function AppSidebar() {
                           type="button"
                           className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-ink-50"
                           onClick={() => {
-                            setSelectedWorkspace(workspace.path);
+                            if (workspace.kind === "workspace") {
+                              setSelectedWorkspace(workspace.path);
+                            }
                             setExpandedWorkspaces((current) => ({
                               ...current,
                               [workspace.key]: true,
@@ -545,9 +764,16 @@ export function AppSidebar() {
                       {isExpanded ? (
                         <div className="border-t border-white/10 px-2 pb-2 pt-1">
                           {workspace.threads.length ? (
-                            workspace.threads.slice(0, 10).map((thread) => {
+                            workspace.threads.map((thread) => {
                               const isThreadSelected =
                                 thread.id === selectedThreadId;
+                              const metadata =
+                                sidebarThreadMetadata[thread.id] ?? {};
+                              const displayTitle = threadDisplayTitle(
+                                thread,
+                                sidebarThreadMetadata,
+                              );
+                              const isArchived = thread.archived === true;
                               const showDot =
                                 thread.status === "needs_review" ||
                                 thread.status === "running";
@@ -557,39 +783,140 @@ export function AppSidebar() {
                                 (changeSummary.additions > 0 ||
                                   changeSummary.deletions > 0);
                               return (
-                                <Link
+                                <div
                                   key={thread.id}
-                                  to="/t/$threadId"
-                                  params={{ threadId: thread.id }}
                                   className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[0.7rem] transition ${
                                     isThreadSelected
                                       ? "bg-flare-400/20 text-ink-50"
                                       : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
                                   }`}
-                                  onClick={() =>
-                                    setSelectedWorkspace(workspace.path)
-                                  }
                                 >
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    {showDot ? (
-                                      <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
-                                    ) : (
-                                      <span className="h-1.5 w-1.5 rounded-full border border-white/10" />
-                                    )}
-                                    <span className="truncate">
-                                      {thread.title}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[0.65rem] text-ink-500">
-                                    {showChanges ? (
-                                      <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[0.6rem]">
-                                        +{changeSummary.additions} -
-                                        {changeSummary.deletions}
+                                  <button
+                                    type="button"
+                                    className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                                    onClick={() => {
+                                      void openThread(
+                                        thread.id,
+                                        workspace.kind === "workspace"
+                                          ? workspace.path
+                                          : null,
+                                      );
+                                    }}
+                                  >
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      {showDot ? (
+                                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                                      ) : (
+                                        <span className="h-1.5 w-1.5 rounded-full border border-white/10" />
+                                      )}
+                                      <span className="truncate">
+                                        {displayTitle}
                                       </span>
+                                      {metadata.pinned ? (
+                                        <Pin className="h-3 w-3 text-amber-200" />
+                                      ) : null}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[0.65rem] text-ink-500">
+                                      {showChanges ? (
+                                        <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[0.6rem]">
+                                          +{changeSummary.additions} -
+                                          {changeSummary.deletions}
+                                        </span>
+                                      ) : null}
+                                      <span>{thread.lastUpdated}</span>
+                                    </div>
+                                  </button>
+                                  <div
+                                    className="relative"
+                                    data-thread-menu="true"
+                                  >
+                                    <button
+                                      type="button"
+                                      className="rounded-lg p-1 text-ink-400 hover:bg-white/8 hover:text-ink-100"
+                                      onClick={() => {
+                                        setOpenThreadMenuId((current) =>
+                                          current === thread.id
+                                            ? null
+                                            : thread.id,
+                                        );
+                                      }}
+                                      aria-label="Thread actions"
+                                    >
+                                      <EllipsisVertical className="h-3.5 w-3.5" />
+                                    </button>
+                                    {openThreadMenuId === thread.id ? (
+                                      <div className="surface-panel absolute right-0 top-7 z-40 w-44 p-1 text-[0.65rem] text-ink-200">
+                                        <button
+                                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                                          onClick={() => {
+                                            toggleSidebarThreadPinned(
+                                              thread.id,
+                                            );
+                                            setOpenThreadMenuId(null);
+                                          }}
+                                        >
+                                          {metadata.pinned ? "Unpin" : "Pin"}
+                                          <Pin className="h-3 w-3 text-ink-400" />
+                                        </button>
+                                        <button
+                                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                                          onClick={() => {
+                                            const nextAlias = window.prompt(
+                                              "Thread display alias",
+                                              metadata.alias ?? thread.title,
+                                            );
+                                            if (nextAlias === null) {
+                                              return;
+                                            }
+                                            const trimmed = nextAlias.trim();
+                                            setSidebarThreadAlias(
+                                              thread.id,
+                                              trimmed.length
+                                                ? trimmed
+                                                : undefined,
+                                            );
+                                            setOpenThreadMenuId(null);
+                                          }}
+                                        >
+                                          Rename
+                                          <SquarePen className="h-3 w-3 text-ink-400" />
+                                        </button>
+                                        <button
+                                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                                          onClick={() => {
+                                            void handleToggleArchive(
+                                              thread,
+                                              isArchived,
+                                            );
+                                          }}
+                                        >
+                                          {isArchived ? "Unarchive" : "Archive"}
+                                          {isArchived ? (
+                                            <ArchiveRestore className="h-3 w-3 text-ink-400" />
+                                          ) : (
+                                            <Archive className="h-3 w-3 text-ink-400" />
+                                          )}
+                                        </button>
+                                        <button
+                                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                                          onClick={() => {
+                                            setOpenThreadMenuId(null);
+                                            void openThread(
+                                              thread.id,
+                                              workspace.kind === "workspace"
+                                                ? workspace.path
+                                                : null,
+                                              true,
+                                            );
+                                          }}
+                                        >
+                                          Open changes
+                                          <ChevronRight className="h-3 w-3 text-ink-400" />
+                                        </button>
+                                      </div>
                                     ) : null}
-                                    <span>{thread.lastUpdated}</span>
                                   </div>
-                                </Link>
+                                </div>
                               );
                             })
                           ) : (
@@ -610,6 +937,11 @@ export function AppSidebar() {
             </div>
           )}
         </div>
+        {threadActionError ? (
+          <p className="mt-2 text-[0.65rem] text-rose-300">
+            {threadActionError}
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-4 space-y-2 pt-4">

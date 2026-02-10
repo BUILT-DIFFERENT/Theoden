@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,6 +18,17 @@ const mocks = vi.hoisted(() => {
     readAccountRateLimitsMock: vi.fn(),
     listWorktreesMock: vi.fn(),
     removeWorktreeMock: vi.fn(),
+    batchWriteConfigMock: vi.fn(),
+    loadConfigSnapshotMock: vi.fn(),
+    loadMergedConfigMock: vi.fn(),
+    loadMcpServerStatusesMock: vi.fn(),
+    loadAuthStatusMock: vi.fn(),
+    mcpServersFromConfigMock: vi.fn(),
+    providersFromConfigMock: vi.fn(),
+    reloadMcpServerConfigMock: vi.fn(),
+    startMcpServerOauthLoginMock: vi.fn(),
+    validateConfigMock: vi.fn(),
+    mapConfigWriteErrorMessageMock: vi.fn(),
     notificationListeners,
     subscribeNotificationsMock: vi.fn(
       (listener: (notification: { method: string }) => void) => {
@@ -92,22 +104,17 @@ vi.mock("@/app/services/cli/appServerEventHub", () => ({
 }));
 
 vi.mock("@/app/services/cli/config", () => ({
-  loadAuthStatus: () =>
-    Promise.resolve({
-      status: "unknown",
-      requiresOpenaiAuth: null,
-    }),
-  loadMergedConfig: () => Promise.resolve({}),
-  loadMcpServerStatuses: () => Promise.resolve([]),
-  mcpServersFromConfig: () => [],
-  providersFromConfig: () => [],
-  reloadMcpServerConnections: () => Promise.resolve({}),
-  startMcpServerOauthLogin: () =>
-    Promise.resolve({
-      name: "github",
-      authorizationUrl: "https://example.test/oauth",
-    }),
-  validateConfig: () => Promise.resolve({ valid: true, errors: [], keys: 0 }),
+  batchWriteConfig: mocks.batchWriteConfigMock,
+  loadAuthStatus: mocks.loadAuthStatusMock,
+  loadConfigSnapshot: mocks.loadConfigSnapshotMock,
+  loadMergedConfig: mocks.loadMergedConfigMock,
+  loadMcpServerStatuses: mocks.loadMcpServerStatusesMock,
+  mapConfigWriteErrorMessage: mocks.mapConfigWriteErrorMessageMock,
+  mcpServersFromConfig: mocks.mcpServersFromConfigMock,
+  providersFromConfig: mocks.providersFromConfigMock,
+  reloadMcpServerConfig: mocks.reloadMcpServerConfigMock,
+  startMcpServerOauthLogin: mocks.startMcpServerOauthLoginMock,
+  validateConfig: mocks.validateConfigMock,
 }));
 
 vi.mock("@/app/services/cli/commands", () => ({
@@ -137,6 +144,15 @@ vi.mock("@/app/utils/tauri", () => ({
   isTauri: () => mocks.isTauriEnabled,
 }));
 
+function renderSettingsPage() {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <SettingsPage />
+    </QueryClientProvider>,
+  );
+}
+
 describe("SettingsPage archived threads", () => {
   beforeEach(() => {
     mocks.currentSection = "archived-threads";
@@ -150,6 +166,17 @@ describe("SettingsPage archived threads", () => {
     mocks.subscribeNotificationsMock.mockClear();
     mocks.listWorktreesMock.mockReset();
     mocks.removeWorktreeMock.mockReset();
+    mocks.batchWriteConfigMock.mockReset();
+    mocks.loadConfigSnapshotMock.mockReset();
+    mocks.loadMergedConfigMock.mockReset();
+    mocks.loadMcpServerStatusesMock.mockReset();
+    mocks.loadAuthStatusMock.mockReset();
+    mocks.mcpServersFromConfigMock.mockReset();
+    mocks.providersFromConfigMock.mockReset();
+    mocks.reloadMcpServerConfigMock.mockReset();
+    mocks.startMcpServerOauthLoginMock.mockReset();
+    mocks.validateConfigMock.mockReset();
+    mocks.mapConfigWriteErrorMessageMock.mockReset();
 
     mocks.listThreadsMock.mockResolvedValue({
       data: [
@@ -170,6 +197,43 @@ describe("SettingsPage archived threads", () => {
     });
     mocks.listWorktreesMock.mockResolvedValue([]);
     mocks.removeWorktreeMock.mockResolvedValue({});
+    mocks.batchWriteConfigMock.mockResolvedValue({
+      status: "ok",
+      version: "next",
+      filePath: "C:/Users/gamer/.codex/config.toml",
+      overriddenMetadata: null,
+    });
+    mocks.loadConfigSnapshotMock.mockResolvedValue({
+      config: {},
+      origins: {},
+      layers: [],
+      writeTarget: {
+        filePath: "C:/Users/gamer/.codex/config.toml",
+        expectedVersion: "sha256:1",
+      },
+    });
+    mocks.loadMergedConfigMock.mockResolvedValue({});
+    mocks.loadMcpServerStatusesMock.mockResolvedValue([]);
+    mocks.loadAuthStatusMock.mockResolvedValue({
+      status: "unknown",
+      requiresOpenaiAuth: null,
+    });
+    mocks.mcpServersFromConfigMock.mockReturnValue([]);
+    mocks.providersFromConfigMock.mockReturnValue([]);
+    mocks.reloadMcpServerConfigMock.mockResolvedValue({});
+    mocks.startMcpServerOauthLoginMock.mockResolvedValue({
+      name: "github",
+      authorizationUrl: "https://example.test/oauth",
+    });
+    mocks.validateConfigMock.mockResolvedValue({
+      valid: true,
+      errors: [],
+      warnings: [],
+      keys: [],
+    });
+    mocks.mapConfigWriteErrorMessageMock.mockImplementation((error: unknown) =>
+      error instanceof Error ? error.message : "config write failed",
+    );
   });
 
   afterEach(() => {
@@ -177,7 +241,7 @@ describe("SettingsPage archived threads", () => {
   });
 
   it("loads archived threads and restores an individual thread", async () => {
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Open archived threads" }),
@@ -197,7 +261,7 @@ describe("SettingsPage archived threads", () => {
 
   it("includes parity settings sections in navigation", () => {
     mocks.currentSection = "general";
-    render(<SettingsPage />);
+    renderSettingsPage();
     expect(screen.getByRole("button", { name: "Account" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Data controls" }),
@@ -232,7 +296,7 @@ describe("SettingsPage archived threads", () => {
         planType: "pro",
       });
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     expect(await screen.findByText("Used: 41%")).toBeInTheDocument();
 
@@ -244,5 +308,32 @@ describe("SettingsPage archived threads", () => {
       expect(mocks.readAccountRateLimitsMock).toHaveBeenCalledTimes(2);
     });
     expect(await screen.findByText("Used: 52%")).toBeInTheDocument();
+  });
+
+  it("persists added MCP server settings through config writes", async () => {
+    mocks.currentSection = "mcp-servers";
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add MCP server" }));
+    fireEvent.change(screen.getByPlaceholderText("github"), {
+      target: { value: "github" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("https://example.mcp.local"), {
+      target: { value: "https://mcp.example.local" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
+
+    await waitFor(() => {
+      expect(mocks.batchWriteConfigMock).toHaveBeenCalled();
+    });
+    expect(mocks.reloadMcpServerConfigMock).toHaveBeenCalled();
+    expect(mocks.batchWriteConfigMock.mock.calls[0]?.[0]).toMatchObject({
+      edits: [
+        {
+          keyPath: "mcp_servers",
+          mergeStrategy: "replace",
+        },
+      ],
+    });
   });
 });

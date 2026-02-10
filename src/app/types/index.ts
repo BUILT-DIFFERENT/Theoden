@@ -243,3 +243,38 @@ export interface PersistedAtomPayload {
   key: string;
   value: unknown;
 }
+
+export interface CloudRunDescriptor {
+  runId: string;
+  threadId: string;
+  taskId: string | null;
+  url: string | null;
+  environmentId: string;
+  branch: string | null;
+  attempts: number;
+  cwd: string | null;
+  status: "queued" | "running" | "completed" | "failed" | "interrupted";
+  startedAt: number;
+  updatedAt: number;
+}
+
+export interface CloudRunStatusEvent {
+  runId: string;
+  threadId: string;
+  status: CloudRunDescriptor["status"];
+  detail: string | null;
+  taskId: string | null;
+  url: string | null;
+  updatedAt: number;
+}
+
+export interface McpServerDraft {
+  id: string;
+  transport: "url" | "command";
+  endpointValue: string;
+  enabled: boolean;
+}
+
+export interface McpServerFormState extends McpServerDraft {
+  originalId: string | null;
+}
