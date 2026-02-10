@@ -48,14 +48,16 @@ export function registerAuthNotification(
 ): AuthNotificationEvents {
   const accountLoginCompleted = parseAccountLoginCompleted(notification);
   if (accountLoginCompleted) {
-    accountLoginListeners.forEach((listener) =>
-      listener(accountLoginCompleted),
-    );
+    accountLoginListeners.forEach((listener) => {
+      listener(accountLoginCompleted);
+    });
   }
 
   const mcpOauthLoginCompleted = parseMcpOauthLoginCompleted(notification);
   if (mcpOauthLoginCompleted) {
-    mcpOauthListeners.forEach((listener) => listener(mcpOauthLoginCompleted));
+    mcpOauthListeners.forEach((listener) => {
+      listener(mcpOauthLoginCompleted);
+    });
   }
 
   return {

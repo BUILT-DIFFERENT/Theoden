@@ -358,6 +358,8 @@ export function AppSidebar() {
         if (result.type === "chatgpt") {
           setPendingChatgptLoginId(result.loginId);
           window.open(result.authUrl, "_blank", "noopener,noreferrer");
+          showAccountMessage("Complete sign-in in your browser.");
+          return;
         }
         await queryClient.invalidateQueries({ queryKey: ["account", "read"] });
         showAccountMessage("Signed in.");
