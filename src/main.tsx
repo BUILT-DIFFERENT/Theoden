@@ -6,6 +6,7 @@ import ReactDOM from "react-dom/client";
 import { ThemeSync } from "@/app/components/layout/ThemeSync";
 import { router } from "@/app/router";
 import { initializeElectronCompatBridge } from "@/app/services/bridge/electronCompat";
+import { getHostRendererMode } from "@/app/services/host/runtime";
 import { AppUiProvider } from "@/app/state/appUi";
 import "@/styles/parity-keyframes.css";
 import "@/styles/parity-tokens.css";
@@ -26,16 +27,24 @@ const root = document.getElementById("root");
 if (!root) {
   throw new Error("Root element not found");
 }
+const rootElement = root;
 
-initializeElectronCompatBridge();
+async function bootstrap() {
+  const rendererMode = await getHostRendererMode();
+  if (rendererMode.mode === "compat") {
+    initializeElectronCompatBridge();
+  }
 
-ReactDOM.createRoot(root).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AppUiProvider>
-        <ThemeSync />
-        <RouterProvider router={router} />
-      </AppUiProvider>
-    </QueryClientProvider>
-  </React.StrictMode>,
-);
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <AppUiProvider>
+          <ThemeSync />
+          <RouterProvider router={router} />
+        </AppUiProvider>
+      </QueryClientProvider>
+    </React.StrictMode>,
+  );
+}
+
+void bootstrap();

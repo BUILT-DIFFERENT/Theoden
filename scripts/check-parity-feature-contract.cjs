@@ -21,6 +21,7 @@ const featureContract = fs.readFileSync(featureContractPath, "utf8");
 
 const requiredHostCommands = [
   "host_dispatch_deeplink",
+  "host_get_renderer_mode",
   "host_get_update_state",
   "host_check_updates",
   "bridge_message_from_view",
@@ -56,6 +57,7 @@ const missingChannelsInContract = requiredBridgeChannels.filter(
 
 const requiredWrappers = [
   "dispatchHostDeeplink",
+  "getHostRendererMode",
   "getHostUpdateState",
   "checkForHostUpdates",
   "subscribeHostDeeplinks",

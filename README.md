@@ -35,8 +35,10 @@ The goal of this repository is to deliver a parity-focused Tauri implementation 
 
 - `src/`: React rewrite code (kept in-repo for staged refactor, not the default desktop runtime renderer)
 - `src-tauri/`: Tauri host (window/menu setup, app-server bridge commands)
-- `out/electron-ui/`: synced Electron renderer bundle used by desktop runtime (`frontendDist`)
+- `out/electron-ui/`: synced Electron renderer bundle used for `compat` desktop renderer mode
+- `out/desktop-runtime/`: prepared renderer output consumed by Tauri (`frontendDist`)
 - `sync-electron-ui.cjs` + `scripts/sync-electron-ui.cjs`: build-time sync pipeline from `third_party/CodexDesktop-Rebuild/src/webview`
+- `scripts/prepare-desktop-runtime.cjs`: desktop renderer mode preparation (`compat`/`rewrite`)
 - `codex-rs/`: Rust workspace for Codex core/app-server/protocol crates
 - `third_party/CodexDesktop-Rebuild/`: official Codex desktop app submodule used for runtime parity tracing/debugging
 - `docs/custom/`: implementation and parity plan docs
@@ -79,6 +81,13 @@ Run as desktop app:
 pnpm desktop:dev
 ```
 
+Run desktop app in explicit renderer mode:
+
+```bash
+pnpm desktop:dev:compat
+pnpm desktop:dev:rewrite
+```
+
 Sync Electron UI bundle only:
 
 ```bash
@@ -104,22 +113,31 @@ pnpm build
 - `pnpm frontend:test`
 - `pnpm frontend:build`
 - `pnpm desktop:build`
+- `pnpm desktop:build:compat`
+- `pnpm desktop:build:rewrite`
+- `pnpm parity:check:baseline-lock`
+- `pnpm parity:check:bridge-boundary`
 - `pnpm parity:test:routes`
 - `pnpm parity:test:cloud-sidebar-settings`
 - `pnpm parity:audit:check`
 
 ## Command Map
 
-| Goal                                 | Command                                   |
-| ------------------------------------ | ----------------------------------------- |
-| Web dev server                       | `pnpm frontend:dev`                       |
-| Desktop dev app (Electron UI bundle) | `pnpm desktop:dev`                        |
-| Frontend production bundle           | `pnpm frontend:build`                     |
-| Desktop production build             | `pnpm build` (or `pnpm desktop:build`)    |
-| Frontend tests                       | `pnpm frontend:test`                      |
-| Route parity snapshot                | `pnpm parity:test:routes`                 |
-| Cloud/sidebar/settings parity suite  | `pnpm parity:test:cloud-sidebar-settings` |
-| Official audit artifact gate         | `pnpm parity:audit:check`                 |
+| Goal                                           | Command                                   |
+| ---------------------------------------------- | ----------------------------------------- |
+| Web dev server                                 | `pnpm frontend:dev`                       |
+| Desktop dev app (default compat mode)          | `pnpm desktop:dev`                        |
+| Desktop dev app (forced compat mode)           | `pnpm desktop:dev:compat`                 |
+| Desktop dev app (rewrite mode)                 | `pnpm desktop:dev:rewrite`                |
+| Frontend production bundle                     | `pnpm frontend:build`                     |
+| Desktop production build (default compat mode) | `pnpm build` (or `pnpm desktop:build`)    |
+| Desktop production build (forced rewrite mode) | `pnpm desktop:build:rewrite`              |
+| Frontend tests                                 | `pnpm frontend:test`                      |
+| Route parity snapshot                          | `pnpm parity:test:routes`                 |
+| Cloud/sidebar/settings parity suite            | `pnpm parity:test:cloud-sidebar-settings` |
+| Baseline lock check                            | `pnpm parity:check:baseline-lock`         |
+| Rewrite bridge boundary check                  | `pnpm parity:check:bridge-boundary`       |
+| Official audit artifact gate                   | `pnpm parity:audit:check`                 |
 
 ## Parity CI Gate
 
@@ -179,6 +197,7 @@ Key submodule debug files:
 
 - Frontend service calls use app-server JSON-RPC methods (for example `thread/*`, `turn/*`, `config/*`, `skills/*`, `command/exec`).
 - `src-tauri/src/main.rs` owns process lifecycle for `codex app-server` and forwards notifications/requests into the webview.
+- Desktop runtime is prepared in `out/desktop-runtime` with mode selection through `CODEX_DESKTOP_RENDERER_MODE` (`compat` default, `rewrite` opt-in).
 - Host-side persisted state, automations/inbox, and terminal command streaming are exposed through Tauri commands (`persisted_atom_*`, `automation_*`, `inbox_*`, `terminal_*`).
 - Automation persistence is stored under `$CODEX_HOME/sqlite/codex-dev.db` and TOML definitions under `$CODEX_HOME/automations/<id>/automation.toml`.
 - Workspace-aware UI state is centralized in React providers under `src/app/state`.

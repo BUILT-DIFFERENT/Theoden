@@ -160,8 +160,14 @@ jobs:
       - name: Motion/token contract
         run: pnpm parity:check:ui-motion
 
+      - name: Baseline lock contract
+        run: pnpm parity:check:baseline-lock
+
       - name: Runtime/bridge feature contract
         run: pnpm parity:check:feature-contract
+
+      - name: Rewrite bridge boundary contract
+        run: pnpm parity:check:bridge-boundary
 
   parity-results:
     name: Parity gate results (required)

@@ -33,7 +33,7 @@ use git_worker_compat::handle_git_worker;
 use paths::codex_home_dir;
 use runtime_contract::{
     apply_update_transition, parse_codex_deeplink, BridgeMessageFromViewParams,
-    HostBuildFlavorPayload, HostUpdateStatePayload, HostUpdateTransition,
+    HostBuildFlavorPayload, HostRendererModePayload, HostUpdateStatePayload, HostUpdateTransition,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -73,9 +73,17 @@ impl RuntimeHostState {
     }
 }
 
+fn resolve_renderer_mode() -> String {
+    match std::env::var("CODEX_DESKTOP_RENDERER_MODE") {
+        Ok(mode) if mode.eq_ignore_ascii_case("rewrite") => "rewrite".to_string(),
+        _ => "compat".to_string(),
+    }
+}
+
 struct ElectronCompatRuntimeState {
     sentry: SentryInitOptions,
     build_flavor: String,
+    renderer_mode: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -460,6 +468,15 @@ fn bridge_get_build_flavor(
         } else {
             "release".to_string()
         },
+    }
+}
+
+#[tauri::command]
+fn host_get_renderer_mode(
+    state: tauri::State<'_, Arc<ElectronCompatRuntimeState>>,
+) -> HostRendererModePayload {
+    HostRendererModePayload {
+        mode: state.renderer_mode.clone(),
     }
 }
 
@@ -2059,6 +2076,7 @@ async fn reconcile_automation_run_completion(
 }
 
 fn main() {
+    let renderer_mode = resolve_renderer_mode();
     let build_flavor = std::env::var("CODEX_DESKTOP_BUILD_FLAVOR")
         .or_else(|_| std::env::var("CODEX_BUILD_FLAVOR"))
         .unwrap_or_else(|_| {
@@ -2078,6 +2096,7 @@ fn main() {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
         },
         build_flavor,
+        renderer_mode,
     };
 
     tauri::Builder::default()
@@ -2211,6 +2230,7 @@ fn main() {
             cloud_run_cancel,
             cloud_run_list,
             bridge_get_build_flavor,
+            host_get_renderer_mode,
             bridge_message_from_view,
             bridge_get_sentry_init_options,
             bridge_trigger_sentry_test,

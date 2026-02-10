@@ -16,5 +16,5 @@ Generated: February 10, 2026
 - Status: pass
 - Verified:
   - Scoped bridge channels are present in compatibility adapter.
-  - Host deeplink/update/build-flavor/bridge command surfaces exist.
+  - Host deeplink/update/build-flavor/renderer-mode/bridge command surfaces exist.
   - Frontend typed wrappers exist for command/event contract usage.

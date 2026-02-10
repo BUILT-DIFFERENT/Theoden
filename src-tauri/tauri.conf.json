@@ -5,9 +5,9 @@
   "version": "0.1.0",
   "identifier": "com.openai.codex.desktop",
   "build": {
-    "beforeBuildCommand": "pnpm sync:electron-ui",
-    "beforeDevCommand": "pnpm sync:electron-ui",
-    "frontendDist": "../out/electron-ui"
+    "beforeBuildCommand": "pnpm prepare:desktop-runtime",
+    "beforeDevCommand": "pnpm prepare:desktop-runtime",
+    "frontendDist": "../out/desktop-runtime"
   },
   "app": {
     "windows": [

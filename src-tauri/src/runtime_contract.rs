@@ -57,6 +57,12 @@ pub struct HostBuildFlavorPayload {
     pub channel: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostRendererModePayload {
+    pub mode: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeMessageFromViewParams {
@@ -218,8 +224,7 @@ mod tests {
         assert_eq!(checking.status, HostUpdateStatus::Checking);
         assert_eq!(checking.checked_at, None);
 
-        let up_to_date =
-            apply_update_transition(checking, HostUpdateTransition::MarkUpToDate, 30);
+        let up_to_date = apply_update_transition(checking, HostUpdateTransition::MarkUpToDate, 30);
         assert_eq!(up_to_date.status, HostUpdateStatus::UpToDate);
         assert_eq!(up_to_date.checked_at, Some(30));
 

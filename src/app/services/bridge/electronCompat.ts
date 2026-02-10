@@ -1,10 +1,5 @@
-import {
-  getBridgeBuildFlavor,
-  sendBridgeMessageFromView,
-  showBridgeContextMenu,
-  subscribeBridgeMessageForView,
-  type HostBridgeMessage,
-} from "@/app/services/host/runtime";
+import { hostAdapter } from "@/app/services/host/adapter";
+import { type HostBridgeMessage } from "@/app/services/host/runtime";
 import { isTauri } from "@/app/utils/tauri";
 
 type BridgeListener = (payload: unknown) => void;
@@ -64,26 +59,26 @@ function unsubscribe(channel: string, listener: BridgeListener) {
 const bridge: ElectronBridgeCompat = {
   send(channel, payload) {
     if (channel === CHANNEL_SHOW_CONTEXT_MENU) {
-      void showBridgeContextMenu(payload);
+      void hostAdapter.runtime.showBridgeContextMenu(payload);
       return;
     }
     if (
       channel === CHANNEL_MESSAGE_FROM_VIEW ||
       channel === CHANNEL_MESSAGE_FOR_VIEW
     ) {
-      void sendBridgeMessageFromView({ channel, payload });
+      void hostAdapter.runtime.sendBridgeMessageFromView({ channel, payload });
       return;
     }
-    void sendBridgeMessageFromView({ channel, payload });
+    void hostAdapter.runtime.sendBridgeMessageFromView({ channel, payload });
   },
   async invoke(channel, payload) {
     if (channel === CHANNEL_GET_BUILD_FLAVOR) {
-      return getBridgeBuildFlavor();
+      return hostAdapter.runtime.getBridgeBuildFlavor();
     }
     if (channel === CHANNEL_SHOW_CONTEXT_MENU) {
-      return showBridgeContextMenu(payload);
+      return hostAdapter.runtime.showBridgeContextMenu(payload);
     }
-    await sendBridgeMessageFromView({ channel, payload });
+    await hostAdapter.runtime.sendBridgeMessageFromView({ channel, payload });
     return null;
   },
   on(channel, listener) {
@@ -113,7 +108,7 @@ export function initializeElectronCompatBridge() {
     return;
   }
 
-  void subscribeBridgeMessageForView((payload) => {
+  void hostAdapter.runtime.subscribeBridgeMessageForView((payload) => {
     forwardHostMessage(payload);
   });
 }
