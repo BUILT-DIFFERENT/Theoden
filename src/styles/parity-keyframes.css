@@ -1,0 +1,173 @@
+@keyframes _loading-bar-slide_1g9nv_1 {
+  0% {
+    transform: translateX(-32%);
+  }
+  100% {
+    transform: translateX(132%);
+  }
+}
+
+@keyframes _trace-recording-float_19aiq_1 {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes codex-dialog-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes codex-dialog-overlay {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes edge-fade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes edge-fade-top {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loading-shimmer {
+  0% {
+    background-position: -240px 0;
+  }
+  100% {
+    background-position: 240px 0;
+  }
+}
+
+@keyframes ping {
+  75%,
+  100% {
+    opacity: 0;
+    transform: scale(2);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sync-dot-pass-down {
+  0% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(2px);
+  }
+}
+
+@keyframes sync-dot-pass-up {
+  0% {
+    transform: translateY(2px);
+  }
+  100% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes toast-open {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-close {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes worked-for-content-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes worked-for-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-codex-dialog-enter {
+  animation: codex-dialog-enter var(--default-transition-duration, 180ms)
+    var(--default-transition-timing-function, ease-out) both;
+}
+
+.animate-codex-dialog-overlay {
+  animation: codex-dialog-overlay var(--default-transition-duration, 180ms)
+    ease-out both;
+}
+
+.animate-toast-open {
+  animation: toast-open var(--default-transition-duration, 180ms)
+    var(--default-transition-timing-function, ease-out) both;
+}
+
+.animate-worked-for-enter {
+  animation: worked-for-enter var(--default-transition-duration, 180ms)
+    var(--default-transition-timing-function, ease-out) both;
+}

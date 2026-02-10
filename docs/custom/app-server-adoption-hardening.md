@@ -32,12 +32,12 @@ This document records the documented-surface hardening completed for app-server 
 - `src/app/routes/LoginPage.tsx` now exposes cancel for pending ChatGPT login flows and routes cancellation through documented `account/login/cancel`.
 - `src/app/routes/SettingsPage.tsx` now writes MCP server map through documented `config/value/write` and loads requirements via `configRequirements/read`.
 
-## Deferred API-Overview Methods (No New Surface In This Phase)
+## Previously Deferred Methods (Now Activated In UI)
 
-- `app/list`
-- `collaborationMode/list`
-- `thread/fork`
-- `thread/loaded/list`
-- `thread/rollback`
+- `app/list` (plan summary runtime surface)
+- `collaborationMode/list` (plan summary runtime surface)
+- `thread/fork` (thread topbar menu action)
+- `thread/loaded/list` (thread topbar + plan summary)
+- `thread/rollback` (thread topbar menu action)
 
-These remain intentionally deferred for dedicated UI/product work and are already wrapped for test-level method coverage.
+These methods are no longer test-only wrappers and now have runtime-facing loading/error handling.

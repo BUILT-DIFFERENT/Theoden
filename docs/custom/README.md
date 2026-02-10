@@ -8,6 +8,12 @@ Current docs:
 
 - `docs/custom/plan.md`: gap analysis and implementation parity checklist.
 - `docs/custom/parity-backend-v1.md`: backend parity contract, acceptance matrix, and intentional deviations.
+- `docs/custom/parity-scope-v2.md`: scoped route/runtime parity contract for Windows/Linux.
+- `docs/custom/parity-gap-registry.json`: machine-readable parity gap tracker with closure status.
+- `docs/custom/parity-closure-report.md`: closure evidence map for scoped parity IDs.
+- `docs/custom/parity-route-report.md`: scoped route contract checker evidence.
+- `docs/custom/parity-motion-report.md`: keyframe/token parity checker evidence.
+- `docs/custom/parity-runtime-contract-report.md`: host/bridge contract checker evidence.
 - `docs/custom/app-server-adoption-hardening.md`: app-server documented-surface adoption status, outbound method policy, and deferred API-overview backlog.
 - `docs/custom/signal-parity-map-tauri.md`: closed signal-level parity mapping for thread/turn/approval/auth + OAuth coverage.
 - `docs/custom/codex-app.md`: consolidated product/UX specification.

@@ -5,7 +5,10 @@ import ReactDOM from "react-dom/client";
 
 import { ThemeSync } from "@/app/components/layout/ThemeSync";
 import { router } from "@/app/router";
+import { initializeElectronCompatBridge } from "@/app/services/bridge/electronCompat";
 import { AppUiProvider } from "@/app/state/appUi";
+import "@/styles/parity-keyframes.css";
+import "@/styles/parity-tokens.css";
 import "@/styles/index.css";
 
 const queryClient = new QueryClient({
@@ -23,6 +26,8 @@ const root = document.getElementById("root");
 if (!root) {
   throw new Error("Root element not found");
 }
+
+initializeElectronCompatBridge();
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>

@@ -1,0 +1,99 @@
+{
+  "version": 2,
+  "updatedAt": "2026-02-10",
+  "owner": "desktop-parity",
+  "requiredMotionContract": {
+    "keyframes": [
+      "codex-dialog-enter",
+      "codex-dialog-overlay",
+      "loading-shimmer",
+      "toast-open",
+      "toast-close",
+      "worked-for-enter",
+      "worked-for-content-enter",
+      "edge-fade",
+      "edge-fade-top",
+      "sync-dot-pass-down",
+      "sync-dot-pass-up",
+      "spin",
+      "ping",
+      "pulse"
+    ],
+    "tokens": [
+      "--color-background-surface",
+      "--color-background-elevated-primary",
+      "--color-border",
+      "--color-border-heavy",
+      "--color-text-foreground",
+      "--color-text-foreground-secondary",
+      "--color-text-foreground-tertiary",
+      "--color-token-text-primary",
+      "--color-token-text-secondary",
+      "--color-token-text-tertiary",
+      "--color-token-main-surface-primary",
+      "--color-token-side-bar-background",
+      "--color-token-menu-background",
+      "--color-token-menu-border",
+      "--color-token-input-background",
+      "--color-token-input-border",
+      "--color-token-input-foreground",
+      "--color-token-link",
+      "--color-token-button-background",
+      "--color-token-button-border",
+      "--color-token-button-foreground",
+      "--default-transition-duration",
+      "--default-transition-timing-function",
+      "--thread-content-max-width",
+      "--thread-composer-max-width",
+      "--conversation-block-gap",
+      "--conversation-tool-assistant-gap",
+      "--radius-xl",
+      "--radius-2xl",
+      "--padding-panel"
+    ]
+  },
+  "gaps": [
+    {
+      "id": "routes.surface.v2",
+      "category": "routes",
+      "status": "closed",
+      "owner": "frontend",
+      "summary": "Scoped parity routes implemented in router and validated by route scope checker."
+    },
+    {
+      "id": "runtime.deeplink.update",
+      "category": "runtime-contract",
+      "status": "closed",
+      "owner": "tauri-host",
+      "summary": "Deeplink parsing/dispatch and update-state signaling exposed through typed host commands/events."
+    },
+    {
+      "id": "rpc.deferred.activation",
+      "category": "deferred-rpc",
+      "status": "closed",
+      "owner": "frontend",
+      "summary": "Deferred API-overview methods wired to production UI entry points with visible failure handling."
+    },
+    {
+      "id": "bridge.compat.layer",
+      "category": "bridge channels",
+      "status": "closed",
+      "owner": "frontend",
+      "summary": "Scoped Electron compatibility globals/channels added with host bridge command wiring."
+    },
+    {
+      "id": "motion.token.contract",
+      "category": "motion/tokens",
+      "status": "closed",
+      "owner": "design-system",
+      "summary": "Parity token and keyframe contract files added with CI checker coverage."
+    },
+    {
+      "id": "ux.flows.hardening",
+      "category": "UX flows",
+      "status": "in_progress",
+      "owner": "frontend",
+      "summary": "Thread/diff/skills/settings/automations parity flows hardened with documented exceptions."
+    }
+  ]
+}

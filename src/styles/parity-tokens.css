@@ -1,0 +1,51 @@
+:root {
+  --color-background-surface: #0a1326;
+  --color-background-elevated-primary: rgba(12, 20, 38, 0.92);
+  --color-border: rgba(255, 255, 255, 0.14);
+  --color-border-heavy: rgba(255, 255, 255, 0.24);
+  --color-text-foreground: #f6f8fb;
+  --color-text-foreground-secondary: #c7d4ea;
+  --color-text-foreground-tertiary: #8fa0bc;
+  --color-token-text-primary: var(--color-text-foreground);
+  --color-token-text-secondary: var(--color-text-foreground-secondary);
+  --color-token-text-tertiary: var(--color-text-foreground-tertiary);
+  --color-token-main-surface-primary: var(--color-background-surface);
+  --color-token-side-bar-background: rgba(16, 29, 56, 0.78);
+  --color-token-menu-background: rgba(9, 15, 28, 0.96);
+  --color-token-menu-border: var(--color-border);
+  --color-token-input-background: rgba(0, 0, 0, 0.24);
+  --color-token-input-border: rgba(255, 255, 255, 0.14);
+  --color-token-input-foreground: #e7edfa;
+  --color-token-link: #90bbff;
+  --color-token-button-background: rgba(132, 167, 255, 0.14);
+  --color-token-button-border: rgba(132, 167, 255, 0.52);
+  --color-token-button-foreground: #eef3ff;
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  --thread-content-max-width: 76ch;
+  --thread-composer-max-width: 980px;
+  --conversation-block-gap: 1rem;
+  --conversation-tool-assistant-gap: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1rem;
+  --padding-panel: 1rem;
+}
+
+:root[data-theme="light"] {
+  --color-background-surface: #f5f8ff;
+  --color-background-elevated-primary: rgba(255, 255, 255, 0.96);
+  --color-border: rgba(19, 24, 35, 0.16);
+  --color-border-heavy: rgba(19, 24, 35, 0.26);
+  --color-text-foreground: #101724;
+  --color-text-foreground-secondary: #304463;
+  --color-text-foreground-tertiary: #50617f;
+  --color-token-side-bar-background: rgba(225, 234, 247, 0.86);
+  --color-token-menu-background: rgba(255, 255, 255, 0.98);
+  --color-token-input-background: rgba(255, 255, 255, 0.95);
+  --color-token-input-border: rgba(20, 28, 42, 0.2);
+  --color-token-input-foreground: #121723;
+  --color-token-link: #2f66c8;
+  --color-token-button-background: rgba(74, 122, 232, 0.16);
+  --color-token-button-border: rgba(74, 122, 232, 0.42);
+  --color-token-button-foreground: #0f1e44;
+}

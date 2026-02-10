@@ -6,7 +6,11 @@ on:
       - "src/app/components/sidebar/**"
       - "src/app/routes/**"
       - "src/app/services/cli/**"
+      - "src/app/services/bridge/**"
+      - "src/app/services/host/**"
+      - "src/styles/**"
       - "src-tauri/src/**"
+      - "scripts/check-parity-*.cjs"
       - "docs/custom/**"
       - ".github/workflows/tauri-parity-gates.yml"
       - "package.json"
@@ -129,6 +133,36 @@ jobs:
       - name: Verify official audit artifact
         run: pnpm parity:audit:check
 
+  parity-contract-checks:
+    name: Parity contract checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Route scope contract
+        run: pnpm parity:check:routes-scope
+
+      - name: Motion/token contract
+        run: pnpm parity:check:ui-motion
+
+      - name: Runtime/bridge feature contract
+        run: pnpm parity:check:feature-contract
+
   parity-results:
     name: Parity gate results (required)
     needs:
@@ -137,6 +171,7 @@ jobs:
       - parity-route-snapshot
       - parity-cloud-sidebar-settings
       - official-audit-gate
+      - parity-contract-checks
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -148,3 +183,4 @@ jobs:
           [[ "${{ needs.parity-route-snapshot.result }}" == "success" ]] || exit 1
           [[ "${{ needs.parity-cloud-sidebar-settings.result }}" == "success" ]] || exit 1
           [[ "${{ needs.official-audit-gate.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.parity-contract-checks.result }}" == "success" ]] || exit 1

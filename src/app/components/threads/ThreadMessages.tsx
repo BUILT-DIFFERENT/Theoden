@@ -368,7 +368,7 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
               ) : null}
               {typeof message.workedDurationMs === "number" &&
               message.workedDurationMs > 0 ? (
-                <p className="mt-3 text-right text-[0.68rem] text-ink-400">
+                <p className="animate-worked-for-enter mt-3 text-right text-[0.68rem] text-ink-400">
                   Worked for {formatWorkedDuration(message.workedDurationMs)}
                 </p>
               ) : null}

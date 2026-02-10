@@ -594,8 +594,8 @@ export function SkillsPage() {
       </section>
 
       {newSkillOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="surface-panel w-full max-w-lg p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 animate-codex-dialog-overlay">
+          <div className="surface-panel animate-codex-dialog-enter w-full max-w-lg p-5">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-lg text-ink-50">
                 Add skill path
@@ -647,8 +647,8 @@ export function SkillsPage() {
       ) : null}
 
       {detailSkill ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="surface-panel w-full max-w-lg p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 animate-codex-dialog-overlay">
+          <div className="surface-panel animate-codex-dialog-enter w-full max-w-lg p-5">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-lg text-ink-50">
                 {detailSkill.name}

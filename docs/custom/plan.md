@@ -459,3 +459,14 @@ The real app shows git-related UI in at least two ways:
 - [ ] ~00:00:20 “APP‑SERVER UNAVAILABLE” blocking state
 - [ ] ~00:01:10 Automations route still blocked by the same error
 
+
+## Parity owner checklist (V2)
+
+- [ ] `routes.surface.v2` owner: frontend
+- [ ] `runtime.deeplink.update` owner: tauri-host
+- [ ] `rpc.deferred.activation` owner: frontend
+- [ ] `bridge.compat.layer` owner: frontend
+- [ ] `motion.token.contract` owner: design-system
+- [ ] `ux.flows.hardening` owner: frontend
+
+Reference tracker: `docs/custom/parity-gap-registry.json`.

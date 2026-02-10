@@ -14,6 +14,7 @@ import { startAppServer } from "@/app/services/cli/appServer";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useInteractionAudit } from "@/app/services/dev/useInteractionAudit";
+import { subscribeHostDeeplinks } from "@/app/services/host/runtime";
 import {
   executeMenuCommand,
   type MenuCommandId,
@@ -25,7 +26,10 @@ import {
 } from "@/app/state/appServerHealth";
 import { useAppUi } from "@/app/state/appUi";
 import { EnvironmentUiProvider } from "@/app/state/environmentUi";
-import { defaultSettingsSection } from "@/app/state/settingsData";
+import {
+  defaultSettingsSection,
+  settingsSections,
+} from "@/app/state/settingsData";
 import { ThreadUiProvider, type ThreadModal } from "@/app/state/threadUi";
 import { WorkspaceUiProvider } from "@/app/state/workspaceUi";
 import { isTauri } from "@/app/utils/tauri";
@@ -41,6 +45,12 @@ export function AppShell() {
   const welcomeMatch = matchRoute({ to: "/welcome" });
   const selectWorkspaceMatch = matchRoute({ to: "/select-workspace" });
   const skillsMatch = matchRoute({ to: "/skills" });
+  const diffMatch = matchRoute({ to: "/diff" });
+  const filePreviewMatch = matchRoute({ to: "/file-preview" });
+  const planSummaryMatch = matchRoute({ to: "/plan-summary" });
+  const transcribeMatch = matchRoute({ to: "/transcribe" });
+  const remoteTaskMatch = matchRoute({ to: "/remote/$taskId" });
+  const worktreeInitMatch = matchRoute({ to: "/worktree-init-v2/$pendingId" });
   const settingsMatch = matchRoute({ to: "/settings/$section" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const { thread } = useThreadDetail(threadId);
@@ -196,6 +206,66 @@ export function AppShell() {
     };
   }, [isDesktop, scheduleReconnect]);
 
+  useEffect(() => {
+    if (!isDesktop) {
+      return;
+    }
+    let unlisten: (() => void) | null = null;
+    void subscribeHostDeeplinks((payload) => {
+      if (payload.route === "/settings" && payload.section) {
+        const section = settingsSections.some(
+          (item) => item.id === payload.section,
+        )
+          ? payload.section
+          : defaultSettingsSection;
+        void navigate({
+          to: "/settings/$section",
+          params: {
+            section: section as (typeof settingsSections)[number]["id"],
+          },
+        });
+        return;
+      }
+      if (payload.route === "/skills") {
+        void navigate({ to: "/skills" });
+        return;
+      }
+      if (payload.route === "/automations") {
+        void navigate({ to: "/automations" });
+        return;
+      }
+      if (payload.route === "/") {
+        void navigate({ to: "/" });
+        return;
+      }
+      if (payload.route === "/t" && payload.threadId) {
+        void navigate({
+          to: "/t/$threadId",
+          params: { threadId: payload.threadId },
+        });
+        return;
+      }
+      if (payload.route === "/remote" && payload.taskId) {
+        void navigate({
+          to: "/remote/$taskId",
+          params: { taskId: payload.taskId },
+        });
+        return;
+      }
+      if (payload.route === "/worktree-init-v2" && payload.pendingId) {
+        void navigate({
+          to: "/worktree-init-v2/$pendingId",
+          params: { pendingId: payload.pendingId },
+        });
+      }
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [isDesktop, navigate]);
+
   const handleMenuCommand = useCallback(
     async (command: MenuCommandId) => {
       const closeCurrentWindow = async () => {
@@ -303,23 +373,23 @@ export function AppShell() {
     [appServerError, appServerStatus, reconnectAttempts, restartAppServer],
   );
 
-  const topBarTitle = automationsMatch
-    ? "Automations"
-    : inboxMatch
-      ? "Inbox"
-      : loginMatch
-        ? "Login"
-        : welcomeMatch
-          ? "Welcome"
-          : selectWorkspaceMatch
-            ? "Select workspace"
-            : skillsMatch
-              ? "Skills"
-              : settingsMatch
-                ? "Settings"
-                : threadMatch
-                  ? "Thread"
-                  : "Codex";
+  const topBarTitle = (() => {
+    if (automationsMatch) return "Automations";
+    if (inboxMatch) return "Inbox";
+    if (loginMatch) return "Login";
+    if (welcomeMatch) return "Welcome";
+    if (selectWorkspaceMatch) return "Select workspace";
+    if (skillsMatch) return "Skills";
+    if (diffMatch) return "Diff";
+    if (filePreviewMatch) return "File preview";
+    if (planSummaryMatch) return "Plan summary";
+    if (transcribeMatch) return "Transcribe";
+    if (remoteTaskMatch) return "Remote task";
+    if (worktreeInitMatch) return "Worktree init";
+    if (settingsMatch) return "Settings";
+    if (threadMatch) return "Thread";
+    return "Codex";
+  })();
   const topBarVariant = threadMatch
     ? "thread"
     : newThreadMatch

@@ -27,7 +27,7 @@ export function AppServerRouteBoundary({
     <div className="flex flex-col gap-4">
       {showBanner ? (
         <div
-          className="surface-panel px-4 py-3 text-xs text-ink-200"
+          className="surface-panel animate-toast-open px-4 py-3 text-xs text-ink-200"
           role="status"
           aria-live="polite"
         >
@@ -46,7 +46,7 @@ export function AppServerRouteBoundary({
       ) : null}
       {showError ? (
         <div
-          className="surface-panel px-4 py-3 text-xs text-ink-200"
+          className="surface-panel animate-toast-open px-4 py-3 text-xs text-ink-200"
           role="status"
           aria-live="polite"
         >

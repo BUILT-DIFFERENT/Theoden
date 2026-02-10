@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -38,6 +38,13 @@ import {
   removeWorktree,
   type WorktreeInventoryRow,
 } from "@/app/services/git/worktrees";
+import {
+  checkForHostUpdates,
+  getBridgeBuildFlavor,
+  getHostUpdateState,
+  subscribeHostUpdateState,
+  type HostUpdateState,
+} from "@/app/services/host/runtime";
 import {
   environmentProfileIdFromWorkspace,
   loadStoredEnvironmentProfiles,
@@ -318,6 +325,8 @@ export function SettingsPage() {
   const [providerStatuses, setProviderStatuses] = useState<
     MappedProviderStatus[]
   >(fallbackProviderStatuses);
+  const [hostUpdateEventState, setHostUpdateEventState] =
+    useState<HostUpdateState | null>(null);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpMutating, setMcpMutating] = useState(false);
   const [mcpFormState, setMcpFormState] = useState<McpServerFormState>(
@@ -403,6 +412,19 @@ export function SettingsPage() {
     }, 3000);
     return () => window.clearTimeout(timeoutId);
   }, [actionMessage]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void subscribeHostUpdateState((payload) => {
+      setHostUpdateEventState(payload);
+      void queryClient.setQueryData(["host", "update-state"], payload);
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     setEnvironmentProfiles((current) => {
@@ -602,6 +624,16 @@ export function SettingsPage() {
         ? "\\"
         : "/"
   }automations`;
+  const hostUpdateStateQuery = useQuery({
+    queryKey: ["host", "update-state"],
+    queryFn: getHostUpdateState,
+    refetchOnWindowFocus: true,
+  });
+  const hostBuildFlavorQuery = useQuery({
+    queryKey: ["host", "build-flavor"],
+    queryFn: getBridgeBuildFlavor,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
   const refreshRateLimits = useCallback(async () => {
     setRateLimitsLoading(true);
@@ -1143,6 +1175,60 @@ export function SettingsPage() {
               />
               Use compact composer controls
             </label>
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-ink-300">
+              <p className="uppercase tracking-[0.2em] text-ink-500">
+                Host runtime
+              </p>
+              <p className="mt-2">
+                Build flavor:{" "}
+                <span className="font-mono">
+                  {hostBuildFlavorQuery.data
+                    ? `${hostBuildFlavorQuery.data.flavor}:${hostBuildFlavorQuery.data.platform}`
+                    : hostBuildFlavorQuery.isPending
+                      ? "loading…"
+                      : "unknown"}
+                </span>
+              </p>
+              <p>
+                Update state:{" "}
+                <span className="font-mono">
+                  {(hostUpdateEventState ?? hostUpdateStateQuery.data)
+                    ?.status ??
+                    (hostUpdateStateQuery.isPending ? "loading…" : "unknown")}
+                </span>
+              </p>
+              <p className="text-ink-500">
+                {(hostUpdateEventState ?? hostUpdateStateQuery.data)?.detail ??
+                  "No update details."}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  className={actionButtonClass}
+                  onClick={() => {
+                    void runAction(async () => {
+                      const next = await checkForHostUpdates();
+                      setHostUpdateEventState(next);
+                      void queryClient.setQueryData(
+                        ["host", "update-state"],
+                        next,
+                      );
+                      return `Update check: ${next.status}`;
+                    }, "Failed to check for updates.");
+                  }}
+                >
+                  Check for updates
+                </button>
+                <button
+                  className={actionButtonClass}
+                  onClick={() => {
+                    void hostUpdateStateQuery.refetch();
+                    void hostBuildFlavorQuery.refetch();
+                  }}
+                >
+                  Refresh runtime status
+                </button>
+              </div>
+            </div>
             <div className="mt-4">
               <button
                 className={actionButtonClass}

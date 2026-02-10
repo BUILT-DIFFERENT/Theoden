@@ -1,7 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useQuery } from "@tanstack/react-query";
 import {
-  Link,
   Navigate,
   RootRoute,
   Route,
@@ -18,18 +16,22 @@ import {
   RoutePendingFallback,
 } from "@/app/components/layout/RouteFallbacks";
 import { AutomationsPage } from "@/app/routes/AutomationsPage";
+import { DiffRoutePage } from "@/app/routes/DiffRoutePage";
+import { FilePreviewPage } from "@/app/routes/FilePreviewPage";
 import { InboxPage } from "@/app/routes/InboxPage";
 import { LoginPage } from "@/app/routes/LoginPage";
 import { NewThreadPage } from "@/app/routes/NewThreadPage";
+import { PlanSummaryPage } from "@/app/routes/PlanSummaryPage";
+import { RemoteTaskPage } from "@/app/routes/RemoteTaskPage";
 import { SelectWorkspacePage } from "@/app/routes/SelectWorkspacePage";
 import { SettingsPage } from "@/app/routes/SettingsPage";
 import { SkillsPage } from "@/app/routes/SkillsPage";
 import { ThreadPage } from "@/app/routes/ThreadPage";
+import { TranscribePage } from "@/app/routes/TranscribePage";
 import { WelcomePage } from "@/app/routes/WelcomePage";
-import { readThread } from "@/app/services/cli/threads";
+import { WorktreeInitPage } from "@/app/routes/WorktreeInitPage";
 import { defaultSettingsSection } from "@/app/state/settingsData";
 import { useThreadUi } from "@/app/state/threadUi";
-import { isTauri } from "@/app/utils/tauri";
 
 const rootRoute = new RootRoute({
   component: AppShell,
@@ -61,71 +63,6 @@ function ThreadOverlayAliasRoute() {
   return (
     <section className="surface-panel p-4 text-sm text-ink-300">
       Opening thread overlay…
-    </section>
-  );
-}
-
-function RemoteConversationAliasRoute() {
-  const navigate = useNavigate();
-  const { conversationId } = useParams({ from: "/remote/$conversationId" });
-  const desktop = isTauri();
-  const threadQuery = useQuery({
-    queryKey: ["threads", "read", "remote-alias", conversationId],
-    queryFn: () => readThread(conversationId, false),
-    retry: false,
-    enabled: desktop,
-  });
-
-  useEffect(() => {
-    const threadId = threadQuery.data?.id;
-    if (!threadId) {
-      return;
-    }
-    void navigate({
-      to: "/t/$threadId",
-      params: { threadId },
-      replace: true,
-    });
-  }, [navigate, threadQuery.data?.id]);
-
-  if (threadQuery.isPending) {
-    return (
-      <section className="surface-panel p-4 text-sm text-ink-300">
-        Resolving remote conversation…
-      </section>
-    );
-  }
-
-  if (threadQuery.data?.id) {
-    return null;
-  }
-
-  return (
-    <section className="surface-panel max-w-2xl p-6">
-      <p className="text-xs uppercase tracking-[0.3em] text-ink-300">
-        Remote conversation
-      </p>
-      <h1 className="mt-2 font-display text-2xl text-ink-50">
-        Task not yet linked
-      </h1>
-      <p className="mt-2 text-sm text-ink-300">
-        Conversation <span className="font-mono">{conversationId}</span> is not
-        linked to a local thread yet.
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2 text-sm">
-        <Link
-          to="/inbox"
-          className="rounded-full border border-white/10 px-4 py-2 text-ink-100 hover:border-flare-300"
-        >
-          Open inbox
-        </Link>
-        <Link
-          to="/automations"
-          className="rounded-full border border-white/10 px-4 py-2 text-ink-100 hover:border-flare-300"
-        >
-          Open automations
-        </Link>
-      </div>
     </section>
   );
 }
@@ -222,10 +159,10 @@ const localConversationRoute = new Route({
 
 const remoteConversationRoute = new Route({
   getParentRoute: () => rootRoute,
-  path: "/remote/$conversationId",
+  path: "/remote/$taskId",
   component: () => (
     <AppServerRouteBoundary>
-      <RemoteConversationAliasRoute />
+      <RemoteTaskPage />
     </AppServerRouteBoundary>
   ),
   errorComponent: RouteErrorFallback,
@@ -236,6 +173,12 @@ const threadOverlayRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/thread-overlay/$conversationId",
   component: ThreadOverlayAliasRoute,
+});
+
+const threadOverlayBaseRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/thread-overlay",
+  component: () => <Navigate to="/" replace />,
 });
 
 const settingsRoute = new Route({
@@ -262,6 +205,46 @@ const settingsSectionRoute = new Route({
   pendingComponent: RoutePendingFallback,
 });
 
+const settingsAgentAliasRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/settings/agent",
+  component: () => (
+    <Navigate to="/settings/$section" params={{ section: "general" }} replace />
+  ),
+});
+
+const settingsDataControlsAliasRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/settings/data-controls",
+  component: () => (
+    <Navigate
+      to="/settings/$section"
+      params={{ section: "data-controls" }}
+      replace
+    />
+  ),
+});
+
+const settingsGitAliasRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/settings/git-settings",
+  component: () => (
+    <Navigate to="/settings/$section" params={{ section: "git" }} replace />
+  ),
+});
+
+const settingsLocalEnvironmentsAliasRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/settings/local-environments",
+  component: () => (
+    <Navigate
+      to="/settings/$section"
+      params={{ section: "environments" }}
+      replace
+    />
+  ),
+});
+
 const skillsRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/skills",
@@ -274,12 +257,73 @@ const skillsRoute = new Route({
   pendingComponent: RoutePendingFallback,
 });
 
+const diffRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/diff",
+  component: () => (
+    <AppServerRouteBoundary>
+      <DiffRoutePage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
+});
+
+const filePreviewRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/file-preview",
+  component: () => (
+    <AppServerRouteBoundary>
+      <FilePreviewPage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
+});
+
+const planSummaryRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/plan-summary",
+  component: () => (
+    <AppServerRouteBoundary>
+      <PlanSummaryPage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
+});
+
+const transcribeRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/transcribe",
+  component: () => (
+    <AppServerRouteBoundary>
+      <TranscribePage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
+});
+
+const worktreeInitRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/worktree-init-v2/$pendingId",
+  component: () => (
+    <AppServerRouteBoundary>
+      <WorktreeInitPage />
+    </AppServerRouteBoundary>
+  ),
+  errorComponent: RouteErrorFallback,
+  pendingComponent: RoutePendingFallback,
+});
+
 const routeTree = rootRoute.addChildren([
   newThreadRoute,
   threadRoute,
   localConversationRoute,
   remoteConversationRoute,
   threadOverlayRoute,
+  threadOverlayBaseRoute,
   inboxRoute,
   loginRoute,
   welcomeRoute,
@@ -287,7 +331,16 @@ const routeTree = rootRoute.addChildren([
   automationsRoute,
   settingsRoute,
   settingsSectionRoute,
+  settingsAgentAliasRoute,
+  settingsDataControlsAliasRoute,
+  settingsGitAliasRoute,
+  settingsLocalEnvironmentsAliasRoute,
   skillsRoute,
+  diffRoute,
+  filePreviewRoute,
+  planSummaryRoute,
+  transcribeRoute,
+  worktreeInitRoute,
 ]);
 
 export const router = new Router({

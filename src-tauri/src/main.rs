@@ -4,6 +4,7 @@ mod app_server_bridge;
 mod automation_store;
 mod cloud_host;
 mod paths;
+mod runtime_contract;
 mod state_store;
 mod terminal_host;
 
@@ -21,6 +22,7 @@ use serde_json::Value;
 use state_store::StateStore;
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,8 +36,24 @@ use terminal_host::{
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::sync::Notify;
+use runtime_contract::{
+    apply_update_transition, parse_codex_deeplink, BridgeMessageFromViewParams,
+    HostBuildFlavorPayload, HostUpdateStatePayload, HostUpdateTransition,
+};
 
 static REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
+
+struct RuntimeHostState {
+    update_state: Mutex<HostUpdateStatePayload>,
+}
+
+impl RuntimeHostState {
+    fn new() -> Self {
+        Self {
+            update_state: Mutex::new(HostUpdateStatePayload::default()),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigPayload {
@@ -407,6 +425,108 @@ async fn cloud_run_list(
     Ok(cloud_host.list().await)
 }
 
+#[tauri::command]
+fn bridge_get_build_flavor() -> HostBuildFlavorPayload {
+    HostBuildFlavorPayload {
+        flavor: "tauri".to_string(),
+        platform: std::env::consts::OS.to_string(),
+        channel: if cfg!(debug_assertions) {
+            "debug".to_string()
+        } else {
+            "release".to_string()
+        },
+    }
+}
+
+#[tauri::command]
+async fn bridge_message_from_view(
+    app: AppHandle,
+    params: BridgeMessageFromViewParams,
+) -> Result<(), String> {
+    let payload = serde_json::json!({
+        "channel": params.channel,
+        "payload": params.payload
+    });
+    let _ = app.emit("codex-desktop-message-from-view", payload.clone());
+    let _ = app.emit("codex-desktop-message-for-view", payload);
+    Ok(())
+}
+
+#[tauri::command]
+fn bridge_show_context_menu(payload: Option<Value>) -> bool {
+    let _ = payload;
+    true
+}
+
+#[tauri::command]
+fn host_get_update_state(
+    state: tauri::State<'_, Arc<RuntimeHostState>>,
+) -> Result<HostUpdateStatePayload, String> {
+    state
+        .update_state
+        .lock()
+        .map(|value| value.clone())
+        .map_err(|error| format!("failed to read update state: {error}"))
+}
+
+#[tauri::command]
+async fn host_check_updates(
+    app: AppHandle,
+    state: tauri::State<'_, Arc<RuntimeHostState>>,
+) -> Result<HostUpdateStatePayload, String> {
+    let now = now_ts();
+    let checking = {
+        let current = state
+            .update_state
+            .lock()
+            .map_err(|error| format!("failed to lock update state: {error}"))?
+            .clone();
+        apply_update_transition(current, HostUpdateTransition::StartCheck, now)
+    };
+    {
+        let mut guard = state
+            .update_state
+            .lock()
+            .map_err(|error| format!("failed to lock update state: {error}"))?;
+        *guard = checking.clone();
+    }
+    let _ = app.emit("host-update-state", checking.clone());
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    let completed = {
+        let current = state
+            .update_state
+            .lock()
+            .map_err(|error| format!("failed to lock update state: {error}"))?
+            .clone();
+        let transition = if std::env::var("CODEX_DESKTOP_FAKE_UPDATE_AVAILABLE")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            HostUpdateTransition::MarkAvailable
+        } else {
+            HostUpdateTransition::MarkUpToDate
+        };
+        apply_update_transition(current, transition, now_ts())
+    };
+    {
+        let mut guard = state
+            .update_state
+            .lock()
+            .map_err(|error| format!("failed to lock update state: {error}"))?;
+        *guard = completed.clone();
+    }
+    let _ = app.emit("host-update-state", completed.clone());
+    Ok(completed)
+}
+
+#[tauri::command]
+fn host_dispatch_deeplink(app: AppHandle, url: String) -> Result<runtime_contract::HostDeeplinkPayload, String> {
+    let payload = parse_codex_deeplink(&url)?;
+    let _ = app.emit("host-deeplink", payload.clone());
+    Ok(payload)
+}
+
 fn next_request_id() -> u64 {
     REQUEST_NONCE.fetch_add(1, Ordering::Relaxed)
 }
@@ -606,6 +726,7 @@ fn main() {
         .manage(Arc::new(Notify::new()))
         .manage(Arc::new(TerminalHost::new()))
         .manage(Arc::new(CloudRunHost::new()))
+        .manage(Arc::new(RuntimeHostState::new()))
         .setup(|app| {
             #[cfg(target_os = "windows")]
             {
@@ -720,7 +841,13 @@ fn main() {
             terminal_close,
             cloud_run_start,
             cloud_run_cancel,
-            cloud_run_list
+            cloud_run_list,
+            bridge_get_build_flavor,
+            bridge_message_from_view,
+            bridge_show_context_menu,
+            host_get_update_state,
+            host_check_updates,
+            host_dispatch_deeplink
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
