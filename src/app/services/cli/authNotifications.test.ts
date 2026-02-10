@@ -23,19 +23,17 @@ describe("auth notification parsing", () => {
       loginId: "login-123",
       success: true,
       error: null,
-      legacy: false,
     });
     expect(listener).toHaveBeenCalledWith({
       loginId: "login-123",
       success: true,
       error: null,
-      legacy: false,
     });
 
     unsubscribe();
   });
 
-  it("parses legacy loginChatGptComplete notifications", () => {
+  it("ignores legacy loginChatGptComplete notifications", () => {
     const events = registerAuthNotification({
       method: "loginChatGptComplete",
       params: {
@@ -45,12 +43,7 @@ describe("auth notification parsing", () => {
       },
     });
 
-    expect(events.accountLoginCompleted).toEqual({
-      loginId: "legacy-login",
-      success: false,
-      error: "denied",
-      legacy: true,
-    });
+    expect(events.accountLoginCompleted).toBeUndefined();
   });
 
   it("parses mcpServer/oauthLogin/completed and notifies listeners", () => {

@@ -25,11 +25,21 @@ pub struct CliRunResult {
     pub stderr: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppServerClientInfo {
+    pub name: String,
+    pub title: String,
+    pub version: String,
+}
+
 pub struct AppServerBridge {
     writer: Arc<Mutex<Option<mpsc::Sender<String>>>>,
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
     kill_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     running: Arc<AtomicBool>,
+    initialized: Arc<AtomicBool>,
+    init_lock: Arc<Mutex<()>>,
     notification_tx: broadcast::Sender<serde_json::Value>,
 }
 
@@ -41,6 +51,8 @@ impl Default for AppServerBridge {
             pending: Arc::new(Mutex::new(HashMap::new())),
             kill_signal: Arc::new(Mutex::new(None)),
             running: Arc::new(AtomicBool::new(false)),
+            initialized: Arc::new(AtomicBool::new(false)),
+            init_lock: Arc::new(Mutex::new(())),
             notification_tx,
         }
     }
@@ -56,6 +68,64 @@ impl AppServerBridge {
         Self::default()
     }
 
+    pub async fn ensure_ready(
+        &self,
+        app: AppHandle,
+        args: Option<Vec<String>>,
+        cwd: Option<String>,
+        client_info: Option<AppServerClientInfo>,
+    ) -> Result<(), String> {
+        if !self.running.load(Ordering::Acquire) {
+            self.start(app.clone(), args.clone(), cwd.clone()).await?;
+        }
+        if self.initialized.load(Ordering::Acquire) {
+            return Ok(());
+        }
+
+        let _guard = self.init_lock.lock().await;
+        if self.initialized.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        if !self.running.load(Ordering::Acquire) {
+            self.start(app.clone(), args, cwd).await?;
+        }
+
+        let initialize_request = serde_json::json!({
+            "id": "desktop-initialize",
+            "method": "initialize",
+            "params": {
+                "clientInfo": {
+                    "name": client_info
+                        .as_ref()
+                        .map(|value| value.name.as_str())
+                        .unwrap_or("codex_desktop"),
+                    "title": client_info
+                        .as_ref()
+                        .map(|value| value.title.as_str())
+                        .unwrap_or("Codex"),
+                    "version": client_info
+                        .as_ref()
+                        .map(|value| value.version.as_str())
+                        .unwrap_or("0.1.0"),
+                }
+            }
+        });
+        let response = self
+            .request_internal(app.clone(), initialize_request)
+            .await?;
+        if let Some(error) = response.get("error").and_then(serde_json::Value::as_object) {
+            let message = error
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("initialize request failed");
+            return Err(message.to_string());
+        }
+        let initialized_payload = serde_json::json!({ "method": "initialized" });
+        self.write_line(initialized_payload).await?;
+        self.initialized.store(true, Ordering::Release);
+        Ok(())
+    }
+
     pub async fn start(
         &self,
         app: AppHandle,
@@ -68,6 +138,7 @@ impl AppServerBridge {
         if self.running.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
+        self.initialized.store(false, Ordering::Release);
 
         let mut child = match (|| -> Result<tokio::process::Child, String> {
             let codex_command = resolve_codex_cli_command()?;
@@ -90,6 +161,7 @@ impl AppServerBridge {
             Ok(child) => child,
             Err(error) => {
                 self.running.store(false, Ordering::Release);
+                self.initialized.store(false, Ordering::Release);
                 return Err(error);
             }
         };
@@ -98,6 +170,7 @@ impl AppServerBridge {
             Some(stdout) => stdout,
             None => {
                 self.running.store(false, Ordering::Release);
+                self.initialized.store(false, Ordering::Release);
                 return Err("failed to capture app-server stdout".to_string());
             }
         };
@@ -105,6 +178,7 @@ impl AppServerBridge {
             Some(stderr) => stderr,
             None => {
                 self.running.store(false, Ordering::Release);
+                self.initialized.store(false, Ordering::Release);
                 return Err("failed to capture app-server stderr".to_string());
             }
         };
@@ -112,6 +186,7 @@ impl AppServerBridge {
             Some(stdin) => stdin,
             None => {
                 self.running.store(false, Ordering::Release);
+                self.initialized.store(false, Ordering::Release);
                 return Err("failed to capture app-server stdin".to_string());
             }
         };
@@ -239,6 +314,22 @@ impl AppServerBridge {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("unknown")
             .to_string();
+        if method != "initialize" {
+            self.ensure_ready(app.clone(), None, None, None).await?;
+        }
+        self.request_internal(app, request).await
+    }
+
+    async fn request_internal(
+        &self,
+        app: AppHandle,
+        request: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        let method = request
+            .get("method")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
         let id_value = request
             .get("id")
             .and_then(id_to_string)
@@ -272,11 +363,23 @@ impl AppServerBridge {
 
     pub async fn notify(
         &self,
+        app: AppHandle,
         method: String,
         params: Option<serde_json::Value>,
     ) -> Result<(), String> {
-        let payload = serde_json::json!({ "method": method, "params": params });
-        self.write_line(payload).await
+        if method != "initialized" {
+            self.ensure_ready(app, None, None, None).await?;
+        }
+        let payload = if let Some(params) = params {
+            serde_json::json!({ "method": method, "params": params })
+        } else {
+            serde_json::json!({ "method": method })
+        };
+        self.write_line(payload).await?;
+        if method == "initialized" {
+            self.initialized.store(true, Ordering::Release);
+        }
+        Ok(())
     }
 
     pub async fn respond(
@@ -302,6 +405,7 @@ impl AppServerBridge {
         } else {
             self.running.store(false, Ordering::Release);
         }
+        self.initialized.store(false, Ordering::Release);
         self.pending.lock().await.clear();
         *self.writer.lock().await = None;
         Ok(())
@@ -335,6 +439,7 @@ impl AppServerBridge {
             pending: self.pending.clone(),
             kill_signal: self.kill_signal.clone(),
             running: self.running.clone(),
+            initialized: self.initialized.clone(),
         }
     }
 }
@@ -344,6 +449,7 @@ struct AppServerBridgeTaskHandle {
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
     kill_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     running: Arc<AtomicBool>,
+    initialized: Arc<AtomicBool>,
 }
 
 impl AppServerBridgeTaskHandle {
@@ -352,6 +458,7 @@ impl AppServerBridgeTaskHandle {
         *self.kill_signal.lock().await = None;
         self.pending.lock().await.clear();
         self.running.store(false, Ordering::Release);
+        self.initialized.store(false, Ordering::Release);
     }
 }
 

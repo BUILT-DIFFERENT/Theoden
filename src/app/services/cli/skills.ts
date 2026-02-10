@@ -30,28 +30,12 @@ export interface SkillCatalogEntry {
   errors: SkillCatalogError[];
 }
 
-export interface RemoteSkillCatalogEntry {
-  id: string;
-  name: string;
-  description: string;
-}
-
 interface SkillsListResponse {
   data?: unknown;
 }
 
 interface SkillsConfigWriteResponse {
   effectiveEnabled?: boolean;
-}
-
-interface SkillsRemoteReadResponse {
-  data?: unknown;
-}
-
-interface SkillsRemoteWriteResponse {
-  id?: string;
-  name?: string;
-  path?: string;
 }
 
 function readBoolean(record: JsonObject, key: string, fallback = false) {
@@ -182,19 +166,6 @@ function parseSkillsListData(data: unknown): SkillCatalogEntry[] {
     .filter((entry): entry is SkillCatalogEntry => entry !== null);
 }
 
-function parseRemoteSkill(value: unknown): RemoteSkillCatalogEntry | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const id = getString(value, "id");
-  const name = getString(value, "name");
-  const description = getString(value, "description");
-  if (!id || !name || !description) {
-    return null;
-  }
-  return { id, name, description };
-}
-
 export async function listSkills(params?: {
   cwds?: string[];
   forceReload?: boolean;
@@ -222,41 +193,4 @@ export async function writeSkillEnabled(path: string, enabled: boolean) {
     },
   });
   return result?.effectiveEnabled ?? enabled;
-}
-
-export async function listRemoteSkillsExperimental() {
-  const result = await requestAppServer<SkillsRemoteReadResponse>({
-    method: "skills/remote/read",
-    params: {},
-  });
-  const data = result?.data;
-  if (!Array.isArray(data)) {
-    return [];
-  }
-  return data
-    .map((entry) => parseRemoteSkill(entry))
-    .filter((entry): entry is RemoteSkillCatalogEntry => entry !== null);
-}
-
-export async function installRemoteSkillExperimental(hazelnutId: string) {
-  const trimmedId = hazelnutId.trim();
-  if (!trimmedId.length) {
-    throw new Error("Remote skill ID is required.");
-  }
-  const result = await requestAppServer<SkillsRemoteWriteResponse>({
-    method: "skills/remote/write",
-    params: {
-      hazelnutId: trimmedId,
-      isPreload: false,
-    },
-  });
-  const path = result?.path;
-  if (!path) {
-    throw new Error("Remote skill install did not return a path.");
-  }
-  return {
-    id: result?.id ?? trimmedId,
-    name: result?.name ?? trimmedId,
-    path,
-  };
 }

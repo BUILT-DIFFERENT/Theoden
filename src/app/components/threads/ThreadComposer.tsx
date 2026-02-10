@@ -25,6 +25,7 @@ import {
   startThread,
   startTurn,
 } from "@/app/services/cli/turns";
+import { useModels } from "@/app/services/cli/useModels";
 import { useRunProgress } from "@/app/services/cli/useRunProgress";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
@@ -64,8 +65,6 @@ const cloudAttemptsFromQuality: Record<QualityPreset, number> = {
   high: 2,
   extra_high: 4,
 };
-
-const modelOptions = ["GPT-5.2-Codex", "GPT-5", "o4-mini"] as const;
 const commandOptions = [
   {
     id: "summarize",
@@ -133,6 +132,7 @@ export function ThreadComposer({
     setComposerDraft,
   } = useAppUi();
   const { workspaces } = useWorkspaces();
+  const { modelOptions } = useModels();
   const { selectedWorkspace, setWorkspacePickerOpen } = useWorkspaceUi();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const branchMenuRef = useRef<HTMLDivElement | null>(null);
@@ -169,6 +169,24 @@ export function ThreadComposer({
     workspaces,
     fallbackWorkspace: workspaceName,
   });
+  const resolvedModel = useMemo(() => {
+    const preferred = activeModel.trim();
+    if (
+      preferred.length &&
+      modelOptions.some((option) => option.value === preferred)
+    ) {
+      return preferred;
+    }
+    const defaultOption = modelOptions.find((option) => option.isDefault);
+    return defaultOption?.value ?? modelOptions[0]?.value ?? "";
+  }, [activeModel, modelOptions]);
+
+  useEffect(() => {
+    if (!resolvedModel || resolvedModel === activeModel) {
+      return;
+    }
+    setActiveModel(resolvedModel);
+  }, [activeModel, resolvedModel, setActiveModel]);
   const canSubmit = useMemo(() => {
     return (
       !isBusy &&
@@ -407,6 +425,8 @@ export function ThreadComposer({
     }
 
     const cwd = resolvedWorkspacePath ?? undefined;
+    const runModel =
+      environmentMode === "cloud" || !resolvedModel ? null : resolvedModel;
     let targetThreadId: string | undefined = threadId;
     const shouldStartNewThread =
       !targetThreadId ||
@@ -417,7 +437,7 @@ export function ThreadComposer({
         ));
 
     if (shouldStartNewThread) {
-      const newThread = await startThread({ cwd });
+      const newThread = await startThread({ cwd, model: runModel });
       targetThreadId = newThread?.id;
       if (targetThreadId) {
         await navigate({
@@ -430,7 +450,7 @@ export function ThreadComposer({
       throw new Error("Unable to start a new thread.");
     }
     if (!shouldStartNewThread) {
-      await resumeThread({ threadId: targetThreadId });
+      await resumeThread({ threadId: targetThreadId, cwd, model: runModel });
     }
 
     const attachmentContext = attachments.length
@@ -451,6 +471,7 @@ export function ThreadComposer({
         threadId: targetThreadId,
         input: turnInput,
         cwd,
+        model: runModel,
         effort: effortFromQuality[qualityPreset],
       });
     }
@@ -792,12 +813,12 @@ export function ThreadComposer({
             </button>
             <select
               className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-xs text-ink-100"
-              value={activeModel}
+              value={resolvedModel}
               onChange={(event) => setActiveModel(event.target.value)}
             >
               {modelOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

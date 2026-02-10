@@ -9,7 +9,7 @@ mod terminal_host;
 
 use app_server_bridge::{
     build_prepended_path, configure_command_for_desktop, resolve_codex_cli_command,
-    AppServerBridge, CliRunResult,
+    AppServerBridge, AppServerClientInfo, CliRunResult,
 };
 use automation_store::{
     now_ts, AutomationCreateParams, AutomationRecord, AutomationRunRecord, AutomationStore,
@@ -87,8 +87,9 @@ async fn app_server_start(
     state: tauri::State<'_, Arc<AppServerBridge>>,
     args: Option<Vec<String>>,
     cwd: Option<String>,
+    client_info: Option<AppServerClientInfo>,
 ) -> Result<(), String> {
-    state.start(app, args, cwd).await
+    state.ensure_ready(app, args, cwd, client_info).await
 }
 
 #[tauri::command]
@@ -102,11 +103,12 @@ async fn app_server_request(
 
 #[tauri::command]
 async fn app_server_notify(
+    app: AppHandle,
     state: tauri::State<'_, Arc<AppServerBridge>>,
     method: String,
     params: Option<serde_json::Value>,
 ) -> Result<(), String> {
-    state.notify(method, params).await
+    state.notify(app, method, params).await
 }
 
 #[tauri::command]
@@ -428,6 +430,19 @@ async fn run_automation_record(
     bridge: Arc<AppServerBridge>,
     automation: AutomationRecord,
 ) -> Result<AutomationRunRecord, String> {
+    bridge
+        .ensure_ready(
+            app.clone(),
+            None,
+            automation.cwds.first().cloned(),
+            Some(AppServerClientInfo {
+                name: "codex_desktop_automation".to_string(),
+                title: "Codex Desktop Automation".to_string(),
+                version: "0.1.0".to_string(),
+            }),
+        )
+        .await?;
+
     let cwd = automation.cwds.first().cloned();
     let thread_start_request = serde_json::json!({
         "id": next_request_id(),

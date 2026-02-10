@@ -10,11 +10,7 @@ import { WindowTitlebar } from "@/app/components/layout/WindowTitlebar";
 import { AppSidebar } from "@/app/components/sidebar/AppSidebar";
 import { ThreadTopBar } from "@/app/components/threads/ThreadTopBar";
 import { WorkspaceModal } from "@/app/components/workspaces/WorkspaceModal";
-import {
-  sendAppServerNotification,
-  startAppServer,
-} from "@/app/services/cli/appServer";
-import { requestAppServer } from "@/app/services/cli/rpc";
+import { startAppServer } from "@/app/services/cli/appServer";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useInteractionAudit } from "@/app/services/dev/useInteractionAudit";
@@ -74,18 +70,13 @@ export function AppShell() {
       bootstrapInFlightRef.current = true;
       setAppServerStatus(status);
       try {
-        await startAppServer({});
-        await requestAppServer({
-          method: "initialize",
-          params: {
-            clientInfo: {
-              name: "codex_desktop",
-              title: "Codex",
-              version: "0.1.0",
-            },
+        await startAppServer({
+          clientInfo: {
+            name: "codex_desktop",
+            title: "Codex",
+            version: "0.1.0",
           },
         });
-        await sendAppServerNotification("initialized");
         reconnectAttemptRef.current = 0;
         setReconnectAttempts(0);
         setAppServerError(null);

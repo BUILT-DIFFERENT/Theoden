@@ -1,8 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export interface AppServerClientInfo {
+  name: string;
+  title: string;
+  version: string;
+}
+
 export interface AppServerStartRequest extends Record<string, unknown> {
   args?: string[];
   cwd?: string;
+  clientInfo?: AppServerClientInfo;
 }
 
 export interface AppServerRequest extends Record<string, unknown> {

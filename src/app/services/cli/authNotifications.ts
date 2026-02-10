@@ -9,7 +9,6 @@ export interface AccountLoginCompletedEvent {
   loginId: string | null;
   success: boolean;
   error: string | null;
-  legacy: boolean;
 }
 
 export interface McpOauthLoginCompletedEvent {
@@ -80,17 +79,6 @@ function parseAccountLoginCompleted(
       loginId: getString(params, "loginId") ?? null,
       success,
       error: getString(params, "error") ?? null,
-      legacy: false,
-    };
-  }
-
-  if (notification.method === "loginChatGptComplete") {
-    const success = getBoolean(params, "success") ?? false;
-    return {
-      loginId: getString(params, "loginId") ?? null,
-      success,
-      error: getString(params, "error") ?? null,
-      legacy: true,
     };
   }
 

@@ -33,7 +33,7 @@ export function useAppUi() {
 }
 
 export function AppUiProvider({ children }: { children: ReactNode }) {
-  const [activeModel, setActiveModel] = useState("GPT-5.2-Codex");
+  const [activeModel, setActiveModel] = useState("gpt-5.2-codex");
   const [qualityPreset, setQualityPreset] = useState<QualityPreset>("high");
   const [composerDraft, setComposerDraft] = useState("");
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);

@@ -4,11 +4,8 @@ import { MoreHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  installRemoteSkillExperimental,
-  listRemoteSkillsExperimental,
   listSkills,
   writeSkillEnabled,
-  type RemoteSkillCatalogEntry,
   type SkillCatalogSkill,
 } from "@/app/services/cli/skills";
 import { startThread, startTurn } from "@/app/services/cli/turns";
@@ -71,21 +68,6 @@ function mapInstalledSkill(skill: SkillCatalogSkill): InstalledSkillCard {
     enabled: skill.enabled,
     defaultPrompt: skill.defaultPrompt,
     scope: skill.scope,
-  };
-}
-
-function mapRemoteSkill(skill: RemoteSkillCatalogEntry): RemoteSkillCard {
-  return {
-    kind: "remote",
-    id: skill.id,
-    name: skill.name,
-    description: skill.description,
-    documentation: skill.description,
-    version: "preview",
-    source: "Community",
-    publisher: "Codex Catalog",
-    tags: ["remote"],
-    installable: true,
   };
 }
 
@@ -156,11 +138,6 @@ export function SkillsPage() {
   const skillPathInputId = "new-skill-path";
   const isDesktop = isTauri();
   const resolvedWorkspace = selectedWorkspace ?? workspaces[0]?.path ?? null;
-  const remoteSkillsFeatureEnabled =
-    isDesktop &&
-    runtimeSettings.allowCommunitySkills &&
-    (runtimeSettings.showExperimentalConfig ||
-      import.meta.env.VITE_ENABLE_REMOTE_SKILLS === "1");
 
   const localSkillsQuery = useQuery({
     queryKey: ["skills", "list", resolvedWorkspace],
@@ -171,14 +148,6 @@ export function SkillsPage() {
       }),
     enabled: isDesktop,
     refetchOnWindowFocus: isDesktop && runtimeSettings.autoRefreshSkills,
-  });
-
-  const remoteSkillsQuery = useQuery({
-    queryKey: ["skills", "remote", "read"],
-    queryFn: listRemoteSkillsExperimental,
-    enabled: remoteSkillsFeatureEnabled,
-    staleTime: 1000 * 60,
-    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {
@@ -250,23 +219,21 @@ export function SkillsPage() {
     if (!runtimeSettings.allowCommunitySkills) {
       return [] as RemoteSkillCard[];
     }
-    const sourceSkills = isDesktop
-      ? (remoteSkillsQuery.data ?? []).map((skill) => mapRemoteSkill(skill))
-      : mockRemoteSkills.map(
-          (skill) =>
-            ({
-              kind: "remote",
-              id: skill.id,
-              name: skill.name,
-              description: skill.description,
-              documentation: skill.documentation,
-              version: skill.version,
-              source: skill.source,
-              publisher: skill.publisher,
-              tags: skill.tags,
-              installable: skill.installable,
-            }) satisfies RemoteSkillCard,
-        );
+    const sourceSkills = mockRemoteSkills.map(
+      (skill) =>
+        ({
+          kind: "remote",
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+          documentation: skill.documentation,
+          version: skill.version,
+          source: skill.source,
+          publisher: skill.publisher,
+          tags: skill.tags,
+          installable: false,
+        }) satisfies RemoteSkillCard,
+    );
     if (!normalizedSearch) {
       return sourceSkills;
     }
@@ -275,12 +242,7 @@ export function SkillsPage() {
         `${skill.name} ${skill.description} ${skill.publisher}`.toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [
-    isDesktop,
-    normalizedSearch,
-    remoteSkillsQuery.data,
-    runtimeSettings.allowCommunitySkills,
-  ]);
+  }, [normalizedSearch, runtimeSettings.allowCommunitySkills]);
 
   const localCatalogErrors = useMemo(() => {
     if (!isDesktop) {
@@ -307,9 +269,6 @@ export function SkillsPage() {
         forceReload: true,
       });
       await localSkillsQuery.refetch();
-      if (remoteSkillsFeatureEnabled) {
-        await remoteSkillsQuery.refetch();
-      }
       setRefreshMessage("Skill catalog refreshed.");
     } catch (error) {
       setRefreshMessage(
@@ -352,26 +311,10 @@ export function SkillsPage() {
       : installedSkillPathsById.has(detailSkill.id)
     : false;
 
-  const handleInstallRemoteSkill = async (skill: RemoteSkillCard) => {
-    if (!remoteSkillsFeatureEnabled) {
-      setDetailMessage("Remote install is disabled.");
-      return;
-    }
-    setSubmittingSkillAction(true);
-    try {
-      const installed = await installRemoteSkillExperimental(skill.id);
-      await writeSkillEnabled(installed.path, true);
-      await refreshCatalog();
-      setDetailMessage(`Installed ${skill.name}.`);
-    } catch (error) {
-      setDetailMessage(
-        error instanceof Error
-          ? error.message
-          : `Install failed for ${skill.name}.`,
-      );
-    } finally {
-      setSubmittingSkillAction(false);
-    }
+  const handleInstallRemoteSkill = (skill: RemoteSkillCard) => {
+    setDetailMessage(
+      `Remote install is unavailable for ${skill.name}. Add a local SKILL.md path instead.`,
+    );
   };
 
   const handleTrySkill = async () => {
@@ -578,10 +521,10 @@ export function SkillsPage() {
             Community catalog is disabled in settings.
           </p>
         ) : null}
-        {runtimeSettings.allowCommunitySkills && !remoteSkillsFeatureEnabled ? (
+        {runtimeSettings.allowCommunitySkills ? (
           <p className="mt-3 text-xs text-ink-500">
-            Enable experimental config (or set `VITE_ENABLE_REMOTE_SKILLS=1`) to
-            use live remote skills APIs.
+            Remote installs are disabled in desktop. Use + New skill with a
+            local `SKILL.md` path.
           </p>
         ) : null}
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -617,13 +560,12 @@ export function SkillsPage() {
                   disabled={
                     submittingSkillAction ||
                     !skill.installable ||
-                    installedSkillPathsById.has(skill.id) ||
-                    !remoteSkillsFeatureEnabled
+                    installedSkillPathsById.has(skill.id)
                   }
                 >
                   {installedSkillPathsById.has(skill.id)
                     ? "Installed"
-                    : "Download"}
+                    : "Unavailable"}
                 </button>
               </div>
             </div>
@@ -775,11 +717,9 @@ export function SkillsPage() {
                     onClick={() => {
                       void handleInstallRemoteSkill(detailSkill);
                     }}
-                    disabled={
-                      submittingSkillAction || !remoteSkillsFeatureEnabled
-                    }
+                    disabled={submittingSkillAction}
                   >
-                    Install
+                    Install unavailable
                   </button>
                 ) : null}
                 <button
