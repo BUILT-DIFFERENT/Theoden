@@ -53,6 +53,14 @@ export function getNumber(record: JsonObject, key: string): number | undefined {
   return value;
 }
 
+export function getBoolean(
+  record: JsonObject,
+  key: string,
+): boolean | undefined {
+  const value = record[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
 export function parseAppServerNotification(
   payload: unknown,
 ): AppServerNotification | null {

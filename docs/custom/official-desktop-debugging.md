@@ -120,11 +120,10 @@ Source:
 
 ### 7) Parity map
 
-Signal mapping between official app methods/events, native/Tauri equivalents (`TBD` where unknown), and CLI/protocol source:
+Signal mapping between official app methods/events, native/Tauri equivalents, and CLI/protocol source:
 
-- `third_party/CodexDesktop-Rebuild/docs/signal-parity-map.md`
-
-OAuth fixture parity is explicitly deferred to a v2 follow-up.
+- `third_party/CodexDesktop-Rebuild/signal-parity-map.md`
+- `docs/custom/signal-parity-map-tauri.md`
 
 ## Useful Environment Variables
 

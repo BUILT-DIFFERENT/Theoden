@@ -60,7 +60,8 @@ Reference files for this workflow:
 - `third_party/CodexDesktop-Rebuild/scripts/debug-renderer-playwright.js` (Playwright/CDP UI + screenshots)
 - `third_party/CodexDesktop-Rebuild/scripts/mcp-fixtures/*` (deterministic fixture matrix)
 - `third_party/CodexDesktop-Rebuild/scripts/debug-audit/index.js` (machine-readable parity audit)
-- `third_party/CodexDesktop-Rebuild/docs/signal-parity-map.md` (audited-signal mapping and parity tracking)
+- `third_party/CodexDesktop-Rebuild/signal-parity-map.md` (audited-signal mapping and parity tracking)
+- `docs/custom/signal-parity-map-tauri.md` (repo-owned parity closure map for Tauri equivalents)
 
 Working rules:
 

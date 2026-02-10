@@ -26,6 +26,8 @@ interface AccountLoginStartResponse {
   type?: string;
   loginId?: string;
   authUrl?: string;
+  login_id?: string;
+  auth_url?: string;
   [key: string]: unknown;
 }
 
@@ -49,6 +51,19 @@ interface AccountRateLimitsResponse {
 interface AccountCancelLoginResponse {
   status?: "canceled" | "notFound";
 }
+
+export type AccountLoginStartResult =
+  | {
+      type: "apiKey";
+    }
+  | {
+      type: "chatgpt";
+      loginId: string;
+      authUrl: string;
+    }
+  | {
+      type: "chatgptAuthTokens";
+    };
 
 let cachedExternalChatgptTokens: ChatgptAuthTokens | null = null;
 
@@ -185,14 +200,44 @@ function normalizeLoginParams(
 export async function startAccountLogin(
   mode: AccountLoginMode,
   value?: string | ChatgptAuthTokens,
-) {
+): Promise<AccountLoginStartResult> {
   const params = normalizeLoginParams(mode, value);
 
   const result = await requestAppServer<AccountLoginStartResponse>({
     method: "account/login/start",
     params,
   });
-  return result ?? {};
+
+  const fallbackType =
+    mode === "chatgptAuthTokens"
+      ? "chatgptAuthTokens"
+      : mode === "apiKey"
+        ? "apiKey"
+        : "chatgpt";
+  const type =
+    result?.type === "chatgpt" ||
+    result?.type === "apiKey" ||
+    result?.type === "chatgptAuthTokens"
+      ? result.type
+      : fallbackType;
+
+  if (type === "chatgpt") {
+    const record = isRecord(result) ? result : {};
+    const loginId = readString(record, ["loginId", "login_id"]);
+    const authUrl = readString(record, ["authUrl", "auth_url"]);
+    if (!loginId || !authUrl) {
+      throw new Error("ChatGPT login start did not return login metadata.");
+    }
+    return {
+      type,
+      loginId,
+      authUrl,
+    };
+  }
+
+  return {
+    type,
+  };
 }
 
 export async function cancelAccountLogin(loginId: string) {

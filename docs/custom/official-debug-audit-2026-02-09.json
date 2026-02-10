@@ -1,0 +1,346 @@
+{
+  "schemaVersion": "1.0",
+  "runId": "08946d8b-8e6d-4774-bd26-f957aee9cd76",
+  "logPath": "C:\\Users\\gamer\\.codex\\worktrees\\1f8c\\Theoden\\third_party\\CodexDesktop-Rebuild\\logs\\dev-debug-2026-02-09T09-10-21-069Z.ndjson",
+  "summary": {
+    "totalChecks": 5,
+    "passed": 1,
+    "failed": 4,
+    "status": "fail",
+    "eventCount": 1929,
+    "parseErrors": 0
+  },
+  "checks": [
+    {
+      "id": "schema-contract",
+      "status": "pass",
+      "requiredSignals": [
+        "schemaVersion:1.0",
+        "contract:required-keys"
+      ],
+      "matchedSignals": [
+        "schemaVersion:1.0",
+        "contract:required-keys"
+      ],
+      "missingSignals": [],
+      "evidence": [
+        {
+          "signal": "schemaVersion:1.0",
+          "details": []
+        },
+        {
+          "signal": "contract:required-keys",
+          "details": []
+        },
+        {
+          "signal": "parse-errors",
+          "details": []
+        }
+      ]
+    },
+    {
+      "id": "thread-lifecycle",
+      "status": "fail",
+      "requiredSignals": [
+        "method:thread/start",
+        "method:thread/resume",
+        "method:thread/list",
+        "method:thread/read",
+        "method:thread/archive",
+        "method:thread/unarchive"
+      ],
+      "matchedSignals": [
+        "method:thread/start",
+        "method:thread/resume",
+        "method:thread/list",
+        "method:thread/read"
+      ],
+      "missingSignals": [
+        "method:thread/archive",
+        "method:thread/unarchive"
+      ],
+      "evidence": [
+        {
+          "signal": "method:thread/start",
+          "lines": [
+            {
+              "line": 204,
+              "ts": "2026-02-09T09:10:26.356Z",
+              "method": "thread-stream-state-changed",
+              "type": "ipc-broadcast",
+              "status": "sent"
+            },
+            {
+              "line": 1022,
+              "ts": "2026-02-09T09:10:30.680Z",
+              "method": "branch-changes",
+              "type": "worker-response",
+              "status": "sent"
+            }
+          ]
+        },
+        {
+          "signal": "method:thread/resume",
+          "lines": [
+            {
+              "line": 912,
+              "ts": "2026-02-09T09:10:29.093Z",
+              "method": "staged-and-unstaged-changes",
+              "type": "worker-response",
+              "status": "sent"
+            },
+            {
+              "line": 919,
+              "ts": "2026-02-09T09:10:29.311Z",
+              "method": "tracked-uncommitted-changes",
+              "type": "worker-response",
+              "status": "sent"
+            },
+            {
+              "line": 1020,
+              "ts": "2026-02-09T09:10:30.645Z",
+              "method": "tracked-uncommitted-changes",
+              "type": "worker-response",
+              "status": "sent"
+            },
+            {
+              "line": 1890,
+              "ts": "2026-02-09T09:10:32.698Z",
+              "method": "staged-and-unstaged-changes",
+              "type": "worker-response",
+              "status": "sent"
+            },
+            {
+              "line": 1928,
+              "ts": "2026-02-09T09:10:49.275Z",
+              "method": "thread-stream-state-changed",
+              "type": "ipc-broadcast",
+              "status": "sent"
+            }
+          ]
+        },
+        {
+          "signal": "method:thread/list",
+          "lines": [
+            {
+              "line": 44,
+              "ts": "2026-02-09T09:10:25.076Z",
+              "method": null,
+              "type": "log-message",
+              "status": null
+            },
+            {
+              "line": 46,
+              "ts": "2026-02-09T09:10:25.080Z",
+              "method": "thread/list",
+              "type": "mcp-request",
+              "status": null
+            },
+            {
+              "line": 46,
+              "ts": "2026-02-09T09:10:25.080Z",
+              "method": "thread/list",
+              "type": "mcp-request",
+              "status": null
+            },
+            {
+              "line": 52,
+              "ts": "2026-02-09T09:10:25.372Z",
+              "method": "thread/list",
+              "type": "mcp-request",
+              "status": "ok"
+            },
+            {
+              "line": 815,
+              "ts": "2026-02-09T09:10:28.398Z",
+              "method": null,
+              "type": "log-message",
+              "status": null
+            }
+          ]
+        },
+        {
+          "signal": "method:thread/read",
+          "lines": [
+            {
+              "line": 912,
+              "ts": "2026-02-09T09:10:29.093Z",
+              "method": "staged-and-unstaged-changes",
+              "type": "worker-response",
+              "status": "sent"
+            },
+            {
+              "line": 919,
+              "ts": "2026-02-09T09:10:29.311Z",
+              "method": "tracked-uncommitted-changes",
+              "type": "worker-response",
+              "status": "sent"
+            },
+            {
+              "line": 1020,
+              "ts": "2026-02-09T09:10:30.645Z",
+              "method": "tracked-uncommitted-changes",
+              "type": "worker-response",
+              "status": "sent"
+            },
+            {
+              "line": 1890,
+              "ts": "2026-02-09T09:10:32.698Z",
+              "method": "staged-and-unstaged-changes",
+              "type": "worker-response",
+              "status": "sent"
+            },
+            {
+              "line": 1928,
+              "ts": "2026-02-09T09:10:49.275Z",
+              "method": "thread-stream-state-changed",
+              "type": "ipc-broadcast",
+              "status": "sent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "turn-lifecycle",
+      "status": "fail",
+      "requiredSignals": [
+        "method:turn/start",
+        "method:turn/interrupt",
+        "method:turn/completed",
+        "method:item/agentMessage/delta"
+      ],
+      "matchedSignals": [
+        "method:turn/start"
+      ],
+      "missingSignals": [
+        "method:turn/interrupt",
+        "method:turn/completed",
+        "method:item/agentMessage/delta"
+      ],
+      "evidence": [
+        {
+          "signal": "method:turn/start",
+          "lines": [
+            {
+              "line": 204,
+              "ts": "2026-02-09T09:10:26.356Z",
+              "method": "thread-stream-state-changed",
+              "type": "ipc-broadcast",
+              "status": "sent"
+            },
+            {
+              "line": 208,
+              "ts": "2026-02-09T09:10:26.991Z",
+              "method": "thread-stream-state-changed",
+              "type": "ipc-broadcast",
+              "status": "sent"
+            },
+            {
+              "line": 1022,
+              "ts": "2026-02-09T09:10:30.680Z",
+              "method": "branch-changes",
+              "type": "worker-response",
+              "status": "sent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "approval-lifecycle",
+      "status": "fail",
+      "requiredSignals": [
+        "method:item/commandExecution/requestApproval",
+        "method:item/fileChange/requestApproval",
+        "response:approval"
+      ],
+      "matchedSignals": [],
+      "missingSignals": [
+        "method:item/commandExecution/requestApproval",
+        "method:item/fileChange/requestApproval",
+        "response:approval"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "mcp-auth-status",
+      "status": "fail",
+      "requiredSignals": [
+        "method:getAuthStatus",
+        "method:mcpServerStatus/list",
+        "token:mcp-auth-authorized",
+        "token:mcp-auth-unauthorized"
+      ],
+      "matchedSignals": [
+        "method:getAuthStatus",
+        "method:mcpServerStatus/list"
+      ],
+      "missingSignals": [
+        "token:mcp-auth-authorized",
+        "token:mcp-auth-unauthorized"
+      ],
+      "evidence": [
+        {
+          "signal": "method:getAuthStatus",
+          "lines": [
+            {
+              "line": 204,
+              "ts": "2026-02-09T09:10:26.356Z",
+              "method": "thread-stream-state-changed",
+              "type": "ipc-broadcast",
+              "status": "sent"
+            },
+            {
+              "line": 1022,
+              "ts": "2026-02-09T09:10:30.680Z",
+              "method": "branch-changes",
+              "type": "worker-response",
+              "status": "sent"
+            }
+          ]
+        },
+        {
+          "signal": "method:mcpServerStatus/list",
+          "lines": [
+            {
+              "line": 204,
+              "ts": "2026-02-09T09:10:26.356Z",
+              "method": "thread-stream-state-changed",
+              "type": "ipc-broadcast",
+              "status": "sent"
+            },
+            {
+              "line": 449,
+              "ts": "2026-02-09T09:10:27.880Z",
+              "method": null,
+              "type": "log-message",
+              "status": null
+            },
+            {
+              "line": 451,
+              "ts": "2026-02-09T09:10:27.883Z",
+              "method": "mcpServerStatus/list",
+              "type": "mcp-request",
+              "status": null
+            },
+            {
+              "line": 451,
+              "ts": "2026-02-09T09:10:27.883Z",
+              "method": "mcpServerStatus/list",
+              "type": "mcp-request",
+              "status": null
+            },
+            {
+              "line": 452,
+              "ts": "2026-02-09T09:10:27.886Z",
+              "method": "mcpServerStatus/list",
+              "type": "mcp-request",
+              "status": "ok"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

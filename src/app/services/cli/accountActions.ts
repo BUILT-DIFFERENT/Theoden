@@ -51,11 +51,18 @@ export async function runAccountAction(
     }
     const result = await startAccountLogin("apiKey", apiKey.trim());
     const url = readLoginUrl(result);
+    const resultType =
+      result && typeof result === "object" && typeof result.type === "string"
+        ? result.type
+        : null;
     if (url) {
       options.openExternal(url);
     }
+    if (resultType === "chatgpt") {
+      return "Complete sign-in in your browser.";
+    }
     await options.refreshAccount();
-    return "Sign-in started.";
+    return "Signed in.";
   }
 
   const result = await startAccountLogin("chatgpt");
@@ -63,6 +70,5 @@ export async function runAccountAction(
   if (url) {
     options.openExternal(url);
   }
-  await options.refreshAccount();
-  return "Sign-in started.";
+  return "Complete sign-in in your browser.";
 }

@@ -101,6 +101,12 @@ vi.mock("@/app/services/cli/config", () => ({
   loadMcpServerStatuses: () => Promise.resolve([]),
   mcpServersFromConfig: () => [],
   providersFromConfig: () => [],
+  reloadMcpServerConnections: () => Promise.resolve({}),
+  startMcpServerOauthLogin: () =>
+    Promise.resolve({
+      name: "github",
+      authorizationUrl: "https://example.test/oauth",
+    }),
   validateConfig: () => Promise.resolve({ valid: true, errors: [], keys: 0 }),
 }));
 
