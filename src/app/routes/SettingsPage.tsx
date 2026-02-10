@@ -1194,7 +1194,7 @@ export function SettingsPage() {
                   void handleOpenConfigFile();
                 }}
               >
-                Open config file
+                Copy config path
               </button>
               <button
                 className={actionButtonClass}

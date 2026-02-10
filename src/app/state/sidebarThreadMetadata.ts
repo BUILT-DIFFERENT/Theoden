@@ -55,19 +55,28 @@ function snapshotRecord(): SidebarThreadMetadataMap {
   return payload;
 }
 
-function hydrateFromRecord(value: unknown) {
+function normalizeRecord(value: unknown): SidebarThreadMetadataMap {
   if (!value || typeof value !== "object") {
-    return;
+    return {};
   }
-  metadataCache.clear();
+  const normalized: SidebarThreadMetadataMap = {};
   Object.entries(value as Record<string, unknown>).forEach(
     ([threadId, entry]) => {
       const normalizedEntry = normalizeEntry(entry);
       if (normalizedEntry) {
-        metadataCache.set(threadId, normalizedEntry);
+        normalized[threadId] = normalizedEntry;
       }
     },
   );
+  return normalized;
+}
+
+function hydrateFromRecord(value: unknown) {
+  const normalized = normalizeRecord(value);
+  metadataCache.clear();
+  Object.entries(normalized).forEach(([threadId, entry]) => {
+    metadataCache.set(threadId, entry);
+  });
 }
 
 function emit() {
@@ -115,7 +124,12 @@ function loadFromStorage() {
   const localSnapshot = snapshotRecord();
   void syncPersistedAtom<SidebarThreadMetadataMap>(ATOM_KEY, localSnapshot)
     .then((hostSnapshot) => {
-      hydrateFromRecord(hostSnapshot);
+      const latestLocalSnapshot = snapshotRecord();
+      const mergedSnapshot = {
+        ...normalizeRecord(hostSnapshot),
+        ...latestLocalSnapshot,
+      };
+      hydrateFromRecord(mergedSnapshot);
       persist();
       emit();
     })
