@@ -14,6 +14,7 @@ import { startAppServer } from "@/app/services/cli/appServer";
 import { useAppServerStream } from "@/app/services/cli/useAppServerStream";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
 import { useInteractionAudit } from "@/app/services/dev/useInteractionAudit";
+import { openExternalUrl } from "@/app/services/host/external";
 import { subscribeHostDeeplinks } from "@/app/services/host/runtime";
 import {
   executeMenuCommand,
@@ -302,11 +303,7 @@ export function AppShell() {
           setReviewOpen((open) => !open);
         },
         openDocs: () => {
-          window.open(
-            "https://developers.openai.com/codex/",
-            "_blank",
-            "noopener,noreferrer",
-          );
+          void openExternalUrl("https://developers.openai.com/codex/");
         },
         closeWindow: closeCurrentWindow,
         quitApp: closeCurrentWindow,
@@ -329,11 +326,7 @@ export function AppShell() {
           document.execCommand(action);
         },
         showAbout: () => {
-          window.open(
-            "https://developers.openai.com/codex/",
-            "_blank",
-            "noopener,noreferrer",
-          );
+          void openExternalUrl("https://developers.openai.com/codex/");
         },
       });
     },
@@ -387,7 +380,7 @@ export function AppShell() {
     if (remoteTaskMatch) return "Remote task";
     if (worktreeInitMatch) return "Worktree init";
     if (settingsMatch) return "Settings";
-    if (threadMatch) return "Thread";
+    if (threadMatch) return thread?.title ?? "Thread";
     return "Codex";
   })();
   const topBarVariant = threadMatch
@@ -402,27 +395,37 @@ export function AppShell() {
       <EnvironmentUiProvider>
         <AppServerHealthProvider value={appServerHealth}>
           <ThreadUiProvider value={threadUi}>
-            <div className="relative min-h-screen p-3 text-ink-50 sm:p-4 lg:p-6">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_10%,rgba(150,183,255,0.4),transparent_45%),radial-gradient(circle_at_78%_14%,rgba(126,158,247,0.45),transparent_44%),radial-gradient(circle_at_60%_82%,rgba(38,70,155,0.35),transparent_56%)]" />
-              <div className="relative mx-auto flex min-h-[calc(100vh-1.5rem)] max-w-[1460px] flex-col overflow-hidden rounded-[20px] border border-white/10 bg-[#070d1a]/85 shadow-[0_40px_90px_rgba(4,8,20,0.7)] backdrop-blur-xl">
+            <div className="relative h-screen overflow-hidden p-4 text-ink-50 sm:p-5 lg:p-6">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_9%_10%,rgba(182,208,255,0.34),transparent_42%),radial-gradient(circle_at_83%_16%,rgba(167,195,255,0.28),transparent_40%),radial-gradient(circle_at_25%_82%,rgba(104,132,225,0.36),transparent_48%)]" />
+              <div className="relative mx-auto flex h-full max-w-[1150px] flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#0f131a]/94 shadow-[0_32px_72px_rgba(5,10,24,0.52)] backdrop-blur-xl">
                 {isDesktop ? (
                   <WindowTitlebar onCommand={handleMenuCommand} />
                 ) : (
-                  <header className="flex h-10 items-center justify-between border-b border-white/10 bg-[#121621]/80 px-3 text-xs text-ink-300">
+                  <header className="flex h-10 items-center border-b border-white/10 bg-[#0d1015]/95 px-3 text-[0.7rem] text-ink-300">
                     <div className="flex items-center gap-1.5">
                       <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
                       <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
                       <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
                     </div>
-                    <span className="font-medium text-ink-200">
-                      Codex Command Center
-                    </span>
-                    <div className="w-10" />
+                    <div className="ml-3 flex min-w-0 items-center gap-2 text-ink-200">
+                      <span className="truncate text-[0.72rem] font-medium">
+                        {topBarTitle}
+                      </span>
+                      <span className="text-ink-500">...</span>
+                    </div>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <button className="rounded-full border border-white/10 px-2 py-0.5 text-[0.62rem] text-ink-300 hover:border-white/25">
+                        Open
+                      </button>
+                      <button className="rounded-full border border-white/10 px-2 py-0.5 text-[0.62rem] text-ink-300 hover:border-white/25">
+                        Commit
+                      </button>
+                    </div>
                   </header>
                 )}
                 <div className="flex min-h-0 flex-1 overflow-hidden">
                   <AppSidebar />
-                  <main className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[#0b1224]/82 via-[#0a0f1f]/76 to-[#090d1a]/85">
+                  <main className="flex min-h-0 flex-1 flex-col bg-[#121821]">
                     <ThreadTopBar
                       variant={topBarVariant}
                       title={topBarTitle}
@@ -432,11 +435,11 @@ export function AppShell() {
                     <div
                       className={
                         showReviewPanel
-                          ? "grid flex-1 gap-6 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_380px]"
-                          : "flex-1 px-5 py-5"
+                          ? "grid flex-1 gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_430px]"
+                          : "flex-1 px-3 py-3"
                       }
                     >
-                      <section className="min-h-[70vh] min-w-0">
+                      <section className="min-h-0 min-w-0 h-full">
                         <Outlet />
                       </section>
                       {showReviewPanel ? (

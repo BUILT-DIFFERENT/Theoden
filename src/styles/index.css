@@ -41,21 +41,21 @@
   --scrollbar-track: rgba(13, 17, 23, 0.5);
   --app-bg:
     radial-gradient(
-      circle at 10% 12%,
-      rgba(118, 148, 255, 0.3),
-      transparent 48%
-    ),
-    radial-gradient(
-      circle at 82% 22%,
-      rgba(141, 176, 255, 0.32),
+      circle at 10% 14%,
+      rgba(153, 185, 255, 0.72),
       transparent 44%
     ),
     radial-gradient(
-      circle at 30% 86%,
-      rgba(60, 87, 172, 0.35),
-      transparent 55%
+      circle at 84% 18%,
+      rgba(188, 214, 255, 0.56),
+      transparent 40%
     ),
-    #0a1020;
+    radial-gradient(
+      circle at 24% 82%,
+      rgba(108, 136, 238, 0.56),
+      transparent 50%
+    ),
+    linear-gradient(152deg, #3553b4 0%, #3150af 44%, #4862bb 100%);
   --app-fg: #f6f8fb;
 }
 
@@ -87,28 +87,30 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  height: 100%;
   overscroll-behavior: none;
 }
 
 body {
   font-family: "Instrument Sans", sans-serif;
   background: var(--app-bg);
+  background-attachment: fixed;
   color: var(--app-fg);
-  min-height: 100vh;
+  margin: 0;
+  overflow: hidden;
 }
 
 @layer components {
   .surface-panel {
-    @apply rounded-2xl border border-white/10 bg-ink-900/70 shadow-card;
+    @apply rounded-[14px] border border-white/10 bg-[#0f131a] shadow-[0_10px_24px_rgba(0,0,0,0.3)];
   }
 
   .surface-card {
-    @apply rounded-xl border border-white/10 bg-black/20;
+    @apply rounded-xl border border-white/10 bg-[#0d1118];
   }
 
   .btn-flat {
-    @apply rounded-full border border-white/10 px-3 py-1 text-xs text-ink-200 transition hover:border-flare-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply rounded-full border border-white/10 px-3 py-1 text-xs text-ink-200 transition hover:border-white/20 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .btn-primary {

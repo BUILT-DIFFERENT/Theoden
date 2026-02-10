@@ -90,3 +90,10 @@ Rationale: these are telemetry/debug or worker-lane channels that are not requir
 - `third_party/CodexDesktop-Rebuild/docs/parity/feature-contract.md`
 - `third_party/CodexDesktop-Rebuild/docs/parity/routes.json`
 - `third_party/CodexDesktop-Rebuild/docs/parity/animations.json`
+
+## Recent Closure Notes (February 10, 2026)
+
+- OAuth login continuity: wired `account/login/completed` notifications through the app-server stream to login/account UI so ChatGPT sign-in completion updates account state without refresh.
+- Host browser handoff: moved account/docs/settings external links to a dedicated Tauri command (`host_open_external_url`) for consistent desktop OAuth launching behavior.
+- Composer auth gate: block run start when account auth is required and redirect to `/login`; additionally redirect on auth/unauthorized run errors to avoid dead-end send failures.
+- Dark UI parity pass: tightened shell/sidebar/thread/diff spacing and contrast to align with official dark reference composition and sizing.

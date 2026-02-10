@@ -527,6 +527,17 @@ fn host_dispatch_deeplink(app: AppHandle, url: String) -> Result<runtime_contrac
     Ok(payload)
 }
 
+#[tauri::command]
+fn host_open_external_url(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err("url is required".to_string());
+    }
+    tauri::webbrowser::open(trimmed)
+        .map_err(|error| format!("failed to open external URL: {error}"))?;
+    Ok(())
+}
+
 fn next_request_id() -> u64 {
     REQUEST_NONCE.fetch_add(1, Ordering::Relaxed)
 }
@@ -847,7 +858,8 @@ fn main() {
             bridge_show_context_menu,
             host_get_update_state,
             host_check_updates,
-            host_dispatch_deeplink
+            host_dispatch_deeplink,
+            host_open_external_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

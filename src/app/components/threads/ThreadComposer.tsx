@@ -26,6 +26,7 @@ import {
   startThread,
   startTurn,
 } from "@/app/services/cli/turns";
+import { useAccount } from "@/app/services/cli/useAccount";
 import { useModels } from "@/app/services/cli/useModels";
 import { useRunProgress } from "@/app/services/cli/useRunProgress";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
@@ -66,6 +67,20 @@ const cloudAttemptsFromQuality: Record<QualityPreset, number> = {
   high: 2,
   extra_high: 4,
 };
+
+function isAuthRequiredError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("sign in") ||
+    message.includes("not authenticated") ||
+    message.includes("authentication") ||
+    message.includes("unauthorized") ||
+    message.includes("401")
+  );
+}
 const commandOptions = [
   {
     id: "summarize",
@@ -134,6 +149,7 @@ export function ThreadComposer({
   } = useAppUi();
   const { workspaces } = useWorkspaces();
   const { modelOptions } = useModels();
+  const { account } = useAccount();
   const { selectedWorkspace, setWorkspacePickerOpen } = useWorkspaceUi();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const branchMenuRef = useRef<HTMLDivElement | null>(null);
@@ -424,6 +440,10 @@ export function ThreadComposer({
       setWorkspacePickerOpen(true);
       throw new Error("Select a workspace before starting a run.");
     }
+    if (account?.requiresOpenaiAuth && !account.isAuthenticated) {
+      void navigate({ to: "/login" });
+      throw new Error("Sign in with your account before starting a run.");
+    }
 
     const cwd = resolvedWorkspacePath ?? undefined;
     const runModel =
@@ -534,6 +554,11 @@ export function ThreadComposer({
           queryKey: ["threads", "read", targetThreadId],
         });
       } catch (commandError) {
+        if (isAuthRequiredError(commandError)) {
+          setError("Sign in with your account before starting a run.");
+          void navigate({ to: "/login" });
+          return;
+        }
         setError(
           commandError instanceof Error
             ? commandError.message
@@ -559,6 +584,11 @@ export function ThreadComposer({
     try {
       await submitPrompt(commandPrompts[commandId], []);
     } catch (commandError) {
+      if (isAuthRequiredError(commandError)) {
+        setError("Sign in with your account before starting a run.");
+        void navigate({ to: "/login" });
+        return;
+      }
       setError(
         commandError instanceof Error
           ? commandError.message
@@ -584,6 +614,11 @@ export function ThreadComposer({
     if (!canSubmit) {
       return;
     }
+    if (requiresAccountLogin) {
+      setError("Sign in with your account before sending a message.");
+      void navigate({ to: "/login" });
+      return;
+    }
     const trimmedPrompt = composerDraft.trim();
     if (!trimmedPrompt) {
       return;
@@ -593,6 +628,11 @@ export function ThreadComposer({
     try {
       await submitPrompt(trimmedPrompt, selectedAttachments);
     } catch (submitError) {
+      if (isAuthRequiredError(submitError)) {
+        setError("Sign in with your account before sending a message.");
+        void navigate({ to: "/login" });
+        return;
+      }
       setError(
         submitError instanceof Error
           ? submitError.message
@@ -686,16 +726,19 @@ export function ThreadComposer({
   const workspaceLabel = resolvedWorkspacePath
     ? workspaceNameFromPath(resolvedWorkspacePath)
     : "Add workspace";
+  const requiresAccountLogin = Boolean(
+    account?.requiresOpenaiAuth && !account.isAuthenticated,
+  );
 
   return (
     <div className="space-y-3">
-      <div className="rounded-[24px] border border-white/10 bg-[#090f1d]/88 p-4 shadow-[0_12px_34px_rgba(2,6,18,0.45)]">
+      <div className="rounded-[16px] border border-white/10 bg-[#0d1118] p-3.5 shadow-[0_10px_26px_rgba(2,6,18,0.35)]">
         {selectedAttachments.length ? (
           <div className="mb-3 flex flex-wrap gap-2">
             {selectedAttachments.map((attachment) => (
               <button
                 key={attachment}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-3 py-1 text-xs text-ink-200 hover:border-flare-300"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-200 hover:border-flare-300"
                 onClick={() => removeAttachment(attachment)}
                 title={`Remove ${attachment}`}
               >
@@ -708,8 +751,8 @@ export function ThreadComposer({
         ) : null}
         <textarea
           ref={composerRef}
-          className={`w-full resize-none bg-transparent p-2 text-base text-ink-100 placeholder:text-ink-500/80 focus:outline-none ${
-            isCompactComposer ? "h-20" : "h-28"
+          className={`w-full resize-none bg-transparent p-2 text-[0.95rem] leading-6 text-ink-100 placeholder:text-ink-500/80 focus:outline-none ${
+            isCompactComposer ? "h-20" : "h-24"
           }`}
           placeholder={
             placeholder ?? "Ask Codex anything, @ to add files, / for commands"
@@ -854,8 +897,8 @@ export function ThreadComposer({
             <button
               className={`rounded-full border p-2 transition ${
                 attachmentsDrawerOpen
-                  ? "border-flare-300 bg-flare-400/14 text-ink-50"
-                  : "border-white/10 bg-black/25 hover:border-flare-300"
+                  ? "border-flare-300 bg-flare-400/12 text-ink-50"
+                  : "border-white/10 bg-black/20 hover:border-flare-300"
               }`}
               onClick={() => setAttachmentsDrawerOpen((open) => !open)}
               aria-label={
@@ -867,7 +910,7 @@ export function ThreadComposer({
               <Plus className="h-3.5 w-3.5" />
             </button>
             <select
-              className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-xs text-ink-100"
+              className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-100"
               value={resolvedModel}
               onChange={(event) => setActiveModel(event.target.value)}
             >
@@ -878,7 +921,7 @@ export function ThreadComposer({
               ))}
             </select>
             <select
-              className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-xs text-ink-100"
+              className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-100"
               value={qualityPreset}
               onChange={(event) =>
                 setQualityPreset(event.target.value as QualityPreset)
@@ -896,7 +939,7 @@ export function ThreadComposer({
               className={`rounded-full border p-2 transition ${
                 isContextLocked
                   ? "border-flare-300 bg-flare-400/10 text-ink-50"
-                  : "border-white/10 bg-black/25 text-ink-300 hover:border-flare-300"
+                  : "border-white/10 bg-black/20 text-ink-300 hover:border-flare-300"
               }`}
               onClick={() => {
                 setIsContextLocked((locked) => !locked);
@@ -916,7 +959,7 @@ export function ThreadComposer({
               <Lock className="h-3.5 w-3.5" />
             </button>
             <button
-              className={`flex items-center justify-center rounded-full border border-flare-300 bg-flare-400/20 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-black/25 disabled:text-ink-400 ${
+              className={`flex items-center justify-center rounded-full border border-flare-300 bg-flare-400/18 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-black/25 disabled:text-ink-400 ${
                 isCompactComposer ? "h-9 w-9" : "h-10 w-10"
               }`}
               onClick={() => {
@@ -937,7 +980,7 @@ export function ThreadComposer({
           </div>
         </div>
         {attachmentsDrawerOpen ? (
-          <div className="mt-3 rounded-2xl border border-white/10 bg-black/35 p-3">
+          <div className="mt-3 rounded-2xl border border-white/10 bg-black/28 p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
                 Attachment picker

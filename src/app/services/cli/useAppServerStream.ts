@@ -6,6 +6,7 @@ import {
   subscribeAppServerNotifications,
   subscribeAppServerRequests,
 } from "@/app/services/cli/appServerEventHub";
+import { registerAuthNotification } from "@/app/services/cli/authNotifications";
 import { registerAutomationRunNotification } from "@/app/services/cli/automationRuns";
 import { registerConfigWarningNotification } from "@/app/services/cli/configWarnings";
 import { registerDiffNotification } from "@/app/services/cli/diffUpdates";
@@ -22,6 +23,7 @@ export function useAppServerStream() {
         registerApprovalItem(notification);
         registerDiffNotification(notification);
         registerConfigWarningNotification(notification);
+        registerAuthNotification(notification);
         registerTerminalNotification(notification);
         registerAutomationRunNotification(notification);
       },

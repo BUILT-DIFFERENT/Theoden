@@ -38,6 +38,7 @@ import {
   removeWorktree,
   type WorktreeInventoryRow,
 } from "@/app/services/git/worktrees";
+import { openExternalUrl } from "@/app/services/host/external";
 import {
   checkForHostUpdates,
   getBridgeBuildFlavor,
@@ -768,7 +769,7 @@ export function SettingsPage() {
         const message = await performAccountAction(action, {
           promptApiKey: () => window.prompt("Enter OpenAI API key"),
           openExternal: (url) => {
-            window.open(url, "_blank", "noopener,noreferrer");
+            void openExternalUrl(url);
           },
           refreshAccount,
         });
@@ -931,7 +932,7 @@ export function SettingsPage() {
       const result = await startMcpServerOauthLogin({
         name: server.id,
       });
-      window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
+      await openExternalUrl(result.authorizationUrl);
       await reloadMcpServerConfig();
       await refreshMcpServers();
       return reconnect
@@ -1305,10 +1306,8 @@ export function SettingsPage() {
               <button
                 className={actionButtonClass}
                 onClick={() => {
-                  window.open(
+                  void openExternalUrl(
                     "https://platform.openai.com/settings/organization",
-                    "_blank",
-                    "noopener,noreferrer",
                   );
                 }}
               >
@@ -1385,10 +1384,8 @@ export function SettingsPage() {
               <button
                 className={actionButtonClass}
                 onClick={() => {
-                  window.open(
+                  void openExternalUrl(
                     "https://platform.openai.com/settings/data-controls",
-                    "_blank",
-                    "noopener,noreferrer",
                   );
                 }}
               >
@@ -1397,10 +1394,8 @@ export function SettingsPage() {
               <button
                 className={actionButtonClass}
                 onClick={() => {
-                  window.open(
+                  void openExternalUrl(
                     "https://platform.openai.com/settings/privacy",
-                    "_blank",
-                    "noopener,noreferrer",
                   );
                 }}
               >
@@ -1434,11 +1429,7 @@ export function SettingsPage() {
               <button
                 className={actionButtonClass}
                 onClick={() => {
-                  window.open(
-                    "https://platform.openai.com/usage",
-                    "_blank",
-                    "noopener,noreferrer",
-                  );
+                  void openExternalUrl("https://platform.openai.com/usage");
                 }}
               >
                 Open usage dashboard
@@ -1446,10 +1437,8 @@ export function SettingsPage() {
               <button
                 className={actionButtonClass}
                 onClick={() => {
-                  window.open(
+                  void openExternalUrl(
                     "https://platform.openai.com/settings/organization/general",
-                    "_blank",
-                    "noopener,noreferrer",
                   );
                 }}
               >

@@ -121,11 +121,13 @@ export function ThreadTopBar({
   };
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#0d111a]/88 px-5 py-3.5">
+    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#10151d] px-3 py-2">
       <div className="flex items-center gap-2">
-        <h1 className="font-display text-lg text-ink-50">{headerTitle}</h1>
+        <h1 className="text-[0.86rem] font-medium tracking-[0.01em] text-ink-50">
+          {headerTitle}
+        </h1>
         {showThreadHeader ? (
-          <span className="text-xs text-ink-400">
+          <span className="text-[0.66rem] text-ink-500">
             {subtitle}
             {isCurrentThreadLoaded ? " · loaded" : ""}
           </span>
@@ -134,7 +136,7 @@ export function ThreadTopBar({
       {showThreadHeader ? (
         <div className="flex items-center gap-2">
           {hasChanges ? (
-            <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[0.68rem] text-ink-300">
+            <span className="rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[0.6rem] text-ink-300">
               +{changeSummary?.additions ?? 0} -{changeSummary?.deletions ?? 0}
             </span>
           ) : null}

@@ -1,15 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   AccountActionCancelledError,
   cancelPendingChatgptLogin,
   runAccountAction,
 } from "@/app/services/cli/accountActions";
+import { subscribeAccountLoginCompleted } from "@/app/services/cli/authNotifications";
+import { openExternalUrl } from "@/app/services/host/external";
+import { isTauri } from "@/app/utils/tauri";
 
 export function LoginPage() {
   const queryClient = useQueryClient();
+  const canUseDesktopAuth = isTauri();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<
@@ -17,9 +21,33 @@ export function LoginPage() {
   >(null);
   const [pendingLoginId, setPendingLoginId] = useState<string | null>(null);
 
+  useEffect(() => {
+    return subscribeAccountLoginCompleted((event) => {
+      if (pendingLoginId && event.loginId && event.loginId !== pendingLoginId) {
+        return;
+      }
+      setPendingLoginId(null);
+      setActiveAction(null);
+      if (event.success) {
+        setError(null);
+        setMessage("Signed in.");
+        void queryClient.invalidateQueries({
+          queryKey: ["account", "read"],
+        });
+        return;
+      }
+      setMessage(null);
+      setError(event.error ?? "Sign-in failed.");
+    });
+  }, [pendingLoginId, queryClient]);
+
   const handleAction = async (action: "login-chatgpt" | "login-api-key") => {
     setError(null);
     setMessage(null);
+    if (!canUseDesktopAuth) {
+      setError("Account sign-in is available in the desktop app runtime.");
+      return;
+    }
     if (action === "login-chatgpt") {
       setPendingLoginId(null);
     }
@@ -28,7 +56,7 @@ export function LoginPage() {
       const result = await runAccountAction(action, {
         promptApiKey: () => window.prompt("Enter OpenAI API key"),
         openExternal: (url) => {
-          window.open(url, "_blank", "noopener,noreferrer");
+          void openExternalUrl(url);
         },
         refreshAccount: async () => {
           await queryClient.invalidateQueries({
@@ -95,7 +123,7 @@ export function LoginPage() {
           onClick={() => {
             void handleAction("login-chatgpt");
           }}
-          disabled={activeAction !== null}
+          disabled={activeAction !== null || !canUseDesktopAuth}
         >
           {activeAction === "login-chatgpt"
             ? "Starting ChatGPT sign-in…"
@@ -106,7 +134,7 @@ export function LoginPage() {
           onClick={() => {
             void handleAction("login-api-key");
           }}
-          disabled={activeAction !== null}
+          disabled={activeAction !== null || !canUseDesktopAuth}
         >
           {activeAction === "login-api-key"
             ? "Checking API key…"
@@ -133,6 +161,11 @@ export function LoginPage() {
       <p className="mt-4 text-xs text-ink-400">
         Or continue to <Link to="/">new thread</Link>.
       </p>
+      {!canUseDesktopAuth ? (
+        <p className="mt-2 text-xs text-ink-500">
+          Desktop OAuth is unavailable in browser preview mode.
+        </p>
+      ) : null}
     </section>
   );
 }

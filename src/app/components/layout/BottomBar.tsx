@@ -136,11 +136,11 @@ export function BottomBar() {
   };
 
   return (
-    <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-[#0a101e]/80 px-5 py-3 text-xs text-ink-300">
+    <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-[#090e15]/92 px-4 py-2 text-[0.68rem] text-ink-300">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative" ref={continueMenuRef}>
           <button
-            className="btn-flat inline-flex items-center gap-2"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[0.68rem] text-ink-300 transition hover:border-flare-300 hover:text-ink-50"
             onClick={() => setContinueMenuOpen((open) => !open)}
           >
             Continue in {continueLabel}
@@ -172,7 +172,7 @@ export function BottomBar() {
         </div>
         <div className="relative" ref={permissionMenuRef}>
           <button
-            className="btn-flat inline-flex items-center gap-2"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[0.68rem] text-ink-300 transition hover:border-flare-300 hover:text-ink-50"
             onClick={() => setPermissionMenuOpen((open) => !open)}
           >
             Permissions: {permissionLabel}
@@ -209,7 +209,7 @@ export function BottomBar() {
           align="right"
           trigger={({ toggle }) => (
             <button
-              className="btn-flat inline-flex items-center gap-2"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[0.68rem] text-ink-300 transition hover:border-flare-300 hover:text-ink-50"
               onClick={toggle}
             >
               <Settings className="h-3.5 w-3.5" />
@@ -220,7 +220,7 @@ export function BottomBar() {
         />
         <div className="relative" ref={branchMenuRef}>
           <button
-            className="btn-flat inline-flex items-center gap-2"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[0.68rem] text-ink-300 transition hover:border-flare-300 hover:text-ink-50"
             onClick={() => setBranchMenuOpen((open) => !open)}
           >
             <GitBranch className="h-3.5 w-3.5" />

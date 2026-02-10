@@ -3,25 +3,25 @@ import type { Project, ThreadDetail, ThreadSummary } from "@/app/types";
 export const mockThreads: ThreadSummary[] = [
   {
     id: "thread-032",
-    title: "Fix timestamp bug in invoice export",
-    subtitle: "Scanned 84 files · 3 edits · tests pending",
+    title: "Polish app for launch prep",
+    subtitle: "Add drag and drop to gallery photobooth",
     status: "needs_review",
-    projectId: "project-northstar",
-    lastUpdated: "2 minutes ago",
+    projectId: "project-photobooth",
+    lastUpdated: "1d",
     changeSummary: {
-      additions: 76,
-      deletions: 30,
+      additions: 156,
+      deletions: 64,
     },
     modelProvider: "openai",
     source: "cli",
   },
   {
     id: "thread-029",
-    title: "Add automation for CI failure triage",
-    subtitle: "Drafted automation template",
+    title: "Create new app",
+    subtitle: "Localize iOS app",
     status: "running",
-    projectId: "project-aurora",
-    lastUpdated: "5 minutes ago",
+    projectId: "project-desktop",
+    lastUpdated: "4d",
     modelProvider: "openai",
     source: "app-server",
   },
@@ -29,36 +29,36 @@ export const mockThreads: ThreadSummary[] = [
 
 export const mockProjects: Project[] = [
   {
-    id: "project-northstar",
-    name: "Northstar Desktop",
-    path: "C:/Repos/northstar",
-    tags: ["tauri", "react", "active"],
+    id: "project-photobooth",
+    name: "photobooth",
+    path: "C:/Repos/photobooth",
+    tags: ["nextjs", "ui", "active"],
     activeRuns: [
       {
         id: "run-841",
-        title: "Timestamp hotfix",
+        title: "Launch polish",
         status: "needs_review",
         statusLabel: "Needs review",
         threadId: "thread-032",
-        projectId: "project-northstar",
+        projectId: "project-photobooth",
       },
     ],
     recentThreads: mockThreads,
     lastThreadId: "thread-032",
   },
   {
-    id: "project-aurora",
-    name: "Aurora API",
-    path: "C:/Repos/aurora",
-    tags: ["rust", "automation"],
+    id: "project-desktop",
+    name: "Desktop",
+    path: "C:/Repos/desktop",
+    tags: ["tauri", "react"],
     activeRuns: [
       {
         id: "run-910",
-        title: "CI failures triage",
+        title: "Navigation refresh",
         status: "running",
         statusLabel: "Running",
         threadId: "thread-029",
-        projectId: "project-aurora",
+        projectId: "project-desktop",
       },
     ],
     recentThreads: mockThreads,
@@ -68,11 +68,11 @@ export const mockProjects: Project[] = [
 
 export const mockThreadDetail: ThreadDetail = {
   id: "thread-032",
-  title: "Fix timestamp bug in invoice export",
-  subtitle: "Worktree mode · Scanned 84 files · 3 edits",
+  title: "Polish app for launch prep",
+  subtitle: "photobooth",
   status: "needs_review",
-  projectId: "project-northstar",
-  lastUpdated: "2 minutes ago",
+  projectId: "project-photobooth",
+  lastUpdated: "1 day ago",
   mode: "worktree",
   worktreeStrategy: "clone",
   effort: "high",
@@ -80,29 +80,29 @@ export const mockThreadDetail: ThreadDetail = {
     {
       id: "evt-1",
       timestamp: "10:02",
-      label: "Planning",
-      detail: "Outlined bug triage plan",
+      label: "Edited SnapButton.tsx",
+      detail: "+17 -19",
       status: "running",
     },
     {
       id: "evt-2",
       timestamp: "10:04",
-      label: "Searched 84 files",
-      detail: "Focused on invoice export pipeline",
+      label: "Edited PhotoStrip.tsx",
+      detail: "+22 -2",
       status: "running",
     },
     {
       id: "evt-3",
       timestamp: "10:12",
-      label: "Edited 3 files",
-      detail: "Updated ISO8601 parsing",
+      label: "Edited PreviewPolaroid.tsx",
+      detail: "+5 -2",
       status: "needs_review",
     },
     {
       id: "evt-4",
       timestamp: "10:18",
-      label: "Tests pending",
-      detail: "Awaiting user review",
+      label: "Ran git status -sb",
+      detail: "Explored 1 list",
       status: "queued",
     },
   ],
@@ -110,44 +110,44 @@ export const mockThreadDetail: ThreadDetail = {
     {
       id: "att-1",
       kind: "image",
-      name: "export-bug.png",
-      path: "C:/Users/gamer/Documents/attachments/export-bug.png",
+      name: "booth-ui.png",
+      path: "C:/Users/gamer/Documents/attachments/booth-ui.png",
     },
   ],
   diffSummary: {
-    filesChanged: 3,
-    additions: 42,
-    deletions: 17,
+    filesChanged: 9,
+    additions: 63,
+    deletions: 32,
     files: [
       {
-        path: "src/export/serializer.ts",
-        additions: 18,
-        deletions: 3,
+        path: "app/api/generate/route.ts",
+        additions: 1,
+        deletions: 1,
         status: "modified",
       },
       {
-        path: "src/export/timezone.ts",
+        path: "app/components/BackgroundEffects.tsx",
         additions: 12,
-        deletions: 9,
+        deletions: 0,
         status: "modified",
       },
       {
-        path: "src/export/iso.ts",
-        additions: 12,
-        deletions: 5,
+        path: "app/components/BoothTopPanel.tsx",
+        additions: 35,
+        deletions: 0,
         status: "modified",
       },
     ],
   },
-  diffText: `diff --git a/src/export/serializer.ts b/src/export/serializer.ts
-index 1c2d3e4..5f6a7b8 100644
---- a/src/export/serializer.ts
-+++ b/src/export/serializer.ts
-@@ -44,7 +44,9 @@ export function serializeInvoice() {
--  return formatTimestamp(record.timestamp);
-+  return formatTimestamp(record.timestamp, {
-+    allowTimezoneOffset: true,
-+  });
-}
+  diffText: `diff --git a/app/api/generate/route.ts b/app/api/generate/route.ts
+index 38bb11f..7a31822 100644
+--- a/app/api/generate/route.ts
++++ b/app/api/generate/route.ts
+@@ -101,7 +101,7 @@ const captionPromise = client.responses
+-      model: "gpt-4.1-nano",
++      model: "gpt-5.2",
+       instructions:
+         "Write a short polaroid caption as if someone labeled it with a sharpie.",
+       input: prompt,
 `,
 };

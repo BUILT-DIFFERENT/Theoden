@@ -3,6 +3,7 @@ import {
   logoutAccount,
   startAccountLogin,
 } from "@/app/services/cli/account";
+import { isTauri } from "@/app/utils/tauri";
 
 export type AccountAction = "login-chatgpt" | "login-api-key" | "logout";
 
@@ -65,6 +66,10 @@ export async function runAccountAction(
     onChatgptLoginStarted?: (loginId: string) => void;
   },
 ) {
+  if (!isTauri()) {
+    throw new Error("Account login is available in the desktop app runtime.");
+  }
+
   if (action === "logout") {
     await logoutAccount();
     await options.refreshAccount();

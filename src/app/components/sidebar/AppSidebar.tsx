@@ -35,6 +35,7 @@ import {
   listInboxItems,
   subscribeAutomationStoreUpdates,
 } from "@/app/services/host/automations";
+import { openExternalUrl } from "@/app/services/host/external";
 import { useAppUi } from "@/app/state/appUi";
 import {
   setSidebarThreadAlias,
@@ -431,7 +432,7 @@ export function AppSidebar() {
       const message = await performAccountAction(action, {
         promptApiKey: () => window.prompt("Enter OpenAI API key"),
         openExternal: (url) => {
-          window.open(url, "_blank", "noopener,noreferrer");
+          void openExternalUrl(url);
         },
         refreshAccount: async () => {
           await queryClient.invalidateQueries({
@@ -510,14 +511,14 @@ export function AppSidebar() {
   const accountAvatar = accountEmail.slice(0, 1).toUpperCase() || "?";
 
   return (
-    <aside className="flex min-h-0 w-[240px] flex-col border-r border-white/10 bg-[#1a2649]/72 px-3 py-4 backdrop-blur-xl">
-      <nav className="space-y-1 text-[0.85rem]">
+    <aside className="flex min-h-0 w-[208px] flex-col border-r border-white/10 bg-[#1b2749]/95 px-2.5 py-3 backdrop-blur-xl">
+      <nav className="space-y-1 text-[0.77rem]">
         <Link
           to="/"
-          className={`flex items-center gap-3 rounded-lg px-3 py-2 transition ${
+          className={`flex items-center gap-3 rounded-md px-3 py-2 transition ${
             newThreadMatch
-              ? "bg-white/14 text-ink-50"
-              : "text-ink-200 hover:bg-white/8 hover:text-ink-50"
+              ? "bg-[#2b395f]/90 text-ink-50"
+              : "text-ink-200 hover:bg-[#2b395f]/70 hover:text-ink-50"
           }`}
           onClick={() => {
             setComposerDraft("");
@@ -530,10 +531,10 @@ export function AppSidebar() {
         </Link>
         <Link
           to="/inbox"
-          className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 transition ${
+          className={`flex items-center justify-between gap-3 rounded-md px-3 py-2 transition ${
             inboxMatch
-              ? "bg-white/14 text-ink-50"
-              : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
+              ? "bg-[#2b395f]/90 text-ink-50"
+              : "text-ink-300 hover:bg-[#2b395f]/70 hover:text-ink-50"
           }`}
         >
           <span className="flex items-center gap-3">
@@ -548,10 +549,10 @@ export function AppSidebar() {
         </Link>
         <Link
           to="/automations"
-          className={`flex items-center gap-3 rounded-lg px-3 py-2 transition ${
+          className={`flex items-center gap-3 rounded-md px-3 py-2 transition ${
             automationsMatch
-              ? "bg-white/14 text-ink-50"
-              : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
+              ? "bg-[#2b395f]/90 text-ink-50"
+              : "text-ink-300 hover:bg-[#2b395f]/70 hover:text-ink-50"
           }`}
         >
           <Workflow className="h-4 w-4 text-ink-400" />
@@ -559,10 +560,10 @@ export function AppSidebar() {
         </Link>
         <Link
           to="/skills"
-          className={`flex items-center gap-3 rounded-lg px-3 py-2 transition ${
+          className={`flex items-center gap-3 rounded-md px-3 py-2 transition ${
             skillsMatch
-              ? "bg-white/14 text-ink-50"
-              : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
+              ? "bg-[#2b395f]/90 text-ink-50"
+              : "text-ink-300 hover:bg-[#2b395f]/70 hover:text-ink-50"
           }`}
         >
           <WandSparkles className="h-4 w-4 text-ink-400" />
@@ -570,7 +571,7 @@ export function AppSidebar() {
         </Link>
       </nav>
 
-      <div className="mt-6 flex min-h-0 flex-1 flex-col">
+      <div className="mt-5 flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between">
           <p className="text-[0.65rem] uppercase tracking-[0.25em] text-ink-400">
             Threads
@@ -717,10 +718,10 @@ export function AppSidebar() {
                     }}
                   >
                     <div
-                      className={`mb-2 rounded-xl border text-ink-300 transition ${
+                      className={`mb-1.5 rounded-lg border text-ink-300 transition ${
                         isSelected
-                          ? "border-white/18 bg-white/10"
-                          : "border-white/10 bg-black/12"
+                          ? "border-white/20 bg-[#2a3860]/85"
+                          : "border-white/10 bg-[#202c4d]/55"
                       }`}
                     >
                       <div className="flex items-center justify-between px-3 py-2">
@@ -738,7 +739,7 @@ export function AppSidebar() {
                           }}
                         >
                           <Folder className="h-3.5 w-3.5 text-ink-400" />
-                          <p className="truncate text-[0.8rem] text-ink-100">
+                          <p className="truncate text-[0.76rem] text-ink-100">
                             {workspace.name}
                           </p>
                         </button>
@@ -785,10 +786,10 @@ export function AppSidebar() {
                               return (
                                 <div
                                   key={thread.id}
-                                  className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[0.7rem] transition ${
+                                  className={`mt-1 flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-[0.67rem] transition ${
                                     isThreadSelected
-                                      ? "bg-flare-400/20 text-ink-50"
-                                      : "text-ink-300 hover:bg-white/8 hover:text-ink-50"
+                                      ? "bg-[#30416e]/90 text-ink-50"
+                                      : "text-ink-300 hover:bg-[#2c3b64]/75 hover:text-ink-50"
                                   }`}
                                 >
                                   <button
@@ -944,18 +945,18 @@ export function AppSidebar() {
         ) : null}
       </div>
 
-      <div className="mt-4 space-y-2 pt-4">
+      <div className="mt-3.5 space-y-2 border-t border-white/10 pt-3.5">
         <Link
           to="/settings/$section"
           params={{ section: "general" }}
-          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-ink-400 transition hover:bg-white/5 hover:text-ink-50"
+          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-ink-400 transition hover:bg-[#2b395f]/70 hover:text-ink-50"
         >
           <Settings className="h-3.5 w-3.5" />
           Settings
         </Link>
         <div className="relative" ref={accountMenuRef}>
           <button
-            className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left text-xs text-ink-200 transition hover:border-flare-300"
+            className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-[#202b4c]/70 px-3 py-2 text-left text-xs text-ink-200 transition hover:border-white/20"
             onClick={() => setAccountMenuOpen((open) => !open)}
           >
             <div className="flex min-w-0 items-center gap-2">
@@ -989,11 +990,7 @@ export function AppSidebar() {
               <button
                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5"
                 onClick={() => {
-                  window.open(
-                    "https://developers.openai.com/codex/",
-                    "_blank",
-                    "noopener,noreferrer",
-                  );
+                  void openExternalUrl("https://developers.openai.com/codex/");
                 }}
               >
                 <BookOpen className="h-3.5 w-3.5 text-ink-400" />

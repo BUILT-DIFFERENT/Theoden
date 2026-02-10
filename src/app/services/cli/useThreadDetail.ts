@@ -39,24 +39,24 @@ export function useThreadDetail(threadId: string | undefined) {
         id: "mock-assistant-1",
         role: "assistant",
         content:
-          "Updated invoice export timestamp parsing and prepared changes for review.",
+          "Polished the UI with new launch-ready typography, metadata, and clearer guidance across the booth, prompt dialog, and archive so the experience feels intentional and production-ready.\n\nChanges:\n- Updated layout and text surfaces to match a stronger visual system.\n- Tightened global color and contrast rules for dark-mode readability.\n- Refined photo strip and prompt dialog flows for first-time users.\n- Added clearer callouts and labels in the timeline and controls.\n\nNext steps:\n1. Run a full browser pass to verify spacing and hierarchy.\n2. Add share/download actions if you want launch touches.",
         activities: [
           {
             id: "mock-activity-1",
             kind: "command",
-            label: "pnpm lint",
+            label: "git status -sb",
             status: "completed",
             durationMs: 18000,
           },
           {
             id: "mock-activity-2",
             kind: "command",
-            label: "pnpm frontend:test",
+            label: "Explored 1 list",
             status: "completed",
             durationMs: 42000,
           },
         ],
-        workedDurationMs: 60000,
+        workedDurationMs: 96000,
       },
     ],
     [mockThreadDetail.title],

@@ -773,7 +773,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
   };
 
   return (
-    <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl border border-white/10 bg-ink-900/70 shadow-card">
+    <div className="sticky top-2 max-h-[calc(100vh-7.5rem)] overflow-hidden rounded-xl border border-white/10 bg-[#11161d]/96 shadow-[0_12px_28px_rgba(0,0,0,0.34)]">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div>
           <button

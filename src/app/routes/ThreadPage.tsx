@@ -165,10 +165,10 @@ export function ThreadPage() {
   };
 
   return (
-    <div className="flex min-h-[70vh] flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-2.5 overflow-hidden">
       <div
         ref={messagesContainerRef}
-        className="codex-scrollbar flex-1 overflow-auto"
+        className="codex-scrollbar min-h-0 flex-1 overflow-auto"
         onScroll={handleMessagesScroll}
       >
         {hiddenMessagesCount > 0 ? (
@@ -189,7 +189,7 @@ export function ThreadPage() {
         ) : null}
         <ThreadMessages messages={visibleMessages} />
       </div>
-      <div className="sticky bottom-4 z-10 space-y-3">
+      <div className="space-y-2.5">
         <ApprovalsPanel threadId={threadId} />
         <div className="surface-panel px-4 py-3">
           <button

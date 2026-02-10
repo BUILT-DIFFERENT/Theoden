@@ -118,7 +118,7 @@ function ActivityGroup({
       : activities.slice(0, ACTIVITY_COLLAPSE_LIMIT);
 
   return (
-    <section className="mt-4 rounded-xl border border-white/10 bg-black/25 px-3 py-3">
+    <section className="mt-3 rounded-lg border border-white/10 bg-[#0d1117]/70 px-3 py-2.5">
       <header className="mb-2 flex items-center justify-between">
         <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
           Agent activity
@@ -136,27 +136,27 @@ function ActivityGroup({
         {visibleActivities.map((activity) => (
           <div
             key={activity.id}
-            className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+            className="rounded-md border border-white/10 bg-[#090e15]/75 px-3 py-1.5"
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="text-[0.78rem] text-ink-100">
+              <p className="text-[0.74rem] text-ink-100">
                 <span className="mr-1 uppercase tracking-[0.14em] text-ink-500">
                   Ran
                 </span>
-                <code className="rounded border border-white/10 bg-black/30 px-1 py-0.5 font-mono text-[0.78rem] text-ink-100">
+                <code className="rounded border border-white/10 bg-black/30 px-1 py-0.5 font-mono text-[0.73rem] text-ink-100">
                   {activity.label}
                 </code>
               </p>
               {activity.status ? (
                 <span
-                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.12em] ${activityBadgeClasses(activity.status)}`}
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.58rem] uppercase tracking-[0.12em] ${activityBadgeClasses(activity.status)}`}
                 >
                   {formatActivityStatus(activity.status)}
                 </span>
               ) : null}
             </div>
             {activity.detail ? (
-              <p className="mt-1 truncate text-[0.68rem] text-ink-400">
+              <p className="mt-1 truncate text-[0.65rem] text-ink-400">
                 {activity.detail}
               </p>
             ) : null}
@@ -201,14 +201,14 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
 
   if (!messages.length) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-ink-400">
+      <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-ink-400">
         No messages yet. Ask for follow-up changes.
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {messages.map((message) => {
         const isUser = message.role === "user";
         const isAssistant = message.role === "assistant";
@@ -217,25 +217,25 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
         let blockIndex = 0;
         const markdownComponents: Components = {
           h1: ({ children, ...props }: ComponentProps<"h1">) => (
-            <h1 className="mt-3 text-lg font-semibold text-ink-50" {...props}>
+            <h1 className="mt-2 text-base font-semibold text-ink-50" {...props}>
               {children}
             </h1>
           ),
           h2: ({ children, ...props }: ComponentProps<"h2">) => (
-            <h2
-              className="mt-3 text-base font-semibold text-ink-100"
-              {...props}
-            >
+            <h2 className="mt-2 text-sm font-semibold text-ink-100" {...props}>
               {children}
             </h2>
           ),
           h3: ({ children, ...props }: ComponentProps<"h3">) => (
-            <h3 className="mt-3 text-sm font-semibold text-ink-100" {...props}>
+            <h3
+              className="mt-2 text-[0.8rem] font-semibold text-ink-100"
+              {...props}
+            >
               {children}
             </h3>
           ),
           p: ({ children, ...props }: ComponentProps<"p">) => (
-            <p className="leading-relaxed text-ink-100" {...props}>
+            <p className="leading-[1.5] text-ink-100" {...props}>
               {children}
             </p>
           ),
@@ -284,7 +284,7 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
             blockIndex += 1;
             const language = className?.replace("language-", "") ?? "code";
             return (
-              <div className="overflow-hidden rounded-xl border border-white/10 bg-black/40">
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0c1017]/90">
                 <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[0.65rem] text-ink-400">
                   <span>{language || "code"}</span>
                   <button
@@ -296,7 +296,7 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
                     {copiedSegmentId === segmentId ? "Copied" : "Copy"}
                   </button>
                 </div>
-                <pre className="overflow-x-auto p-3 font-mono text-[0.75rem] text-ink-200">
+                <pre className="overflow-x-auto p-3 font-mono text-[0.72rem] text-ink-200">
                   <code>{codeText}</code>
                 </pre>
               </div>
@@ -318,19 +318,19 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
         return (
           <article key={message.id}>
             <div
-              className={`rounded-2xl border px-4 py-3 text-sm ${
+              className={`rounded-xl border px-4 py-2.5 text-sm ${
                 isUser
-                  ? "border-flare-300/35 bg-flare-400/10 text-ink-100"
+                  ? "border-white/10 bg-[#1c1a22]/75 text-ink-100"
                   : isAssistant
-                    ? "border-white/10 bg-black/25 text-ink-100"
-                    : "border-white/10 bg-black/15 text-ink-300"
+                    ? "border-white/10 bg-[#11161e]/86 text-ink-100"
+                    : "border-white/10 bg-[#0f141c]/70 text-ink-300"
               }`}
             >
-              <header className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+              <header className="mb-2 text-[0.63rem] uppercase tracking-[0.18em] text-ink-500">
                 {isAssistant ? "assistant" : isSystem ? "system" : "you"}
               </header>
               {content ? (
-                <div className="space-y-3 text-[0.95rem] leading-7">
+                <div className="space-y-2 text-[0.84rem] leading-[1.48]">
                   <ReactMarkdown
                     remarkPlugins={markdownRemarkPlugins}
                     rehypePlugins={markdownRehypePlugins}
