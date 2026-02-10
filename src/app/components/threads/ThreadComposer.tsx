@@ -731,14 +731,14 @@ export function ThreadComposer({
   );
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-[16px] border border-white/10 bg-[#0d1118] p-3.5 shadow-[0_10px_26px_rgba(2,6,18,0.35)]">
+    <div className="space-y-2">
+      <div className="rounded-[14px] border border-white/10 bg-[#15181c] p-3">
         {selectedAttachments.length ? (
           <div className="mb-3 flex flex-wrap gap-2">
             {selectedAttachments.map((attachment) => (
               <button
                 key={attachment}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-200 hover:border-flare-300"
+                className="inline-flex items-center gap-2 rounded border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-200 hover:border-white/25"
                 onClick={() => removeAttachment(attachment)}
                 title={`Remove ${attachment}`}
               >
@@ -751,7 +751,7 @@ export function ThreadComposer({
         ) : null}
         <textarea
           ref={composerRef}
-          className={`w-full resize-none bg-transparent p-2 text-[0.95rem] leading-6 text-ink-100 placeholder:text-ink-500/80 focus:outline-none ${
+          className={`w-full resize-none bg-transparent p-2 text-[0.94rem] leading-6 text-ink-100 placeholder:text-ink-500/80 focus:outline-none ${
             isCompactComposer ? "h-20" : "h-24"
           }`}
           placeholder={
@@ -843,7 +843,7 @@ export function ThreadComposer({
                   key={option}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 ${
                     optionIndex === inlineSelectionIndex
-                      ? "bg-flare-400/10 text-ink-50"
+                      ? "bg-white/10 text-ink-50"
                       : "hover:bg-white/5"
                   }`}
                   onClick={() => applyInlineSelection(option)}
@@ -870,7 +870,7 @@ export function ThreadComposer({
                   key={option.id}
                   className={`w-full rounded-xl px-3 py-2 text-left ${
                     optionIndex === inlineSelectionIndex
-                      ? "bg-flare-400/10"
+                      ? "bg-white/10"
                       : "hover:bg-white/5"
                   }`}
                   onClick={() => applyInlineSelection(option.id)}
@@ -895,10 +895,10 @@ export function ThreadComposer({
         >
           <div className="flex flex-wrap items-center gap-2">
             <button
-              className={`rounded-full border p-2 transition ${
+              className={`rounded-md border p-2 transition ${
                 attachmentsDrawerOpen
-                  ? "border-flare-300 bg-flare-400/12 text-ink-50"
-                  : "border-white/10 bg-black/20 hover:border-flare-300"
+                  ? "border-white/25 bg-white/10 text-ink-50"
+                  : "border-white/10 bg-[#0f1216] hover:border-white/25"
               }`}
               onClick={() => setAttachmentsDrawerOpen((open) => !open)}
               aria-label={
@@ -910,7 +910,7 @@ export function ThreadComposer({
               <Plus className="h-3.5 w-3.5" />
             </button>
             <select
-              className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-100"
+              className="rounded-md border border-white/10 bg-[#0f1216] px-3 py-1 text-xs text-ink-100"
               value={resolvedModel}
               onChange={(event) => setActiveModel(event.target.value)}
             >
@@ -921,7 +921,7 @@ export function ThreadComposer({
               ))}
             </select>
             <select
-              className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-ink-100"
+              className="rounded-md border border-white/10 bg-[#0f1216] px-3 py-1 text-xs text-ink-100"
               value={qualityPreset}
               onChange={(event) =>
                 setQualityPreset(event.target.value as QualityPreset)
@@ -936,10 +936,10 @@ export function ThreadComposer({
           </div>
           <div className="flex items-center gap-2">
             <button
-              className={`rounded-full border p-2 transition ${
+              className={`rounded-md border p-2 transition ${
                 isContextLocked
-                  ? "border-flare-300 bg-flare-400/10 text-ink-50"
-                  : "border-white/10 bg-black/20 text-ink-300 hover:border-flare-300"
+                  ? "border-white/25 bg-white/10 text-ink-50"
+                  : "border-white/10 bg-[#0f1216] text-ink-300 hover:border-white/25"
               }`}
               onClick={() => {
                 setIsContextLocked((locked) => !locked);
@@ -959,7 +959,7 @@ export function ThreadComposer({
               <Lock className="h-3.5 w-3.5" />
             </button>
             <button
-              className={`flex items-center justify-center rounded-full border border-flare-300 bg-flare-400/18 text-ink-50 shadow-glow disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-black/25 disabled:text-ink-400 ${
+              className={`flex items-center justify-center rounded-full border border-white/20 bg-white/10 text-ink-50 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-[#0f1216] disabled:text-ink-400 ${
                 isCompactComposer ? "h-9 w-9" : "h-10 w-10"
               }`}
               onClick={() => {
@@ -980,13 +980,13 @@ export function ThreadComposer({
           </div>
         </div>
         {attachmentsDrawerOpen ? (
-          <div className="mt-3 rounded-2xl border border-white/10 bg-black/28 p-3">
+          <div className="mt-3 rounded-[12px] border border-white/10 bg-[#101419] p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
                 Attachment picker
               </p>
               <button
-                className="rounded-full border border-white/10 px-2 py-1 text-[0.65rem] text-ink-300 hover:border-flare-300"
+                className="rounded-md border border-white/10 px-2 py-1 text-[0.65rem] text-ink-300 hover:border-white/25"
                 onClick={() => setAttachmentsDrawerOpen(false)}
               >
                 Close
@@ -1000,7 +1000,7 @@ export function ThreadComposer({
                     key={option}
                     className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition ${
                       attached
-                        ? "border border-flare-300 bg-flare-400/10 text-ink-50"
+                        ? "border border-white/25 bg-white/10 text-ink-50"
                         : "border border-transparent text-ink-200 hover:border-white/10 hover:bg-white/5"
                     }`}
                     onClick={() => {
@@ -1032,9 +1032,9 @@ export function ThreadComposer({
           {environmentModes.map((option) => (
             <button
               key={option}
-              className={`rounded-full border px-3 py-1 text-xs capitalize hover:border-flare-300 ${
+              className={`rounded-full border px-3 py-1 text-xs capitalize hover:border-white/25 ${
                 environmentMode === option
-                  ? "border-flare-300 bg-flare-400/10 text-ink-50"
+                  ? "border-white/25 bg-white/10 text-ink-50"
                   : "border-white/10 text-ink-300"
               }`}
               onClick={() => handleModeChange(option)}
@@ -1046,7 +1046,7 @@ export function ThreadComposer({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+            className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-white/25"
             onClick={() => {
               if (isContextLocked) {
                 setError("Unlock the composer controls to change workspace.");
@@ -1062,7 +1062,7 @@ export function ThreadComposer({
           </button>
           <div className="relative" ref={branchMenuRef}>
             <button
-              className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+              className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 hover:border-white/25"
               onClick={() => setBranchMenuOpen((open) => !open)}
               disabled={isContextLocked}
             >

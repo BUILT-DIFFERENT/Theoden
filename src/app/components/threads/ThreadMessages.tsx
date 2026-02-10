@@ -118,14 +118,14 @@ function ActivityGroup({
       : activities.slice(0, ACTIVITY_COLLAPSE_LIMIT);
 
   return (
-    <section className="mt-3 rounded-lg border border-white/10 bg-[#0d1117]/70 px-3 py-2.5">
+    <section className="mt-2 rounded-md border border-white/10 bg-[#11161d] px-3 py-2.5">
       <header className="mb-2 flex items-center justify-between">
-        <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
+        <p className="text-[0.62rem] uppercase tracking-[0.22em] text-ink-500">
           Agent activity
         </p>
         {hiddenCount > 0 ? (
           <button
-            className="rounded-full border border-white/10 px-2 py-0.5 text-[0.65rem] text-ink-200 hover:border-flare-300"
+            className="rounded border border-white/10 px-2 py-0.5 text-[0.65rem] text-ink-200 hover:border-white/25"
             onClick={() => onToggleExpand(messageId)}
           >
             {isExpanded ? "Show less" : `Show ${hiddenCount} more`}
@@ -136,7 +136,7 @@ function ActivityGroup({
         {visibleActivities.map((activity) => (
           <div
             key={activity.id}
-            className="rounded-md border border-white/10 bg-[#090e15]/75 px-3 py-1.5"
+            className="rounded-md border border-white/10 bg-[#0f141b] px-3 py-1.5"
           >
             <div className="flex items-start justify-between gap-2">
               <p className="text-[0.74rem] text-ink-100">
@@ -201,14 +201,14 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
 
   if (!messages.length) {
     return (
-      <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-ink-400">
+      <div className="rounded-xl border border-white/10 bg-[#10141a] p-4 text-sm text-ink-400">
         No messages yet. Ask for follow-up changes.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-0">
       {messages.map((message) => {
         const isUser = message.role === "user";
         const isAssistant = message.role === "assistant";
@@ -316,21 +316,21 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
         };
 
         return (
-          <article key={message.id}>
+          <article key={message.id} className="border-b border-white/10">
             <div
-              className={`rounded-xl border px-4 py-2.5 text-sm ${
+              className={`px-5 py-3.5 text-sm ${
                 isUser
-                  ? "border-white/10 bg-[#1c1a22]/75 text-ink-100"
+                  ? "bg-[#1a1f27] text-ink-100"
                   : isAssistant
-                    ? "border-white/10 bg-[#11161e]/86 text-ink-100"
-                    : "border-white/10 bg-[#0f141c]/70 text-ink-300"
+                    ? "bg-transparent text-ink-100"
+                    : "bg-transparent text-ink-300"
               }`}
             >
-              <header className="mb-2 text-[0.63rem] uppercase tracking-[0.18em] text-ink-500">
+              <header className="mb-2 text-[0.62rem] uppercase tracking-[0.22em] text-ink-500">
                 {isAssistant ? "assistant" : isSystem ? "system" : "you"}
               </header>
               {content ? (
-                <div className="space-y-2 text-[0.84rem] leading-[1.48]">
+                <div className="space-y-2 text-[0.95rem] leading-[1.52]">
                   <ReactMarkdown
                     remarkPlugins={markdownRemarkPlugins}
                     rehypePlugins={markdownRehypePlugins}
@@ -344,7 +344,7 @@ export function ThreadMessages({ messages }: ThreadMessagesProps) {
               {isAssistant && content ? (
                 <div className="mt-3 flex justify-end">
                   <button
-                    className="rounded-full border border-white/10 p-1.5 text-ink-300 hover:border-flare-300 hover:text-ink-50"
+                    className="rounded border border-white/10 p-1.5 text-ink-300 hover:border-white/25 hover:text-ink-50"
                     aria-label="Copy assistant message"
                     onClick={() => {
                       void handleCopyCode(messageCopyId, content);

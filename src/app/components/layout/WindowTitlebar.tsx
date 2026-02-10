@@ -87,10 +87,13 @@ export function WindowTitlebar({ onCommand }: WindowTitlebarProps) {
 
   return (
     <header
-      className="relative z-50 flex h-10 items-stretch border-b border-white/10 bg-[#121621]/84 px-2 text-xs text-ink-200 backdrop-blur select-none"
+      className="relative z-50 flex h-8 select-none items-center border-b border-white/10 bg-[#181c21] px-2 text-xs text-ink-200"
       ref={titlebarRef}
     >
-      <div className="flex items-stretch gap-1">
+      <div className="flex min-w-0 items-center gap-3 pl-1 text-[0.73rem] text-ink-100">
+        <span className="truncate font-medium">Codex</span>
+      </div>
+      <div className="relative ml-2 flex h-7 items-stretch gap-0.5">
         {APP_MENU_GROUPS.map((group) => (
           <div
             className="relative flex items-stretch"
@@ -104,8 +107,8 @@ export function WindowTitlebar({ onCommand }: WindowTitlebarProps) {
             <button
               className={
                 openMenu === group.id
-                  ? "rounded-md bg-white/15 px-3 text-ink-50"
-                  : "rounded-md px-3 text-ink-300 hover:bg-white/10 hover:text-ink-50"
+                  ? "rounded-sm bg-white/12 px-2.5 text-ink-50"
+                  : "rounded-sm px-2.5 text-ink-300 hover:bg-white/[0.08] hover:text-ink-50"
               }
               onClick={() =>
                 setOpenMenu((current) =>
@@ -116,7 +119,7 @@ export function WindowTitlebar({ onCommand }: WindowTitlebarProps) {
               {group.label}
             </button>
             {openMenu === group.id ? (
-              <div className="surface-panel absolute left-0 top-[calc(100%+6px)] z-50 min-w-56 p-1">
+              <div className="surface-panel absolute left-0 top-[calc(100%+2px)] z-50 min-w-56 p-1">
                 {group.entries.map((entry, index) =>
                   entry.kind === "separator" ? (
                     <div
@@ -125,7 +128,7 @@ export function WindowTitlebar({ onCommand }: WindowTitlebarProps) {
                     />
                   ) : (
                     <button
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-[0.72rem] text-ink-100 hover:bg-white/[0.08]"
+                      className="flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-[0.72rem] text-ink-100 hover:bg-white/[0.08]"
                       key={entry.id}
                       onClick={() => {
                         void runCommand(entry.id);
@@ -145,12 +148,10 @@ export function WindowTitlebar({ onCommand }: WindowTitlebarProps) {
           </div>
         ))}
       </div>
-
       <div className="flex-1" data-tauri-drag-region />
-
-      <div className="ml-2 flex items-stretch gap-1">
+      <div className="ml-auto flex h-full items-stretch">
         <button
-          className="rounded-md px-2 text-ink-300 hover:bg-white/10 hover:text-ink-50"
+          className="flex w-11 items-center justify-center text-ink-300 hover:bg-white/10 hover:text-ink-50"
           onClick={() => {
             void runCommand("window-minimize");
           }}
@@ -159,7 +160,7 @@ export function WindowTitlebar({ onCommand }: WindowTitlebarProps) {
           <Minus className="h-3.5 w-3.5" />
         </button>
         <button
-          className="rounded-md px-2 text-ink-300 hover:bg-white/10 hover:text-ink-50"
+          className="flex w-11 items-center justify-center text-ink-300 hover:bg-white/10 hover:text-ink-50"
           onClick={() => {
             void runCommand("window-toggle-maximize");
           }}
@@ -168,7 +169,7 @@ export function WindowTitlebar({ onCommand }: WindowTitlebarProps) {
           <Square className="h-3.5 w-3.5" />
         </button>
         <button
-          className="rounded-md px-2 text-ink-300 hover:bg-rose-500/35 hover:text-ink-50"
+          className="flex w-11 items-center justify-center text-ink-300 hover:bg-rose-500/50 hover:text-ink-50"
           onClick={() => {
             void runCommand("window-close");
           }}

@@ -1,18 +1,11 @@
 import { useParams } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { RunTimeline } from "@/app/components/runs/RunTimeline";
 import { ApprovalsPanel } from "@/app/components/threads/ApprovalsPanel";
 import { ThreadComposer } from "@/app/components/threads/ThreadComposer";
 import { ThreadMessages } from "@/app/components/threads/ThreadMessages";
 import { ThreadModals } from "@/app/components/threads/ThreadModals";
-import { diffStatsFromText } from "@/app/services/cli/diffSummary";
-import { startReview } from "@/app/services/cli/review";
 import { useThreadDetail } from "@/app/services/cli/useThreadDetail";
-import { useThreadDiffText } from "@/app/services/cli/useThreadDiff";
-import { mockThreadDetail } from "@/app/state/mockData";
-import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
 import type { ThreadMessage } from "@/app/types";
 import {
@@ -25,32 +18,13 @@ const MESSAGE_WINDOW_SIZE = 120;
 export function ThreadPage() {
   const { threadId } = useParams({ from: "/t/$threadId" });
   const { thread, messages } = useThreadDetail(threadId);
-  const { setReviewOpen } = useThreadUi();
   const { selectedWorkspace, setSelectedWorkspace } = useWorkspaceUi();
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<ThreadMessage[]>(
     [],
   );
-  const [timelineOpen, setTimelineOpen] = useState(false);
   const [visibleStartIndex, setVisibleStartIndex] = useState(0);
   const [stickToBottom, setStickToBottom] = useState(true);
-  const [reviewStarting, setReviewStarting] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const detail = thread ?? mockThreadDetail;
-  const liveDiffText = useThreadDiffText(threadId, detail.diffText ?? "");
-  const hasLiveDiff = liveDiffText.trim().length > 0;
-  const diffStats = hasLiveDiff
-    ? diffStatsFromText(liveDiffText)
-    : {
-        additions: detail.diffSummary.additions,
-        deletions: detail.diffSummary.deletions,
-      };
-  const summary = {
-    ...detail.diffSummary,
-    additions: diffStats.additions,
-    deletions: diffStats.deletions,
-  };
-  const hasChanges = summary.filesChanged > 0;
   const conversationMessages = useMemo(
     () => [...messages, ...optimisticMessages],
     [messages, optimisticMessages],
@@ -141,34 +115,11 @@ export function ThreadPage() {
     });
   };
 
-  const handleReviewChanges = async () => {
-    if (!threadId) {
-      setReviewError("No active thread to review.");
-      return;
-    }
-    setReviewError(null);
-    setReviewStarting(true);
-    setReviewOpen(true);
-    try {
-      await startReview({
-        threadId,
-        target: { type: "uncommittedChanges" },
-        delivery: "inline",
-      });
-    } catch (error) {
-      setReviewError(
-        error instanceof Error ? error.message : "Failed to start review.",
-      );
-    } finally {
-      setReviewStarting(false);
-    }
-  };
-
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col gap-2.5 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#121416]">
       <div
         ref={messagesContainerRef}
-        className="codex-scrollbar min-h-0 flex-1 overflow-auto"
+        className="codex-scrollbar min-h-0 flex-1 overflow-auto px-5 py-4"
         onScroll={handleMessagesScroll}
       >
         {hiddenMessagesCount > 0 ? (
@@ -179,7 +130,7 @@ export function ThreadPage() {
                 {conversationMessages.length} messages
               </span>
               <button
-                className="rounded-full border border-white/10 px-3 py-1 text-xs hover:border-flare-300"
+                className="rounded-md border border-white/10 px-3 py-1 text-xs hover:border-white/25"
                 onClick={handleLoadOlderMessages}
               >
                 Load {Math.min(MESSAGE_WINDOW_SIZE, hiddenMessagesCount)} older
@@ -189,49 +140,8 @@ export function ThreadPage() {
         ) : null}
         <ThreadMessages messages={visibleMessages} />
       </div>
-      <div className="space-y-2.5">
+      <div className="border-t border-white/10 bg-[#14171a] px-5 py-3">
         <ApprovalsPanel threadId={threadId} />
-        <div className="surface-panel px-4 py-3">
-          <button
-            className="flex w-full items-center justify-between text-xs text-ink-200"
-            onClick={() => setTimelineOpen((open) => !open)}
-          >
-            <span>Run timeline</span>
-            <ChevronDown
-              className={`h-3.5 w-3.5 transition ${
-                timelineOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-          {timelineOpen ? (
-            <div className="mt-3 max-h-72 overflow-auto">
-              <RunTimeline />
-            </div>
-          ) : null}
-        </div>
-        {hasChanges ? (
-          <div className="surface-panel px-4 py-3 text-xs text-ink-200">
-            <div className="flex items-center justify-between">
-              <span>
-                {summary.filesChanged} file changed +{summary.additions} -
-                {summary.deletions}
-              </span>
-              <button
-                className="flex items-center gap-2 rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => {
-                  void handleReviewChanges();
-                }}
-                disabled={reviewStarting}
-              >
-                {reviewStarting ? "Starting review…" : "Review changes"}
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            {reviewError ? (
-              <p className="mt-2 text-[0.7rem] text-rose-300">{reviewError}</p>
-            ) : null}
-          </div>
-        ) : null}
         <ThreadComposer
           placeholder="Ask for follow-up changes"
           onSubmitted={(message) => {

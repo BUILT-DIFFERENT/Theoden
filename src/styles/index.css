@@ -30,33 +30,17 @@
 @tailwind utilities;
 
 :root {
-  --surface-radius-lg: 1rem;
-  --surface-radius-xl: 1.25rem;
+  --surface-radius-lg: 0.75rem;
+  --surface-radius-xl: 0.9rem;
   --surface-gap-sm: 0.5rem;
   --surface-gap-md: 0.75rem;
   --surface-gap-lg: 1rem;
-  --hover-overlay: rgba(255, 255, 255, 0.05);
-  --scrollbar-thumb: rgba(159, 176, 200, 0.38);
-  --scrollbar-thumb-hover: rgba(201, 210, 223, 0.62);
-  --scrollbar-track: rgba(13, 17, 23, 0.5);
-  --app-bg:
-    radial-gradient(
-      circle at 10% 14%,
-      rgba(153, 185, 255, 0.72),
-      transparent 44%
-    ),
-    radial-gradient(
-      circle at 84% 18%,
-      rgba(188, 214, 255, 0.56),
-      transparent 40%
-    ),
-    radial-gradient(
-      circle at 24% 82%,
-      rgba(108, 136, 238, 0.56),
-      transparent 50%
-    ),
-    linear-gradient(152deg, #3553b4 0%, #3150af 44%, #4862bb 100%);
-  --app-fg: #f6f8fb;
+  --hover-overlay: rgba(255, 255, 255, 0.06);
+  --scrollbar-thumb: rgba(131, 144, 163, 0.35);
+  --scrollbar-thumb-hover: rgba(167, 178, 196, 0.52);
+  --scrollbar-track: rgba(12, 16, 22, 0.9);
+  --app-bg: #111316;
+  --app-fg: #d8dee8;
 }
 
 :root[data-theme="light"] {
@@ -64,23 +48,7 @@
   --scrollbar-thumb: rgba(58, 70, 88, 0.34);
   --scrollbar-thumb-hover: rgba(58, 70, 88, 0.52);
   --scrollbar-track: rgba(228, 233, 240, 0.65);
-  --app-bg:
-    radial-gradient(
-      circle at 16% 16%,
-      rgba(255, 155, 74, 0.1),
-      transparent 44%
-    ),
-    radial-gradient(
-      circle at 82% 24%,
-      rgba(84, 153, 255, 0.12),
-      transparent 42%
-    ),
-    radial-gradient(
-      circle at 36% 82%,
-      rgba(246, 122, 31, 0.1),
-      transparent 50%
-    ),
-    #f4f7fb;
+  --app-bg: #f4f7fb;
   --app-fg: #121723;
 }
 
@@ -92,9 +60,9 @@ body,
 }
 
 body {
-  font-family: "Instrument Sans", sans-serif;
+  font-family:
+    "Segoe UI", "Inter", "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
   background: var(--app-bg);
-  background-attachment: fixed;
   color: var(--app-fg);
   margin: 0;
   overflow: hidden;
@@ -102,27 +70,27 @@ body {
 
 @layer components {
   .surface-panel {
-    @apply rounded-[14px] border border-white/10 bg-[#0f131a] shadow-[0_10px_24px_rgba(0,0,0,0.3)];
+    @apply rounded-[10px] border border-white/10 bg-[#161b22];
   }
 
   .surface-card {
-    @apply rounded-xl border border-white/10 bg-[#0d1118];
+    @apply rounded-[10px] border border-white/10 bg-[#131820];
   }
 
   .btn-flat {
-    @apply rounded-full border border-white/10 px-3 py-1 text-xs text-ink-200 transition hover:border-white/20 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply rounded-md border border-white/10 px-2.5 py-1 text-xs text-ink-200 transition hover:border-white/20 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .btn-primary {
-    @apply rounded-full border border-flare-300 bg-flare-400/15 px-3 py-1 text-xs text-ink-50 transition hover:bg-flare-400/25 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply rounded-md border border-white/20 bg-white/5 px-2.5 py-1 text-xs text-ink-50 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .input-base {
-    @apply w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none;
+    @apply w-full rounded-[10px] border border-white/10 bg-black/25 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-white/25 focus:outline-none;
   }
 
   .textarea-base {
-    @apply h-24 w-full resize-none rounded-xl border border-white/10 bg-black/25 p-3 text-sm text-ink-100 placeholder:text-ink-500 focus:border-flare-300 focus:outline-none;
+    @apply h-24 w-full resize-none rounded-[10px] border border-white/10 bg-black/25 p-3 text-sm text-ink-100 placeholder:text-ink-500 focus:border-white/25 focus:outline-none;
   }
 
   .codex-scrollbar {

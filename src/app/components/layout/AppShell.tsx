@@ -55,7 +55,7 @@ export function AppShell() {
   const settingsMatch = matchRoute({ to: "/settings/$section" });
   const threadId = threadMatch ? threadMatch.threadId : undefined;
   const { thread } = useThreadDetail(threadId);
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(Boolean(threadId));
   const [activeModal, setActiveModal] = useState<ThreadModal>(null);
   const [appServerStatus, setAppServerStatus] = useState<AppServerHealthStatus>(
     () => (isTauri() ? "booting" : "ready"),
@@ -67,8 +67,21 @@ export function AppShell() {
   const bootstrapInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
+  const reviewInitThreadRef = useRef<string | null>(threadId ?? null);
   useAppServerStream();
   useInteractionAudit();
+
+  useEffect(() => {
+    if (!threadId) {
+      reviewInitThreadRef.current = null;
+      return;
+    }
+    if (reviewInitThreadRef.current === threadId) {
+      return;
+    }
+    reviewInitThreadRef.current = threadId;
+    setReviewOpen(true);
+  }, [threadId]);
 
   const bootstrapAppServer = useCallback(
     async (status: AppServerHealthStatus) => {
@@ -389,43 +402,21 @@ export function AppShell() {
       ? "new-thread"
       : "page";
   const showReviewPanel = reviewOpen;
+  const showBottomBar = !(threadMatch || newThreadMatch);
 
   return (
     <WorkspaceUiProvider>
       <EnvironmentUiProvider>
         <AppServerHealthProvider value={appServerHealth}>
           <ThreadUiProvider value={threadUi}>
-            <div className="relative h-screen overflow-hidden p-4 text-ink-50 sm:p-5 lg:p-6">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_9%_10%,rgba(182,208,255,0.34),transparent_42%),radial-gradient(circle_at_83%_16%,rgba(167,195,255,0.28),transparent_40%),radial-gradient(circle_at_25%_82%,rgba(104,132,225,0.36),transparent_48%)]" />
-              <div className="relative mx-auto flex h-full max-w-[1150px] flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#0f131a]/94 shadow-[0_32px_72px_rgba(5,10,24,0.52)] backdrop-blur-xl">
+            <div className="h-screen overflow-hidden bg-[linear-gradient(180deg,#1a1d1d_0%,#131517_12%,#101214_100%)] text-ink-50">
+              <div className="flex h-full flex-col overflow-hidden">
                 {isDesktop ? (
                   <WindowTitlebar onCommand={handleMenuCommand} />
-                ) : (
-                  <header className="flex h-10 items-center border-b border-white/10 bg-[#0d1015]/95 px-3 text-[0.7rem] text-ink-300">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
-                      <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-                    </div>
-                    <div className="ml-3 flex min-w-0 items-center gap-2 text-ink-200">
-                      <span className="truncate text-[0.72rem] font-medium">
-                        {topBarTitle}
-                      </span>
-                      <span className="text-ink-500">...</span>
-                    </div>
-                    <div className="ml-auto flex items-center gap-1.5">
-                      <button className="rounded-full border border-white/10 px-2 py-0.5 text-[0.62rem] text-ink-300 hover:border-white/25">
-                        Open
-                      </button>
-                      <button className="rounded-full border border-white/10 px-2 py-0.5 text-[0.62rem] text-ink-300 hover:border-white/25">
-                        Commit
-                      </button>
-                    </div>
-                  </header>
-                )}
-                <div className="flex min-h-0 flex-1 overflow-hidden">
+                ) : null}
+                <div className="flex min-h-0 flex-1 overflow-hidden bg-[#121417]">
                   <AppSidebar />
-                  <main className="flex min-h-0 flex-1 flex-col bg-[#121821]">
+                  <main className="flex min-h-0 flex-1 flex-col bg-[#131518]">
                     <ThreadTopBar
                       variant={topBarVariant}
                       title={topBarTitle}
@@ -435,15 +426,15 @@ export function AppShell() {
                     <div
                       className={
                         showReviewPanel
-                          ? "grid flex-1 gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_430px]"
-                          : "flex-1 px-3 py-3"
+                          ? "grid min-h-0 flex-1 grid-cols-1 lg:[grid-template-columns:minmax(0,1fr)_minmax(470px,40%)]"
+                          : "min-h-0 flex-1"
                       }
                     >
-                      <section className="min-h-0 min-w-0 h-full">
+                      <section className="h-full min-h-0 min-w-0 bg-[#121416]">
                         <Outlet />
                       </section>
                       {showReviewPanel ? (
-                        <aside className="hidden lg:block">
+                        <aside className="hidden min-h-0 border-l border-white/10 bg-[#14171b] lg:block">
                           <DiffPanel
                             thread={threadMatch ? thread : undefined}
                           />
@@ -451,7 +442,7 @@ export function AppShell() {
                       ) : null}
                     </div>
                     <TerminalDrawer isOpen={isTerminalOpen} />
-                    <BottomBar />
+                    {showBottomBar ? <BottomBar /> : null}
                   </main>
                 </div>
               </div>

@@ -773,11 +773,11 @@ export function DiffPanel({ thread }: DiffPanelProps) {
   };
 
   return (
-    <div className="sticky top-2 max-h-[calc(100vh-7.5rem)] overflow-hidden rounded-xl border border-white/10 bg-[#11161d]/96 shadow-[0_12px_28px_rgba(0,0,0,0.34)]">
+    <div className="sticky top-0 flex h-full max-h-none min-h-0 flex-col overflow-hidden bg-[#14181d]">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div>
           <button
-            className="flex items-center gap-1 text-sm text-ink-100"
+            className="flex items-center gap-1 text-[1rem] font-medium text-ink-100"
             onClick={() => {
               if (unstagedCount && activeTab === "staged") {
                 setActiveTab("unstaged");
@@ -791,11 +791,11 @@ export function DiffPanel({ thread }: DiffPanelProps) {
             Uncommitted changes
             <ChevronDown className="h-3.5 w-3.5" />
           </button>
-          <div className="mt-2 flex items-center gap-2 text-[0.65rem] text-ink-400">
+          <div className="mt-2 flex items-center gap-2 text-[0.72rem] text-ink-400">
             <button
               className={`rounded-full border px-2 py-0.5 ${
                 activeTab === "unstaged"
-                  ? "border-flare-300 text-ink-50"
+                  ? "border-flare-300/80 bg-flare-300/10 text-ink-50"
                   : "border-white/10 text-ink-400"
               }`}
               onClick={() => setActiveTab("unstaged")}
@@ -805,7 +805,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
             <button
               className={`rounded-full border px-2 py-0.5 ${
                 activeTab === "staged"
-                  ? "border-flare-300 text-ink-50"
+                  ? "border-flare-300/80 bg-flare-300/10 text-ink-50"
                   : "border-white/10 text-ink-400"
               }`}
               onClick={() => setActiveTab("staged")}
@@ -816,7 +816,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
         </div>
         <div className="flex items-center gap-2 text-ink-400">
           <button
-            className="rounded-full border border-white/10 px-2 py-1 text-[0.65rem] text-ink-300 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-white/10 px-2 py-1 text-[0.68rem] text-ink-300 hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={() => {
               void handleRunReview();
             }}
@@ -826,7 +826,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
             {reviewStarting ? "Starting…" : "Run review"}
           </button>
           <button
-            className="rounded-full border border-white/10 p-1 hover:border-flare-300"
+            className="rounded border border-white/10 p-1 hover:border-white/25"
             onClick={() => {
               void handleOpenSelectedFile();
             }}
@@ -836,7 +836,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
           </button>
           <div className="relative" ref={panelMenuRef}>
             <button
-              className="rounded-full border border-white/10 p-1 hover:border-flare-300"
+              className="rounded border border-white/10 p-1 hover:border-white/25"
               onClick={() => setPanelMenuOpen((open) => !open)}
               title="More diff actions"
             >
@@ -872,7 +872,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
             ) : null}
           </div>
           <button
-            className="rounded-full border border-white/10 p-1 hover:border-flare-300"
+            className="rounded border border-white/10 p-1 hover:border-white/25"
             onClick={() => setReviewOpen(false)}
           >
             <X className="h-3.5 w-3.5" />
@@ -880,14 +880,14 @@ export function DiffPanel({ thread }: DiffPanelProps) {
         </div>
       </div>
 
-      <div className="max-h-[65vh] overflow-auto px-4 py-4">
+      <div className="codex-scrollbar min-h-0 flex-1 overflow-auto px-3 py-3">
         <div className="space-y-4">
           {activeSections.length ? (
-            <div className="rounded-xl border border-white/10 bg-black/20 p-2">
+            <div className="rounded-md border border-white/10 bg-[#171c24] p-2">
               <p className="px-2 pb-1 text-[0.65rem] uppercase tracking-[0.2em] text-ink-500">
                 Files
               </p>
-              <div className="max-h-36 space-y-1 overflow-auto">
+              <div className="codex-scrollbar max-h-36 space-y-1 overflow-auto">
                 {activeSections.map((section) => {
                   const isSelected = selectedSection?.path === section.path;
                   return (
@@ -895,7 +895,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                       key={section.path}
                       className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition ${
                         isSelected
-                          ? "border border-flare-300 bg-flare-400/10 text-ink-50"
+                          ? "border border-flare-300/70 bg-flare-300/10 text-ink-50"
                           : "border border-transparent text-ink-200 hover:border-white/10 hover:bg-white/5"
                       }`}
                       onClick={() => setSelectedPath(section.path)}
@@ -913,7 +913,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
           {selectedSectionWithLiveDiff ? (
             <div
               key={selectedSectionWithLiveDiff.path}
-              className="rounded-xl border border-white/10 bg-black/20"
+              className="rounded-md border border-white/10 bg-[#171c24]"
             >
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-xs">
                 <span className="text-ink-100">
@@ -932,7 +932,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                 </span>
               </div>
               {selectedHunksWithChunks.length ? (
-                <div className="divide-y divide-white/5 font-mono text-[0.65rem]">
+                <div className="divide-y divide-white/5 font-mono text-[0.68rem]">
                   {selectedHunksWithChunks.map(({ hunk, chunks }) => (
                     <div key={hunk.id}>
                       <div className="flex items-center justify-between border-b border-white/5 px-3 py-2 text-[0.62rem] text-ink-400">
@@ -942,7 +942,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                             +{hunk.additions} -{hunk.deletions}
                           </span>
                           <button
-                            className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded border border-white/10 p-1 hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-50"
                             onClick={() => {
                               void runHunkAction("revert_hunk", hunk);
                             }}
@@ -956,7 +956,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                             <RotateCcw className="h-3 w-3" />
                           </button>
                           <button
-                            className="rounded-full border border-white/10 p-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded border border-white/10 p-1 hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-50"
                             onClick={() => {
                               void runHunkAction(
                                 activeTab === "staged"
@@ -1045,7 +1045,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
             </div>
           ) : null}
           {!activeSections.length ? (
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-4 text-xs text-ink-500">
+            <div className="rounded-md border border-white/10 bg-[#10141a] px-3 py-4 text-xs text-ink-500">
               {activeTab === "staged"
                 ? "No staged files."
                 : "No unstaged files."}
@@ -1055,7 +1055,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
       </div>
 
       <div className="border-t border-white/10 px-4 py-3">
-        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+        <div className="rounded-md border border-white/10 bg-[#171c24] p-3">
           <p className="text-xs text-ink-400">Request change</p>
           {selectedLine ? (
             <>
@@ -1063,14 +1063,14 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                 {selectedLine.path}:{selectedLine.lineNumber}
               </p>
               <textarea
-                className="mt-2 h-20 w-full resize-none rounded-lg border border-white/10 bg-black/30 p-2 text-xs text-ink-100 focus:outline-none"
+                className="mt-2 h-20 w-full resize-none rounded-md border border-white/10 bg-black/30 p-2 text-xs text-ink-100 focus:outline-none"
                 placeholder="Request change"
                 value={commentDraft}
                 onChange={(event) => setCommentDraft(event.target.value)}
               />
               <div className="mt-3 flex justify-end gap-2 text-xs">
                 <button
-                  className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+                  className="rounded-md border border-white/10 px-3 py-1 hover:border-white/25"
                   onClick={() => {
                     setSelectedLine(null);
                     setCommentDraft("");
@@ -1079,7 +1079,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
                   Cancel
                 </button>
                 <button
-                  className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border border-white/25 bg-white/10 px-3 py-1 text-ink-50 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={submitAnnotation}
                   disabled={!commentDraft.trim()}
                 >
@@ -1101,7 +1101,7 @@ export function DiffPanel({ thread }: DiffPanelProps) {
         </div>
         <div className="mt-3 flex items-center justify-between text-xs">
           <button
-            className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md border border-white/10 px-3 py-1 hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => {
               void runGlobalAction("revert_all");
             }}
@@ -1111,13 +1111,13 @@ export function DiffPanel({ thread }: DiffPanelProps) {
           </button>
           <div className="flex items-center gap-2">
             <button
-              className="rounded-full border border-white/10 px-3 py-1 hover:border-flare-300"
+              className="rounded-md border border-white/10 px-3 py-1 hover:border-white/25"
               onClick={() => setActiveModal("commit")}
             >
               Commit
             </button>
             <button
-              className="rounded-full border border-flare-300 bg-flare-400/10 px-3 py-1 text-ink-50 hover:bg-flare-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-white/25 bg-white/10 px-3 py-1 text-ink-50 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 void runGlobalAction("stage_all");
               }}

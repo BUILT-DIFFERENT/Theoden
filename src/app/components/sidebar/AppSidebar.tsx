@@ -511,14 +511,14 @@ export function AppSidebar() {
   const accountAvatar = accountEmail.slice(0, 1).toUpperCase() || "?";
 
   return (
-    <aside className="flex min-h-0 w-[208px] flex-col border-r border-white/10 bg-[#1b2749]/95 px-2.5 py-3 backdrop-blur-xl">
-      <nav className="space-y-1 text-[0.77rem]">
+    <aside className="flex min-h-0 w-[248px] flex-col border-r border-white/10 bg-[#121518] px-3 py-3">
+      <nav className="space-y-1 text-[0.9rem]">
         <Link
           to="/"
           className={`flex items-center gap-3 rounded-md px-3 py-2 transition ${
             newThreadMatch
-              ? "bg-[#2b395f]/90 text-ink-50"
-              : "text-ink-200 hover:bg-[#2b395f]/70 hover:text-ink-50"
+              ? "bg-white/10 text-ink-50"
+              : "text-ink-300 hover:bg-white/[0.06] hover:text-ink-50"
           }`}
           onClick={() => {
             setComposerDraft("");
@@ -533,8 +533,8 @@ export function AppSidebar() {
           to="/inbox"
           className={`flex items-center justify-between gap-3 rounded-md px-3 py-2 transition ${
             inboxMatch
-              ? "bg-[#2b395f]/90 text-ink-50"
-              : "text-ink-300 hover:bg-[#2b395f]/70 hover:text-ink-50"
+              ? "bg-white/10 text-ink-50"
+              : "text-ink-300 hover:bg-white/[0.06] hover:text-ink-50"
           }`}
         >
           <span className="flex items-center gap-3">
@@ -542,7 +542,7 @@ export function AppSidebar() {
             <span>Inbox</span>
           </span>
           {unreadInboxCount > 0 ? (
-            <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[0.65rem] text-sky-100">
+            <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[0.65rem] text-ink-200">
               {unreadInboxCount}
             </span>
           ) : null}
@@ -551,8 +551,8 @@ export function AppSidebar() {
           to="/automations"
           className={`flex items-center gap-3 rounded-md px-3 py-2 transition ${
             automationsMatch
-              ? "bg-[#2b395f]/90 text-ink-50"
-              : "text-ink-300 hover:bg-[#2b395f]/70 hover:text-ink-50"
+              ? "bg-white/10 text-ink-50"
+              : "text-ink-300 hover:bg-white/[0.06] hover:text-ink-50"
           }`}
         >
           <Workflow className="h-4 w-4 text-ink-400" />
@@ -562,8 +562,8 @@ export function AppSidebar() {
           to="/skills"
           className={`flex items-center gap-3 rounded-md px-3 py-2 transition ${
             skillsMatch
-              ? "bg-[#2b395f]/90 text-ink-50"
-              : "text-ink-300 hover:bg-[#2b395f]/70 hover:text-ink-50"
+              ? "bg-white/10 text-ink-50"
+              : "text-ink-300 hover:bg-white/[0.06] hover:text-ink-50"
           }`}
         >
           <WandSparkles className="h-4 w-4 text-ink-400" />
@@ -573,12 +573,12 @@ export function AppSidebar() {
 
       <div className="mt-5 flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between">
-          <p className="text-[0.65rem] uppercase tracking-[0.25em] text-ink-400">
+          <p className="text-[0.64rem] uppercase tracking-[0.24em] text-ink-500">
             Threads
           </p>
-          <div className="flex items-center gap-1.5 text-ink-400">
+          <div className="flex items-center gap-1 text-ink-400">
             <button
-              className="btn-flat inline-flex h-7 w-7 items-center justify-center"
+              className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 hover:bg-white/5"
               onClick={() => setWorkspacePickerOpen(true)}
               aria-label="Add workspace"
             >
@@ -586,7 +586,7 @@ export function AppSidebar() {
             </button>
             <div className="relative" ref={filterMenuRef}>
               <button
-                className="btn-flat inline-flex h-7 w-7 items-center justify-center"
+                className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 hover:bg-white/5"
                 onClick={() => setFilterMenuOpen((open) => !open)}
                 aria-label="Thread sort and filter"
               >
@@ -598,7 +598,7 @@ export function AppSidebar() {
                     Sort by
                   </p>
                   <button
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-ink-200 hover:bg-white/5"
                     onClick={() => {
                       setThreadSort("updated");
                       setFilterMenuOpen(false);
@@ -610,7 +610,7 @@ export function AppSidebar() {
                     ) : null}
                   </button>
                   <button
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-ink-200 hover:bg-white/5"
                     onClick={() => {
                       setThreadSort("title");
                       setFilterMenuOpen(false);
@@ -625,7 +625,7 @@ export function AppSidebar() {
                     Show
                   </p>
                   <button
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-ink-200 hover:bg-white/5"
                     onClick={() => {
                       setThreadVisibility("all");
                       setFilterMenuOpen(false);
@@ -637,7 +637,7 @@ export function AppSidebar() {
                     ) : null}
                   </button>
                   <button
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-ink-200 hover:bg-white/5"
                     onClick={() => {
                       setThreadVisibility("active");
                       setFilterMenuOpen(false);
@@ -652,7 +652,7 @@ export function AppSidebar() {
                     Group
                   </p>
                   <button
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-ink-200 hover:bg-white/5"
                     onClick={() => {
                       setGroupMode("workspace");
                       setFilterMenuOpen(false);
@@ -664,7 +664,7 @@ export function AppSidebar() {
                     ) : null}
                   </button>
                   <button
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-ink-200 hover:bg-white/5"
+                    className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-ink-200 hover:bg-white/5"
                     onClick={() => {
                       setGroupMode("recency");
                       setFilterMenuOpen(false);
@@ -682,7 +682,7 @@ export function AppSidebar() {
         </div>
         <div
           ref={threadListParentRef}
-          className="codex-scrollbar mt-3 min-h-0 flex-1 overflow-auto"
+          className="codex-scrollbar mt-3 min-h-0 flex-1 overflow-auto pr-1"
           onScroll={(event) =>
             setThreadListScrollTop(event.currentTarget.scrollTop)
           }
@@ -718,13 +718,13 @@ export function AppSidebar() {
                     }}
                   >
                     <div
-                      className={`mb-1.5 rounded-lg border text-ink-300 transition ${
+                      className={`mb-1 rounded-md border text-ink-300 transition ${
                         isSelected
-                          ? "border-white/20 bg-[#2a3860]/85"
-                          : "border-white/10 bg-[#202c4d]/55"
+                          ? "border-white/15 bg-[#1b2330]"
+                          : "border-transparent bg-transparent hover:bg-white/[0.03]"
                       }`}
                     >
-                      <div className="flex items-center justify-between px-3 py-2">
+                      <div className="flex items-center justify-between px-2.5 py-2">
                         <button
                           type="button"
                           className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-ink-50"
@@ -739,13 +739,13 @@ export function AppSidebar() {
                           }}
                         >
                           <Folder className="h-3.5 w-3.5 text-ink-400" />
-                          <p className="truncate text-[0.76rem] text-ink-100">
+                          <p className="truncate text-[0.78rem] text-ink-100">
                             {workspace.name}
                           </p>
                         </button>
                         <button
                           type="button"
-                          className="rounded-lg p-1 text-ink-400 hover:bg-white/5 hover:text-ink-200"
+                          className="rounded p-1 text-ink-400 hover:bg-white/5 hover:text-ink-200"
                           onClick={() =>
                             toggleWorkspaceExpanded(workspace.path)
                           }
@@ -763,7 +763,7 @@ export function AppSidebar() {
                         </button>
                       </div>
                       {isExpanded ? (
-                        <div className="border-t border-white/10 px-2 pb-2 pt-1">
+                        <div className="border-t border-white/10 px-1.5 pb-1.5 pt-1">
                           {workspace.threads.length ? (
                             workspace.threads.map((thread) => {
                               const isThreadSelected =
@@ -786,10 +786,10 @@ export function AppSidebar() {
                               return (
                                 <div
                                   key={thread.id}
-                                  className={`mt-1 flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-[0.67rem] transition ${
+                                  className={`mt-0.5 flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-[0.73rem] transition ${
                                     isThreadSelected
-                                      ? "bg-[#30416e]/90 text-ink-50"
-                                      : "text-ink-300 hover:bg-[#2c3b64]/75 hover:text-ink-50"
+                                      ? "bg-white/10 text-ink-50"
+                                      : "text-ink-300 hover:bg-white/[0.06] hover:text-ink-50"
                                   }`}
                                 >
                                   <button
@@ -806,7 +806,7 @@ export function AppSidebar() {
                                   >
                                     <div className="flex min-w-0 items-center gap-2">
                                       {showDot ? (
-                                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                                        <span className="h-1.5 w-1.5 rounded-full bg-ink-300" />
                                       ) : (
                                         <span className="h-1.5 w-1.5 rounded-full border border-white/10" />
                                       )}
@@ -819,7 +819,7 @@ export function AppSidebar() {
                                     </div>
                                     <div className="flex items-center gap-2 text-[0.65rem] text-ink-500">
                                       {showChanges ? (
-                                        <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[0.6rem]">
+                                        <span className="rounded border border-white/10 px-1.5 py-0.5 text-[0.6rem]">
                                           +{changeSummary.additions} -
                                           {changeSummary.deletions}
                                         </span>
@@ -833,7 +833,7 @@ export function AppSidebar() {
                                   >
                                     <button
                                       type="button"
-                                      className="rounded-lg p-1 text-ink-400 hover:bg-white/8 hover:text-ink-100"
+                                      className="rounded p-1 text-ink-400 hover:bg-white/8 hover:text-ink-100"
                                       onClick={() => {
                                         setOpenThreadMenuId((current) =>
                                           current === thread.id
@@ -848,7 +848,7 @@ export function AppSidebar() {
                                     {openThreadMenuId === thread.id ? (
                                       <div className="surface-panel absolute right-0 top-7 z-40 w-44 p-1 text-[0.65rem] text-ink-200">
                                         <button
-                                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                                          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-white/5"
                                           onClick={() => {
                                             toggleSidebarThreadPinned(
                                               thread.id,
@@ -860,7 +860,7 @@ export function AppSidebar() {
                                           <Pin className="h-3 w-3 text-ink-400" />
                                         </button>
                                         <button
-                                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                                          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-white/5"
                                           onClick={() => {
                                             const nextAlias = window.prompt(
                                               "Thread display alias",
@@ -883,7 +883,7 @@ export function AppSidebar() {
                                           <SquarePen className="h-3 w-3 text-ink-400" />
                                         </button>
                                         <button
-                                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                                          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-white/5"
                                           onClick={() => {
                                             void handleToggleArchive(
                                               thread,
@@ -899,7 +899,7 @@ export function AppSidebar() {
                                           )}
                                         </button>
                                         <button
-                                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                                          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-white/5"
                                           onClick={() => {
                                             setOpenThreadMenuId(null);
                                             void openThread(
@@ -933,7 +933,7 @@ export function AppSidebar() {
               })}
             </div>
           ) : (
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-500">
+            <div className="rounded-xl border border-white/10 bg-[#10141a] px-3 py-2 text-xs text-ink-500">
               No workspaces detected.
             </div>
           )}
@@ -949,14 +949,14 @@ export function AppSidebar() {
         <Link
           to="/settings/$section"
           params={{ section: "general" }}
-          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-ink-400 transition hover:bg-[#2b395f]/70 hover:text-ink-50"
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-ink-400 transition hover:bg-white/8 hover:text-ink-50"
         >
           <Settings className="h-3.5 w-3.5" />
           Settings
         </Link>
         <div className="relative" ref={accountMenuRef}>
           <button
-            className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-[#202b4c]/70 px-3 py-2 text-left text-xs text-ink-200 transition hover:border-white/20"
+            className="flex w-full items-center justify-between rounded-md border border-white/10 bg-[#0f1318] px-3 py-2 text-left text-xs text-ink-200 transition hover:border-white/20"
             onClick={() => setAccountMenuOpen((open) => !open)}
           >
             <div className="flex min-w-0 items-center gap-2">
@@ -975,7 +975,7 @@ export function AppSidebar() {
           {accountMenuOpen ? (
             <div className="surface-panel absolute bottom-11 left-0 z-30 w-64 p-2 text-[0.7rem] text-ink-200">
               <button
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/5"
                 onClick={() => {
                   setAccountMenuOpen(false);
                   void navigate({
@@ -988,7 +988,7 @@ export function AppSidebar() {
                 Open settings
               </button>
               <button
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5"
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/5"
                 onClick={() => {
                   void openExternalUrl("https://developers.openai.com/codex/");
                 }}
@@ -998,7 +998,7 @@ export function AppSidebar() {
               </button>
               {isAuthenticated ? (
                 <button
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5 disabled:opacity-60"
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/5 disabled:opacity-60"
                   onClick={() => {
                     void runAccountAction("logout");
                   }}
@@ -1010,7 +1010,7 @@ export function AppSidebar() {
               ) : (
                 <>
                   <button
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5 disabled:opacity-60"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/5 disabled:opacity-60"
                     onClick={() => {
                       void runAccountAction("login-chatgpt");
                     }}
@@ -1022,7 +1022,7 @@ export function AppSidebar() {
                       : "Sign in with ChatGPT"}
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5 disabled:opacity-60"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/5 disabled:opacity-60"
                     onClick={() => {
                       void runAccountAction("login-api-key");
                     }}

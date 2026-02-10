@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -30,7 +30,7 @@ export function ThreadTopBar({
   title,
   variant,
 }: ThreadTopBarProps) {
-  const { reviewOpen, setReviewOpen } = useThreadUi();
+  const { reviewOpen, setReviewOpen, setActiveModal } = useThreadUi();
   const { selectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
   const navigate = useNavigate();
@@ -60,6 +60,7 @@ export function ThreadTopBar({
         ? (thread?.title ?? title ?? "Thread")
         : (title ?? "Codex");
   const showThreadHeader = resolvedVariant === "thread";
+  const showActionToolbar = showThreadHeader && Boolean(thread);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [menuActionError, setMenuActionError] = useState<string | null>(null);
   const [menuActionBusy, setMenuActionBusy] = useState<
@@ -121,28 +122,54 @@ export function ThreadTopBar({
   };
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#10151d] px-3 py-2">
+    <header className="flex h-12 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#14171a] px-4">
       <div className="flex items-center gap-2">
-        <h1 className="text-[0.86rem] font-medium tracking-[0.01em] text-ink-50">
+        <h1 className="text-[0.95rem] font-semibold tracking-[0.01em] text-ink-50">
           {headerTitle}
         </h1>
         {showThreadHeader ? (
-          <span className="text-[0.66rem] text-ink-500">
+          <span className="text-[0.72rem] text-ink-400">
             {subtitle}
             {isCurrentThreadLoaded ? " · loaded" : ""}
           </span>
         ) : null}
       </div>
       {showThreadHeader ? (
-        <div className="flex items-center gap-2">
-          {hasChanges ? (
-            <span className="rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[0.6rem] text-ink-300">
-              +{changeSummary?.additions ?? 0} -{changeSummary?.deletions ?? 0}
-            </span>
+        <div className="flex items-center gap-1.5">
+          {showActionToolbar ? (
+            <>
+              <button
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/10 text-ink-300 hover:bg-white/5 hover:text-ink-50"
+                title="Run"
+                aria-label="Run"
+              >
+                <Play className="h-3.5 w-3.5" />
+              </button>
+              <button
+                className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2.5 py-1 text-[0.72rem] text-ink-200 hover:bg-white/5"
+                onClick={() => setActiveModal("branch")}
+              >
+                Open
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              <button
+                className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2.5 py-1 text-[0.72rem] text-ink-200 hover:bg-white/5"
+                onClick={() => setActiveModal("commit")}
+              >
+                Commit
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              {hasChanges ? (
+                <span className="rounded-md border border-white/10 bg-black/30 px-2 py-0.5 text-[0.68rem] text-ink-300">
+                  +{changeSummary?.additions ?? 0} -
+                  {changeSummary?.deletions ?? 0}
+                </span>
+              ) : null}
+            </>
           ) : null}
           <div className="relative" ref={headerMenuRef}>
             <button
-              className="btn-flat px-2 text-ink-400"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/10 text-ink-400 hover:bg-white/5"
               onClick={() => setHeaderMenuOpen((open) => !open)}
               aria-label="Thread options"
             >
