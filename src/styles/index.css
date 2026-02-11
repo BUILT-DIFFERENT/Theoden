@@ -36,20 +36,16 @@
   --surface-gap-md: 0.75rem;
   --surface-gap-lg: 1rem;
   --hover-overlay: rgba(255, 255, 255, 0.06);
-  --scrollbar-thumb: rgba(131, 144, 163, 0.35);
-  --scrollbar-thumb-hover: rgba(167, 178, 196, 0.52);
-  --scrollbar-track: rgba(12, 16, 22, 0.9);
-  --app-bg: #111316;
-  --app-fg: #d8dee8;
+  --scrollbar-thumb: var(--color-token-scrollbar-slider-background);
+  --scrollbar-thumb-hover: var(--color-token-scrollbar-slider-hover-background);
+  --scrollbar-track: transparent;
 }
 
 :root[data-theme="light"] {
   --hover-overlay: rgba(18, 23, 35, 0.06);
-  --scrollbar-thumb: rgba(58, 70, 88, 0.34);
-  --scrollbar-thumb-hover: rgba(58, 70, 88, 0.52);
-  --scrollbar-track: rgba(228, 233, 240, 0.65);
-  --app-bg: #f4f7fb;
-  --app-fg: #121723;
+  --scrollbar-thumb: var(--color-token-scrollbar-slider-background);
+  --scrollbar-thumb-hover: var(--color-token-scrollbar-slider-hover-background);
+  --scrollbar-track: transparent;
 }
 
 html,
@@ -60,21 +56,35 @@ body,
 }
 
 body {
-  font-family:
-    "Segoe UI", "Inter", "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
-  background: var(--app-bg);
-  color: var(--app-fg);
+  font-family: var(--font-sans);
+  background: transparent;
+  color: var(--color-token-text-primary);
   margin: 0;
   overflow: hidden;
 }
 
+code,
+pre,
+.vscode-markdown code,
+.vscode-markdown pre {
+  font-family: var(--font-mono);
+}
+
 @layer components {
   .surface-panel {
-    @apply rounded-[10px] border border-white/10 bg-[#161b22];
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-token-main-surface-primary);
   }
 
   .surface-card {
-    @apply rounded-[10px] border border-white/10 bg-[#131820];
+    border: 1px solid color-mix(in oklab, var(--color-border) 90%, transparent);
+    border-radius: var(--radius-xl);
+    background: color-mix(
+      in oklab,
+      var(--color-token-main-surface-primary) 96%,
+      transparent
+    );
   }
 
   .btn-flat {
@@ -119,6 +129,104 @@ body {
     background: var(--scrollbar-thumb-hover);
     background-clip: content-box;
   }
+
+  .main-surface {
+    background-color: var(--color-token-bg-primary);
+    overflow: hidden;
+  }
+
+  [data-codex-window-type="tauri"] .main-surface {
+    background-color: var(--color-token-side-bar-background);
+    border-top-left-radius: var(--radius-xl);
+    border-bottom-left-radius: var(--radius-xl);
+    box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.08);
+  }
+
+  .home-conversation-starters {
+    container-type: inline-size;
+  }
+
+  .home-conversation-starters__grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  @container (min-width: 400px) {
+    .home-conversation-starters__grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .skills-page-container {
+    container-type: inline-size;
+  }
+
+  .skills-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  @container (min-width: 581px) {
+    .skills-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .automation-row {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 420px) {
+    .automation-row__schedule {
+      display: none;
+    }
+  }
+
+  .inbox-toolbar {
+    container: inbox-toolbar / inline-size;
+  }
+
+  @container inbox-toolbar (max-width: 260px) {
+    .inbox-toolbar__label--compact,
+    .inbox-toolbar__filter {
+      display: none;
+    }
+
+    .inbox-toolbar__actions {
+      margin-right: 0;
+    }
+  }
+}
+
+.overflow-auto,
+.overflow-scroll,
+.overflow-x-auto,
+.overflow-y-auto,
+.overflow-x-scroll,
+.overflow-y-scroll {
+  scrollbar-color: var(--color-token-scrollbar-slider-background) transparent;
+}
+
+:is(
+    .overflow-auto,
+    .overflow-scroll,
+    .overflow-x-auto,
+    .overflow-y-auto,
+    .overflow-x-scroll,
+    .overflow-y-scroll
+  ):hover {
+  scrollbar-color: var(--color-token-scrollbar-slider-hover-background)
+    transparent;
+}
+
+:is(
+    .overflow-auto,
+    .overflow-scroll,
+    .overflow-x-auto,
+    .overflow-y-auto,
+    .overflow-x-scroll,
+    .overflow-y-scroll
+  ):active {
+  scrollbar-color: var(--color-token-scrollbar-slider-active-background)
+    transparent;
 }
 
 [data-ui-audit-dead-action="true"] {

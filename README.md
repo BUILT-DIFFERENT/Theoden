@@ -1,6 +1,6 @@
-# Codex Desktop (Tauri + Electron UI Compat)
+# Codex Desktop (Tauri)
 
-This repository contains a Codex desktop app built with a Tauri host and an Electron UI compatibility runtime.
+This repository contains a Codex desktop app built with a Tauri host and a standalone React renderer runtime.
 It is targeted to and used by Windows and Linux desktop users, and it connects to `codex app-server` for thread, turn, config, skills, and command APIs.
 
 ## Platform Support
@@ -33,12 +33,10 @@ The goal of this repository is to deliver a parity-focused Tauri implementation 
 
 ## What Is In This Repo
 
-- `src/`: React rewrite code (kept in-repo for staged refactor, not the default desktop runtime renderer)
+- `src/`: React application code and desktop renderer source
 - `src-tauri/`: Tauri host (window/menu setup, app-server bridge commands)
-- `out/electron-ui/`: synced Electron renderer bundle used for `compat` desktop renderer mode
 - `out/desktop-runtime/`: prepared renderer output consumed by Tauri (`frontendDist`)
-- `sync-electron-ui.cjs` + `scripts/sync-electron-ui.cjs`: build-time sync pipeline from `third_party/CodexDesktop-Rebuild/src/webview`
-- `scripts/prepare-desktop-runtime.cjs`: desktop renderer mode preparation (`compat`/`rewrite`)
+- `scripts/prepare-desktop-runtime.cjs`: desktop renderer preparation from `dist` into `out/desktop-runtime`
 - `codex-rs/`: Rust workspace for Codex core/app-server/protocol crates
 - `third_party/CodexDesktop-Rebuild/`: official Codex desktop app submodule used for runtime parity tracing/debugging
 - `docs/custom/`: implementation and parity plan docs
@@ -81,17 +79,10 @@ Run as desktop app:
 pnpm desktop:dev
 ```
 
-Run desktop app in explicit renderer mode:
+Run desktop app with explicit rewrite script aliases:
 
 ```bash
-pnpm desktop:dev:compat
 pnpm desktop:dev:rewrite
-```
-
-Sync Electron UI bundle only:
-
-```bash
-pnpm sync:electron-ui
 ```
 
 Build frontend bundle:
@@ -113,11 +104,9 @@ pnpm build
 - `pnpm frontend:test`
 - `pnpm frontend:build`
 - `pnpm desktop:build`
-- `pnpm desktop:build:compat`
 - `pnpm desktop:build:rewrite`
 - `pnpm parity:check:baseline-lock`
 - `pnpm parity:check:bridge-boundary`
-- `pnpm parity:check:renderer-mode-matrix`
 - `pnpm parity:test:routes`
 - `pnpm parity:test:thread-slice`
 - `pnpm parity:test:review-git-terminal`
@@ -127,25 +116,23 @@ pnpm build
 
 ## Command Map
 
-| Goal                                           | Command                                       |
-| ---------------------------------------------- | --------------------------------------------- |
-| Web dev server                                 | `pnpm frontend:dev`                           |
-| Desktop dev app (default compat mode)          | `pnpm desktop:dev`                            |
-| Desktop dev app (forced compat mode)           | `pnpm desktop:dev:compat`                     |
-| Desktop dev app (rewrite mode)                 | `pnpm desktop:dev:rewrite`                    |
-| Frontend production bundle                     | `pnpm frontend:build`                         |
-| Desktop production build (default compat mode) | `pnpm build` (or `pnpm desktop:build`)        |
-| Desktop production build (forced rewrite mode) | `pnpm desktop:build:rewrite`                  |
-| Frontend tests                                 | `pnpm frontend:test`                          |
-| Route parity snapshot                          | `pnpm parity:test:routes`                     |
-| Thread slice parity suite                      | `pnpm parity:test:thread-slice`               |
-| Review/git/terminal parity suite               | `pnpm parity:test:review-git-terminal`        |
-| Automations/cloud/settings parity suite        | `pnpm parity:test:automations-cloud-settings` |
-| Cloud/sidebar/settings parity suite            | `pnpm parity:test:cloud-sidebar-settings`     |
-| Baseline lock check                            | `pnpm parity:check:baseline-lock`             |
-| Rewrite bridge boundary check                  | `pnpm parity:check:bridge-boundary`           |
-| Renderer mode matrix check                     | `pnpm parity:check:renderer-mode-matrix`      |
-| Official audit artifact gate                   | `pnpm parity:audit:check`                     |
+| Goal                                     | Command                                       |
+| ---------------------------------------- | --------------------------------------------- |
+| Web dev server                           | `pnpm frontend:dev`                           |
+| Desktop dev app                          | `pnpm desktop:dev`                            |
+| Desktop dev app (rewrite alias)          | `pnpm desktop:dev:rewrite`                    |
+| Frontend production bundle               | `pnpm frontend:build`                         |
+| Desktop production build                 | `pnpm build` (or `pnpm desktop:build`)        |
+| Desktop production build (rewrite alias) | `pnpm desktop:build:rewrite`                  |
+| Frontend tests                           | `pnpm frontend:test`                          |
+| Route parity snapshot                    | `pnpm parity:test:routes`                     |
+| Thread slice parity suite                | `pnpm parity:test:thread-slice`               |
+| Review/git/terminal parity suite         | `pnpm parity:test:review-git-terminal`        |
+| Automations/cloud/settings parity suite  | `pnpm parity:test:automations-cloud-settings` |
+| Cloud/sidebar/settings parity suite      | `pnpm parity:test:cloud-sidebar-settings`     |
+| Baseline lock check                      | `pnpm parity:check:baseline-lock`             |
+| Rewrite bridge boundary check            | `pnpm parity:check:bridge-boundary`           |
+| Official audit artifact gate             | `pnpm parity:audit:check`                     |
 
 ## Parity CI Gate
 
@@ -157,7 +144,6 @@ Parity-touching pull requests now run `.github/workflows/tauri-parity-gates.yml`
 - focused review/git/terminal parity suite
 - focused automations/cloud/settings parity suite
 - focused cloud/sidebar/settings parity suite
-- renderer mode matrix parity check
 - official audit artifact pass check
 
 Use `Parity gate results (required)` as the branch protection required status to enforce merge blocking on parity regressions.
@@ -208,7 +194,7 @@ Key submodule debug files:
 
 - Frontend service calls use app-server JSON-RPC methods (for example `thread/*`, `turn/*`, `config/*`, `skills/*`, `command/exec`).
 - `src-tauri/src/main.rs` owns process lifecycle for `codex app-server` and forwards notifications/requests into the webview.
-- Desktop runtime is prepared in `out/desktop-runtime` with mode selection through `CODEX_DESKTOP_RENDERER_MODE` (`compat` default, `rewrite` opt-in).
+- Desktop runtime is prepared in `out/desktop-runtime` from the React build output (`dist`).
 - Host-side persisted state, automations/inbox, and terminal command streaming are exposed through Tauri commands (`persisted_atom_*`, `automation_*`, `inbox_*`, `terminal_*`).
 - Automation persistence is stored under `$CODEX_HOME/sqlite/codex-dev.db` and TOML definitions under `$CODEX_HOME/automations/<id>/automation.toml`.
 - Workspace-aware UI state is centralized in React providers under `src/app/state`.

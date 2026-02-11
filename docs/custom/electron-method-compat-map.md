@@ -1,4 +1,4 @@
-# Electron Method Compat Map
+# Legacy Electron Method Compat Map
 
 This document is the authoritative translation/dispatch map for the Electron UI compatibility layer in the Tauri host.
 
@@ -8,10 +8,7 @@ The method registry is defined in:
 - `C:/Users/gamer/Documents/Theoden/src-tauri/src/main.rs` (`handle_electron_query`, `handle_electron_mutation`)
 - `C:/Users/gamer/Documents/Theoden/src-tauri/src/git_worker_compat.rs`
 
-Coverage is enforced by:
-
-- `pnpm compat:check:methods`
-- `pnpm compat:check:worker`
+Coverage scripts for this legacy compatibility surface were removed when the desktop runtime moved to Tauri rewrite-only mode (February 11, 2026). Keep this map as reference material for remaining host compat internals.
 
 Any method in parity manifests without a corresponding compat dispatch path is a blocker.
 
@@ -29,7 +26,7 @@ Any method in parity manifests without a corresponding compat dispatch path is a
 | `get-global-state`                    | Local state store (`global-state`)     | Key/value or full map reads.                           |
 | `gh-cli-status`                       | Local host probe                       | Checks `gh` availability.                              |
 | `gh-pr-status`                        | Local stub                             | Returns unavailable status.                            |
-| `git-origins`                         | Local git command                      | `git remote -v` parsed into origin set.                |
+| `git-origins`                         | Local git command                      | Returns `{ origins: [{dir,root,originUrl,commonDir}], homeDir }`. |
 | `has-custom-cli-executable`           | Local env probe                        | Uses `CODEX_CLI_PATH`.                                 |
 | `ide-context`                         | Local stub                             | Returns `null` context.                                |
 | `inbox-items`                         | Automation store                       | Reads inbox rows from SQLite store.                    |
@@ -39,7 +36,7 @@ Any method in parity manifests without a corresponding compat dispatch path is a
 | `list-pinned-threads`                 | Local state store (`global-state`)     | Reads pinned thread IDs list.                          |
 | `local-environment`                   | Local host snapshot                    | Returns env/path/shell metadata snapshot.              |
 | `local-environments`                  | Local host snapshot                    | Returns array of one local environment descriptor.     |
-| `locale-info`                         | Local host/env                         | Uses `LANG` values for locale hints.                   |
+| `locale-info`                         | Local host/env                         | Uses sanitized locale env hints (`LC_ALL`/`LANG` etc). |
 | `open-in-targets`                     | Local stub                             | Returns terminal target metadata.                      |
 | `os-info`                             | Local host probe                       | Platform/WSL flags payload.                            |
 | `paths-exist`                         | Local filesystem checks                | Filters input paths to existing paths.                 |
@@ -118,3 +115,14 @@ All methods from `worker-git-methods.json` are dispatched by `git_worker_compat.
 - App response channel: `codex_desktop:message-for-view`
 - Worker response channel: `codex_desktop:worker:<id>:for-view`
 - Request/response envelope semantics: JSON-RPC-like envelopes emitted from Tauri host.
+- Electron wrapper messages handled in host bridge:
+  - `persisted-atom-sync-request` / `persisted-atom-update` / `persisted-atom-reset`
+  - `mcp-request` / `mcp-notification` / `mcp-response`
+  - `shared-object-subscribe` / `shared-object-unsubscribe` / `shared-object-set`
+  - `electron-add-new-workspace-root-option` / `electron-pick-workspace-root-option`
+  - `electron-onboarding-skip-workspace` / `electron-update-workspace-root-options`
+  - `electron-rename-workspace-root-option` / `electron-set-active-workspace-root`
+  - `open-in-browser` (validated `http/https` URLs are opened externally)
+  - `codex-app-server-restart`, `open-debug-window`, `show-diff`, `terminal-*`
+  - additional Electron-only desktop signals are accepted as no-ops instead of being echoed back
+  - `electron-window-focus-request` -> `electron-window-focus-changed`

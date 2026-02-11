@@ -248,8 +248,43 @@ export function AppShell() {
         void navigate({ to: "/automations" });
         return;
       }
+      if (payload.route === "/inbox") {
+        void navigate({ to: "/inbox" });
+        return;
+      }
+      if (payload.route === "/login") {
+        void navigate({ to: "/login" });
+        return;
+      }
+      if (payload.route === "/welcome") {
+        void navigate({ to: "/welcome" });
+        return;
+      }
+      if (payload.route === "/select-workspace") {
+        void navigate({ to: "/select-workspace" });
+        return;
+      }
+      if (payload.route === "/file-preview") {
+        void navigate({ to: "/file-preview" });
+        return;
+      }
+      if (payload.route === "/plan-summary") {
+        void navigate({ to: "/plan-summary" });
+        return;
+      }
       if (payload.route === "/") {
         void navigate({ to: "/" });
+        return;
+      }
+      if (payload.route === "/thread-overlay") {
+        if (payload.threadId) {
+          void navigate({
+            to: "/thread-overlay/$conversationId",
+            params: { conversationId: payload.threadId },
+          });
+          return;
+        }
+        void navigate({ to: "/thread-overlay" });
         return;
       }
       if (payload.route === "/t" && payload.threadId) {
@@ -409,14 +444,17 @@ export function AppShell() {
       <EnvironmentUiProvider>
         <AppServerHealthProvider value={appServerHealth}>
           <ThreadUiProvider value={threadUi}>
-            <div className="h-screen overflow-hidden bg-[linear-gradient(180deg,#1a1d1d_0%,#131517_12%,#101214_100%)] text-ink-50">
+            <div
+              data-codex-window-type={isDesktop ? "tauri" : "browser"}
+              className="h-screen overflow-hidden bg-[linear-gradient(180deg,#1a1d1d_0%,#131517_12%,#101214_100%)] text-ink-50"
+            >
               <div className="flex h-full flex-col overflow-hidden">
                 {isDesktop ? (
                   <WindowTitlebar onCommand={handleMenuCommand} />
                 ) : null}
                 <div className="flex min-h-0 flex-1 overflow-hidden bg-[#121417]">
                   <AppSidebar />
-                  <main className="flex min-h-0 flex-1 flex-col bg-[#131518]">
+                  <main className="main-surface flex min-h-0 flex-1 flex-col bg-[#131518]">
                     <ThreadTopBar
                       variant={topBarVariant}
                       title={topBarTitle}
@@ -430,11 +468,17 @@ export function AppShell() {
                           : "min-h-0 flex-1"
                       }
                     >
-                      <section className="h-full min-h-0 min-w-0 bg-[#121416]">
+                      <section
+                        data-thread-find-anchor="conversation"
+                        className="h-full min-h-0 min-w-0 bg-[#121416]"
+                      >
                         <Outlet />
                       </section>
                       {showReviewPanel ? (
-                        <aside className="hidden min-h-0 border-l border-white/10 bg-[#14171b] lg:block">
+                        <aside
+                          data-thread-find-anchor="review"
+                          className="hidden min-h-0 border-l border-white/10 bg-[#14171b] lg:block"
+                        >
                           <DiffPanel
                             thread={threadMatch ? thread : undefined}
                           />

@@ -45,9 +45,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager};
 #[cfg(target_os = "windows")]
 use tauri_plugin_decorum::WebviewWindowExt;
+use tauri_plugin_dialog::DialogExt;
 use terminal_host::{
     TerminalCloseParams, TerminalCreateParams, TerminalHost, TerminalResizeParams,
     TerminalSessionDescriptor, TerminalWriteParams,
@@ -60,6 +61,7 @@ use walkdir::WalkDir;
 
 static REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 const COMPAT_APP_CHANNEL_FOR_VIEW: &str = "codex_desktop:message-for-view";
+const ELECTRON_PERSISTED_ATOM_STATE_KEY: &str = "electron-persisted-atom-state";
 
 struct RuntimeHostState {
     update_state: Mutex<HostUpdateStatePayload>,
@@ -73,11 +75,103 @@ impl RuntimeHostState {
     }
 }
 
+struct SharedObjectState {
+    values: Mutex<HashMap<String, Value>>,
+}
+
+impl SharedObjectState {
+    fn new() -> Self {
+        Self {
+            values: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn read(&self, key: &str) -> Result<Value, String> {
+        self.values
+            .lock()
+            .map(|values| values.get(key).cloned().unwrap_or(Value::Null))
+            .map_err(|error| format!("failed to lock shared object state for read: {error}"))
+    }
+
+    fn write(&self, key: &str, value: Value) -> Result<(), String> {
+        self.values
+            .lock()
+            .map_err(|error| format!("failed to lock shared object state for write: {error}"))
+            .map(|mut values| {
+                values.insert(key.to_string(), value);
+            })
+    }
+}
+
 fn resolve_renderer_mode() -> String {
     match std::env::var("CODEX_DESKTOP_RENDERER_MODE") {
         Ok(mode) if mode.eq_ignore_ascii_case("rewrite") => "rewrite".to_string(),
         _ => "compat".to_string(),
     }
+}
+
+fn normalize_locale_tag(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let language_list_head = trimmed.split(':').next().unwrap_or(trimmed);
+    let without_modifier = language_list_head
+        .split('@')
+        .next()
+        .unwrap_or(language_list_head);
+    let without_encoding = without_modifier
+        .split('.')
+        .next()
+        .unwrap_or(without_modifier);
+    if without_encoding.eq_ignore_ascii_case("c") || without_encoding.eq_ignore_ascii_case("posix")
+    {
+        return None;
+    }
+
+    let mut segments = Vec::<String>::new();
+    for (index, segment) in without_encoding.split(['-', '_']).enumerate() {
+        if segment.is_empty() || !segment.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+            return None;
+        }
+        let normalized = if index == 0 {
+            if !(2..=8).contains(&segment.len())
+                || !segment.chars().all(|ch| ch.is_ascii_alphabetic())
+            {
+                return None;
+            }
+            segment.to_ascii_lowercase()
+        } else if segment.len() == 2 && segment.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            segment.to_ascii_uppercase()
+        } else if segment.len() == 4 && segment.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            let mut chars = segment.chars();
+            let first = chars.next()?.to_ascii_uppercase();
+            let rest: String = chars.map(|ch| ch.to_ascii_lowercase()).collect();
+            format!("{first}{rest}")
+        } else if (3..=8).contains(&segment.len()) {
+            segment.to_ascii_lowercase()
+        } else {
+            return None;
+        };
+        segments.push(normalized);
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments.join("-"))
+    }
+}
+
+fn resolve_locale_from_env() -> Option<String> {
+    ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"]
+        .iter()
+        .find_map(|key| {
+            std::env::var(key)
+                .ok()
+                .and_then(|value| normalize_locale_tag(&value))
+        })
 }
 
 struct ElectronCompatRuntimeState {
@@ -641,10 +735,485 @@ async fn bridge_send_message_from_view(
     state_store: tauri::State<'_, Arc<StateStore>>,
     automation_store: tauri::State<'_, Arc<AutomationStore>>,
     terminal_host: tauri::State<'_, Arc<TerminalHost>>,
+    shared_object_state: tauri::State<'_, Arc<SharedObjectState>>,
     payload: Value,
 ) -> Result<(), String> {
     if let Some(message_type) = payload.get("type").and_then(Value::as_str) {
         match message_type {
+            "persisted-atom-sync-request" => {
+                let state = read_persisted_atom_state(state_store.inner())
+                    .await
+                    .map_err(compat_error_to_string)?;
+                let response = serde_json::json!({
+                  "type": "persisted-atom-sync",
+                  "state": state
+                });
+                return emit_compat_message(&app, response);
+            }
+            "persisted-atom-update" => {
+                let key = payload
+                    .get("key")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "persisted-atom-update is missing key".to_string())?
+                    .to_string();
+                let deleted = payload
+                    .get("deleted")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let mut state = read_persisted_atom_state(state_store.inner())
+                    .await
+                    .map_err(compat_error_to_string)?;
+                let value = if deleted {
+                    state.remove(&key);
+                    Value::Null
+                } else {
+                    let next_value = payload.get("value").cloned().unwrap_or(Value::Null);
+                    state.insert(key.clone(), next_value.clone());
+                    next_value
+                };
+                write_persisted_atom_state(state_store.inner(), state)
+                    .await
+                    .map_err(compat_error_to_string)?;
+                let response = serde_json::json!({
+                  "type": "persisted-atom-updated",
+                  "key": key,
+                  "value": value,
+                  "deleted": deleted
+                });
+                return emit_compat_message(&app, response);
+            }
+            "persisted-atom-reset" => {
+                write_persisted_atom_state(state_store.inner(), serde_json::Map::new())
+                    .await
+                    .map_err(compat_error_to_string)?;
+                let response = serde_json::json!({
+                  "type": "persisted-atom-sync",
+                  "state": serde_json::Map::<String, Value>::new()
+                });
+                return emit_compat_message(&app, response);
+            }
+            "mcp-request" => {
+                let request = payload.get("request").cloned().unwrap_or(Value::Null);
+                let request_id = request.get("id").cloned().unwrap_or(Value::Null);
+                if !request.is_object() {
+                    emit_mcp_response_error(
+                        &app,
+                        request_id,
+                        "mcp-request payload is missing request object",
+                    )?;
+                    return Ok(());
+                }
+                match bridge.request(app.clone(), request).await {
+                    Ok(response) => {
+                        let event = serde_json::json!({
+                          "type": "mcp-response",
+                          "message": response
+                        });
+                        return emit_compat_message(&app, event);
+                    }
+                    Err(error) => {
+                        emit_mcp_response_error(
+                            &app,
+                            request_id,
+                            format!("failed to forward mcp-request: {error}"),
+                        )?;
+                        return Ok(());
+                    }
+                }
+            }
+            "mcp-notification" => {
+                let request = payload.get("request").and_then(Value::as_object).cloned();
+                let Some(request) = request else {
+                    emit_mcp_response_error(
+                        &app,
+                        Value::Null,
+                        "mcp-notification payload is missing request object",
+                    )?;
+                    return Ok(());
+                };
+                let method = match request.get("method").and_then(Value::as_str) {
+                    Some(value) if !value.trim().is_empty() => value.to_string(),
+                    _ => {
+                        emit_mcp_response_error(
+                            &app,
+                            Value::Null,
+                            "mcp-notification request is missing method",
+                        )?;
+                        return Ok(());
+                    }
+                };
+                let params = request.get("params").cloned();
+                if let Err(error) = bridge.notify(app.clone(), method, params).await {
+                    emit_mcp_response_error(
+                        &app,
+                        Value::Null,
+                        format!("failed to forward mcp-notification: {error}"),
+                    )?;
+                }
+                return Ok(());
+            }
+            "mcp-response" => {
+                let response = payload.get("response").and_then(Value::as_object).cloned();
+                let Some(response) = response else {
+                    emit_mcp_response_error(
+                        &app,
+                        Value::Null,
+                        "mcp-response payload is missing response object",
+                    )?;
+                    return Ok(());
+                };
+                let id = response.get("id").cloned().unwrap_or(Value::Null);
+                if id.is_null() {
+                    emit_mcp_response_error(
+                        &app,
+                        Value::Null,
+                        "mcp-response payload is missing id",
+                    )?;
+                    return Ok(());
+                }
+                let result = response.get("result").cloned();
+                let error = response.get("error").cloned();
+                if let Err(forward_error) = bridge.respond(id.clone(), result, error).await {
+                    emit_mcp_response_error(
+                        &app,
+                        id,
+                        format!("failed to forward mcp-response: {forward_error}"),
+                    )?;
+                }
+                return Ok(());
+            }
+            "shared-object-subscribe" => {
+                let key = payload
+                    .get("key")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "shared-object-subscribe is missing key".to_string())?;
+                let value = shared_object_state.read(key)?;
+                let event = serde_json::json!({
+                  "type": "shared-object-updated",
+                  "key": key,
+                  "value": value
+                });
+                return emit_compat_message(&app, event);
+            }
+            "shared-object-unsubscribe" => {
+                return Ok(());
+            }
+            "shared-object-set" => {
+                let key = payload
+                    .get("key")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "shared-object-set is missing key".to_string())?;
+                let value = payload.get("value").cloned().unwrap_or(Value::Null);
+                shared_object_state.write(key, value.clone())?;
+                let event = serde_json::json!({
+                  "type": "shared-object-updated",
+                  "key": key,
+                  "value": value
+                });
+                return emit_compat_message(&app, event);
+            }
+            "electron-window-focus-request" => {
+                let event = serde_json::json!({
+                  "type": "electron-window-focus-changed",
+                  "isFocused": current_window_focus_state(&app)
+                });
+                return emit_compat_message(&app, event);
+            }
+            "electron-add-new-workspace-root-option" => {
+                add_workspace_root_option(
+                    &app,
+                    state_store.inner(),
+                    shared_object_state.inner(),
+                    true,
+                    payload.get("root").and_then(Value::as_str),
+                )
+                .await?;
+                return Ok(());
+            }
+            "electron-pick-workspace-root-option" => {
+                add_workspace_root_option(
+                    &app,
+                    state_store.inner(),
+                    shared_object_state.inner(),
+                    false,
+                    payload.get("root").and_then(Value::as_str),
+                )
+                .await?;
+                return Ok(());
+            }
+            "electron-onboarding-skip-workspace" => {
+                skip_onboarding_workspace(&app, state_store.inner()).await?;
+                return Ok(());
+            }
+            "electron-update-workspace-root-options" => {
+                let roots = payload
+                    .get("roots")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let roots = normalize_workspace_root_list(roots);
+
+                let mut map = read_named_state_map(state_store.inner(), "global-state")
+                    .await
+                    .map_err(compat_error_to_string)?;
+                map.insert(
+                    "workspaceRootOptions".to_string(),
+                    workspace_roots_to_value(roots.clone()),
+                );
+
+                let labels = workspace_root_labels_from_map(&map);
+                let mut next_labels = serde_json::Map::<String, Value>::new();
+                for root in &roots {
+                    if let Some(value) = labels.get(root) {
+                        next_labels.insert(root.clone(), value.clone());
+                    }
+                }
+                map.insert(
+                    "workspaceRootLabels".to_string(),
+                    Value::Object(next_labels),
+                );
+
+                let active_roots = string_array_from_value(map.get("activeWorkspaceRoots"));
+                let mut next_active_roots = active_roots
+                    .iter()
+                    .filter(|root| roots.contains(root))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if next_active_roots.is_empty() && !roots.is_empty() {
+                    next_active_roots.push(roots[0].clone());
+                }
+                let active_changed = next_active_roots != active_roots;
+                if active_changed {
+                    map.insert(
+                        "activeWorkspaceRoots".to_string(),
+                        workspace_roots_to_value(next_active_roots),
+                    );
+                }
+
+                write_named_state_map(state_store.inner(), "global-state", map)
+                    .await
+                    .map_err(compat_error_to_string)?;
+                if active_changed {
+                    emit_compat_message(
+                        &app,
+                        serde_json::json!({
+                          "type": "active-workspace-roots-updated"
+                        }),
+                    )?;
+                }
+                emit_compat_message(
+                    &app,
+                    serde_json::json!({
+                      "type": "workspace-root-options-updated"
+                    }),
+                )?;
+                return Ok(());
+            }
+            "electron-rename-workspace-root-option" => {
+                let root = payload
+                    .get("root")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        "electron-rename-workspace-root-option is missing root".to_string()
+                    })?
+                    .trim()
+                    .to_string();
+                if root.is_empty() {
+                    return Ok(());
+                }
+                let label = payload
+                    .get("label")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .unwrap_or("");
+
+                let mut map = read_named_state_map(state_store.inner(), "global-state")
+                    .await
+                    .map_err(compat_error_to_string)?;
+                let roots = string_array_from_value(map.get("workspaceRootOptions"));
+                if !roots.contains(&root) {
+                    return Ok(());
+                }
+
+                let mut labels = workspace_root_labels_from_map(&map);
+                if label.is_empty() {
+                    labels.remove(&root);
+                } else {
+                    labels.insert(root, Value::String(label.to_string()));
+                }
+                map.insert("workspaceRootLabels".to_string(), Value::Object(labels));
+                write_named_state_map(state_store.inner(), "global-state", map)
+                    .await
+                    .map_err(compat_error_to_string)?;
+                emit_compat_message(
+                    &app,
+                    serde_json::json!({
+                      "type": "workspace-root-options-updated"
+                    }),
+                )?;
+                return Ok(());
+            }
+            "electron-set-active-workspace-root" => {
+                let root = payload
+                    .get("root")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        "electron-set-active-workspace-root is missing root".to_string()
+                    })?
+                    .trim()
+                    .to_string();
+                if root.is_empty() {
+                    return Ok(());
+                }
+
+                let mut map = read_named_state_map(state_store.inner(), "global-state")
+                    .await
+                    .map_err(compat_error_to_string)?;
+                let mut roots = string_array_from_value(map.get("workspaceRootOptions"));
+                if !roots.contains(&root) {
+                    roots.insert(0, root.clone());
+                }
+                map.insert(
+                    "workspaceRootOptions".to_string(),
+                    workspace_roots_to_value(normalize_workspace_root_list(roots)),
+                );
+                map.insert(
+                    "activeWorkspaceRoots".to_string(),
+                    Value::Array(vec![Value::String(root)]),
+                );
+                map.insert(
+                    "workspaceRootLabels".to_string(),
+                    Value::Object(workspace_root_labels_from_map(&map)),
+                );
+                write_named_state_map(state_store.inner(), "global-state", map)
+                    .await
+                    .map_err(compat_error_to_string)?;
+                emit_compat_message(
+                    &app,
+                    serde_json::json!({
+                      "type": "active-workspace-roots-updated"
+                    }),
+                )?;
+                return Ok(());
+            }
+            "open-in-browser" => {
+                let Some(url) = payload.get("url").and_then(Value::as_str) else {
+                    return Ok(());
+                };
+                if is_http_or_https_url(url) {
+                    host_open_external_url(url.to_string())?;
+                }
+                return Ok(());
+            }
+            "codex-app-server-restart" => {
+                bridge.stop().await?;
+                bridge
+                    .ensure_ready(app.clone(), None, None, None)
+                    .await
+                    .map_err(|error| format!("failed to restart app-server: {error}"))?;
+                return Ok(());
+            }
+            "open-debug-window" => {
+                return Ok(());
+            }
+            "show-diff" => {
+                emit_compat_message(
+                    &app,
+                    serde_json::json!({
+                      "type": "toggle-diff-panel",
+                      "open": true
+                    }),
+                )?;
+                return Ok(());
+            }
+            "terminal-create" | "terminal-attach" | "terminal-write" | "terminal-resize"
+            | "terminal-close" => {
+                let params = payload
+                    .as_object()
+                    .map(|object| {
+                        let mut object = object.clone();
+                        object.remove("type");
+                        Value::Object(object)
+                    })
+                    .unwrap_or_else(|| serde_json::json!({}));
+                dispatch_electron_method(
+                    &app,
+                    bridge.inner(),
+                    state_store.inner(),
+                    automation_store.inner(),
+                    terminal_host.inner(),
+                    message_type,
+                    params,
+                )
+                .await
+                .map_err(compat_error_to_string)?;
+                return Ok(());
+            }
+            "desktop-notification-show"
+            | "desktop-notification-hide"
+            | "install-app-update"
+            | "install-wsl"
+            | "navigate-in-new-editor-tab"
+            | "open-config-toml"
+            | "open-extension-settings"
+            | "open-keyboard-shortcuts"
+            | "open-thread-overlay"
+            | "open-vscode-command"
+            | "show-plan-summary"
+            | "show-settings"
+            | "thread-overlay-proxy-interrupt-request"
+            | "thread-overlay-proxy-interrupt-response"
+            | "thread-overlay-proxy-start-turn-request"
+            | "thread-overlay-proxy-start-turn-response"
+            | "thread-overlay-set-always-on-top"
+            | "thread-stream-state-changed"
+            | "thread-unarchived"
+            | "update-diff-if-open"
+            | "view-focused"
+            | "worker-request"
+            | "worker-request-cancel"
+            | "electron-set-badge-count"
+            | "electron-set-window-mode"
+            | "set-telemetry-user"
+            | "power-save-blocker-set"
+            | "electron-add-ssh-host" => {
+                return Ok(());
+            }
+            "ready" => {
+                let state = read_persisted_atom_state(state_store.inner())
+                    .await
+                    .map_err(compat_error_to_string)?;
+                emit_compat_message(
+                    &app,
+                    serde_json::json!({
+                      "type": "persisted-atom-sync",
+                      "state": state
+                    }),
+                )?;
+                emit_compat_message(
+                    &app,
+                    serde_json::json!({
+                      "type": "app-update-ready-changed",
+                      "isUpdateReady": false
+                    }),
+                )?;
+                return Ok(());
+            }
+            "log-message" => {
+                let level = payload
+                    .get("level")
+                    .and_then(Value::as_str)
+                    .unwrap_or("info");
+                let message = payload.get("message").and_then(Value::as_str).unwrap_or("");
+                eprintln!("[compat:{level}] {message}");
+                return Ok(());
+            }
             "fetch" => {
                 let request_id = payload
                     .get("requestId")
@@ -955,6 +1524,46 @@ fn emit_compat_message(app: &AppHandle, payload: Value) -> Result<(), String> {
     Ok(())
 }
 
+fn emit_mcp_response_error(
+    app: &AppHandle,
+    id: Value,
+    message: impl Into<String>,
+) -> Result<(), String> {
+    let message = message.into();
+    let payload = serde_json::json!({
+      "type": "mcp-response",
+      "message": {
+        "id": id,
+        "error": {
+          "code": -32000,
+          "message": message,
+          "data": {
+            "code": "desktop_bridge_error"
+          }
+        }
+      }
+    });
+    emit_compat_message(app, payload)
+}
+
+fn compat_error_to_string(error: CompatDispatchError) -> String {
+    let (code, message, _) = error;
+    format!("{code}: {message}")
+}
+
+fn current_window_focus_state(app: &AppHandle) -> bool {
+    app.webview_windows()
+        .values()
+        .any(|window| window.is_focused().ok().unwrap_or(false))
+}
+
+fn is_http_or_https_url(candidate: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(candidate) else {
+        return false;
+    };
+    parsed.scheme() == "http" || parsed.scheme() == "https"
+}
+
 fn normalize_state_key(space: &str) -> &'static str {
     match space {
         "configuration" => "configuration",
@@ -985,6 +1594,29 @@ async fn write_named_state_map(
         .map_err(|error| ("state_write_error".to_string(), error, None))
 }
 
+async fn read_persisted_atom_state(
+    state_store: &Arc<StateStore>,
+) -> Result<serde_json::Map<String, Value>, CompatDispatchError> {
+    let global_state = read_named_state_map(state_store, "global-state").await?;
+    Ok(global_state
+        .get(ELECTRON_PERSISTED_ATOM_STATE_KEY)
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default())
+}
+
+async fn write_persisted_atom_state(
+    state_store: &Arc<StateStore>,
+    state: serde_json::Map<String, Value>,
+) -> Result<(), CompatDispatchError> {
+    let mut global_state = read_named_state_map(state_store, "global-state").await?;
+    global_state.insert(
+        ELECTRON_PERSISTED_ATOM_STATE_KEY.to_string(),
+        Value::Object(state),
+    );
+    write_named_state_map(state_store, "global-state", global_state).await
+}
+
 fn string_array_from_value(value: Option<&Value>) -> Vec<String> {
     value
         .and_then(Value::as_array)
@@ -996,6 +1628,300 @@ fn string_array_from_value(value: Option<&Value>) -> Vec<String> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default()
+}
+
+fn normalize_workspace_root_list(roots: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::<String>::new();
+    let mut seen = HashSet::<String>::new();
+    for root in roots {
+        let trimmed = root.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let value = trimmed.to_string();
+        if seen.insert(value.clone()) {
+            normalized.push(value);
+        }
+    }
+    normalized
+}
+
+fn workspace_roots_to_value(roots: Vec<String>) -> Value {
+    Value::Array(roots.into_iter().map(Value::String).collect())
+}
+
+fn workspace_root_labels_from_map(
+    map: &serde_json::Map<String, Value>,
+) -> serde_json::Map<String, Value> {
+    map.get("workspaceRootLabels")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn resolve_workspace_root(root: &str) -> Option<String> {
+    let trimmed = root.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let candidate = PathBuf::from(trimmed);
+    let metadata = std::fs::metadata(&candidate).ok()?;
+    if !metadata.is_dir() {
+        return None;
+    }
+    let resolved = std::fs::canonicalize(&candidate).unwrap_or(candidate);
+    Some(resolved.to_string_lossy().to_string())
+}
+
+fn next_skip_workspace_root(base_dir: &Path) -> PathBuf {
+    const BASE_NAME: &str = "New project";
+    let mut suffix = 1u32;
+    loop {
+        let candidate = if suffix == 1 {
+            base_dir.join(BASE_NAME)
+        } else {
+            base_dir.join(format!("{BASE_NAME} {suffix}"))
+        };
+        if !candidate.exists() {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
+fn remote_host_display_name(
+    shared_object_state: &Arc<SharedObjectState>,
+) -> Result<Option<String>, String> {
+    let host_config = shared_object_state.read("host_config")?;
+    let Some(host_config) = host_config.as_object() else {
+        return Ok(None);
+    };
+
+    let is_remote = host_config
+        .get("kind")
+        .and_then(Value::as_str)
+        .map(|kind| !kind.eq_ignore_ascii_case("local"))
+        .or_else(|| {
+            host_config
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|id| !id.eq_ignore_ascii_case("local"))
+        })
+        .unwrap_or(false);
+
+    if !is_remote {
+        return Ok(None);
+    }
+
+    let host_name = host_config
+        .get("displayName")
+        .or_else(|| host_config.get("display_name"))
+        .or_else(|| host_config.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or("Remote")
+        .to_string();
+    Ok(Some(host_name))
+}
+
+async fn add_workspace_root_option(
+    app: &AppHandle,
+    state_store: &Arc<StateStore>,
+    shared_object_state: &Arc<SharedObjectState>,
+    set_active: bool,
+    requested_root: Option<&str>,
+) -> Result<(), String> {
+    if let Some(host_name) = remote_host_display_name(shared_object_state)? {
+        let event = if set_active {
+            serde_json::json!({
+              "type": "remote-workspace-root-requested",
+              "mode": "add",
+              "host": host_name,
+              "setActive": true
+            })
+        } else {
+            serde_json::json!({
+              "type": "remote-workspace-root-requested",
+              "mode": "pick",
+              "host": host_name
+            })
+        };
+        emit_compat_message(app, event)?;
+        return Ok(());
+    }
+
+    let workspace_root = if let Some(root) = requested_root {
+        resolve_workspace_root(root)
+    } else {
+        let selected = app
+            .dialog()
+            .file()
+            .set_title("Select Project Root")
+            .blocking_pick_folder();
+        let Some(selected) = selected else {
+            return Ok(());
+        };
+        let selected_path = selected
+            .into_path()
+            .map_err(|error| format!("failed to resolve selected folder path: {error}"))?;
+        let selected_root = selected_path.to_string_lossy().to_string();
+        resolve_workspace_root(&selected_root)
+    };
+    let Some(workspace_root) = workspace_root else {
+        return Ok(());
+    };
+
+    if !set_active {
+        let event = serde_json::json!({
+          "type": "workspace-root-option-picked",
+          "root": workspace_root
+        });
+        emit_compat_message(app, event)?;
+        return Ok(());
+    }
+
+    let mut map = read_named_state_map(state_store, "global-state")
+        .await
+        .map_err(compat_error_to_string)?;
+    let mut workspace_root_options = string_array_from_value(map.get("workspaceRootOptions"));
+    let mut options_changed = false;
+    if !workspace_root_options.contains(&workspace_root) {
+        workspace_root_options.insert(0, workspace_root.clone());
+        options_changed = true;
+    }
+    if options_changed {
+        map.insert(
+            "workspaceRootOptions".to_string(),
+            workspace_roots_to_value(workspace_root_options),
+        );
+    }
+    map.insert(
+        "activeWorkspaceRoots".to_string(),
+        Value::Array(vec![Value::String(workspace_root)]),
+    );
+    write_named_state_map(state_store, "global-state", map)
+        .await
+        .map_err(compat_error_to_string)?;
+
+    if options_changed {
+        emit_compat_message(
+            app,
+            serde_json::json!({
+              "type": "workspace-root-options-updated"
+            }),
+        )?;
+    }
+    emit_compat_message(
+        app,
+        serde_json::json!({
+          "type": "active-workspace-roots-updated"
+        }),
+    )?;
+    emit_compat_message(
+        app,
+        serde_json::json!({
+          "type": "navigate-to-route",
+          "path": "/",
+          "state": { "focusComposerNonce": next_request_id() }
+        }),
+    )?;
+    Ok(())
+}
+
+async fn skip_onboarding_workspace(
+    app: &AppHandle,
+    state_store: &Arc<StateStore>,
+) -> Result<(), String> {
+    let mut attempted_root: Option<String> = None;
+
+    let result = async {
+        let base_dir = dirs::document_dir()
+            .or_else(dirs::home_dir)
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+        let workspace_root_path = next_skip_workspace_root(&base_dir);
+        std::fs::create_dir_all(&workspace_root_path)
+            .map_err(|error| format!("failed to create workspace directory: {error}"))?;
+        let workspace_root = workspace_root_path.to_string_lossy().to_string();
+        attempted_root = Some(workspace_root.clone());
+
+        run_git_capture(&workspace_root, &["init"])
+            .await
+            .map_err(|error| format!("failed to initialize workspace git repo: {error}"))?;
+
+        let mut map = read_named_state_map(state_store, "global-state")
+            .await
+            .map_err(compat_error_to_string)?;
+        let workspace_root_options = string_array_from_value(map.get("workspaceRootOptions"));
+        let workspace_root_options = normalize_workspace_root_list(
+            [vec![workspace_root.clone()], workspace_root_options].concat(),
+        );
+        map.insert(
+            "workspaceRootOptions".to_string(),
+            workspace_roots_to_value(workspace_root_options),
+        );
+        map.insert(
+            "workspaceRootLabels".to_string(),
+            Value::Object(workspace_root_labels_from_map(&map)),
+        );
+        map.insert(
+            "activeWorkspaceRoots".to_string(),
+            Value::Array(vec![Value::String(workspace_root.clone())]),
+        );
+        write_named_state_map(state_store, "global-state", map)
+            .await
+            .map_err(compat_error_to_string)?;
+
+        emit_compat_message(
+            app,
+            serde_json::json!({
+              "type": "workspace-root-options-updated"
+            }),
+        )?;
+        emit_compat_message(
+            app,
+            serde_json::json!({
+              "type": "active-workspace-roots-updated"
+            }),
+        )?;
+        emit_compat_message(
+            app,
+            serde_json::json!({
+              "type": "electron-onboarding-skip-workspace-result",
+              "success": true,
+              "root": workspace_root
+            }),
+        )?;
+        emit_compat_message(
+            app,
+            serde_json::json!({
+              "type": "navigate-to-route",
+              "path": "/",
+              "state": { "focusComposerNonce": next_request_id() }
+            }),
+        )?;
+        Ok::<(), String>(())
+    }
+    .await;
+
+    if let Err(error) = result {
+        let payload = if let Some(root) = attempted_root {
+            serde_json::json!({
+              "type": "electron-onboarding-skip-workspace-result",
+              "success": false,
+              "root": root,
+              "error": error
+            })
+        } else {
+            serde_json::json!({
+              "type": "electron-onboarding-skip-workspace-result",
+              "success": false,
+              "error": error
+            })
+        };
+        emit_compat_message(app, payload)?;
+    }
+
+    Ok(())
 }
 
 fn local_environment_snapshot() -> Value {
@@ -1274,10 +2200,13 @@ async fn handle_electron_query(
           "buildNumber": Value::Null,
           "buildFlavor": if cfg!(debug_assertions) { "debug" } else { "release" }
         })),
-        "locale-info" => Ok(serde_json::json!({
-          "ideLocale": std::env::var("LANG").ok(),
-          "systemLocale": std::env::var("LANG").ok()
-        })),
+        "locale-info" => {
+            let locale = resolve_locale_from_env();
+            Ok(serde_json::json!({
+              "ideLocale": locale,
+              "systemLocale": locale
+            }))
+        }
         "local-environment" => Ok(serde_json::json!({
           "environment": local_environment_snapshot()
         })),
@@ -1314,19 +2243,98 @@ async fn handle_electron_query(
           "available": false
         })),
         "git-origins" => {
-            let cwd = params.get("cwd").and_then(Value::as_str).unwrap_or(".");
-            let output = run_git_capture(cwd, &["remote", "-v"])
-                .await
-                .unwrap_or_default();
-            let mut origins = HashSet::<String>::new();
-            for line in output.lines() {
-                let mut parts = line.split_whitespace();
-                let _name = parts.next();
-                if let Some(url) = parts.next() {
-                    origins.insert(url.to_string());
+            let mut dirs = string_array_from_value(params.get("dirs"));
+            if dirs.is_empty() {
+                if let Some(cwd) = params.get("cwd").and_then(Value::as_str) {
+                    dirs.push(cwd.to_string());
                 }
             }
-            Ok(serde_json::json!({ "origins": origins.into_iter().collect::<Vec<_>>() }))
+            if dirs.is_empty() {
+                let global_state = read_named_state_map(state_store, "global-state").await?;
+                dirs = string_array_from_value(global_state.get("activeWorkspaceRoots"));
+                if dirs.is_empty() {
+                    dirs = string_array_from_value(global_state.get("workspaceRootOptions"));
+                }
+            }
+            if dirs.is_empty() {
+                if let Ok(current_dir) = std::env::current_dir() {
+                    dirs.push(current_dir.to_string_lossy().to_string());
+                }
+            }
+
+            let mut seen_dirs = HashSet::<String>::new();
+            let normalized_dirs = dirs
+                .into_iter()
+                .filter_map(|dir| {
+                    let trimmed = dir.trim();
+                    if trimmed.is_empty() {
+                        return None;
+                    }
+                    let normalized = trimmed.to_string();
+                    if seen_dirs.insert(normalized.clone()) {
+                        Some(normalized)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let mut origins = Vec::<Value>::new();
+            for dir in normalized_dirs {
+                let root = run_git_capture(&dir, &["rev-parse", "--show-toplevel"])
+                    .await
+                    .ok()
+                    .and_then(|value| {
+                        let trimmed = value.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(trimmed.to_string())
+                        }
+                    })
+                    .unwrap_or_else(|| dir.clone());
+
+                let origin_url = run_git_capture(&root, &["config", "--get", "remote.origin.url"])
+                    .await
+                    .ok()
+                    .and_then(|value| {
+                        let trimmed = value.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(trimmed.to_string())
+                        }
+                    });
+
+                let common_dir = run_git_capture(&root, &["rev-parse", "--git-common-dir"])
+                    .await
+                    .ok()
+                    .and_then(|value| {
+                        let trimmed = value.trim();
+                        if trimmed.is_empty() {
+                            return None;
+                        }
+                        let common_path = PathBuf::from(trimmed);
+                        let resolved = if common_path.is_absolute() {
+                            common_path
+                        } else {
+                            Path::new(&root).join(common_path)
+                        };
+                        Some(resolved.to_string_lossy().to_string())
+                    });
+
+                origins.push(serde_json::json!({
+                  "dir": dir,
+                  "root": root,
+                  "originUrl": origin_url,
+                  "commonDir": common_dir
+                }));
+            }
+
+            Ok(serde_json::json!({
+              "origins": origins,
+              "homeDir": dirs::home_dir().map(|path| path.to_string_lossy().to_string())
+            }))
         }
         "has-custom-cli-executable" => Ok(serde_json::json!({
           "hasCustomCliExecutable": std::env::var_os("CODEX_CLI_PATH").is_some()
@@ -2113,6 +3121,7 @@ fn main() {
         .manage(Arc::new(TerminalHost::new()))
         .manage(Arc::new(CloudRunHost::new()))
         .manage(Arc::new(RuntimeHostState::new()))
+        .manage(Arc::new(SharedObjectState::new()))
         .manage(Arc::new(compat_runtime_state))
         .setup(|app| {
             #[cfg(target_os = "windows")]
@@ -2131,6 +3140,18 @@ fn main() {
                 Arc::clone(app.state::<Arc<AutomationStore>>().inner());
             let app_server_bridge_for_notifications =
                 Arc::clone(app.state::<Arc<AppServerBridge>>().inner());
+            let app_handle_for_server_requests = app.handle().clone();
+            app.listen("app-server-request", move |event: tauri::Event| {
+                let request = match serde_json::from_str::<Value>(event.payload()) {
+                    Ok(value) => value,
+                    Err(_) => return,
+                };
+                let payload = serde_json::json!({
+                  "type": "mcp-request",
+                  "request": request
+                });
+                let _ = emit_compat_message(&app_handle_for_server_requests, payload);
+            });
             tauri::async_runtime::spawn(async move {
                 loop {
                     let due = match automation_store.due_automations(now_ts()).await {
@@ -2181,6 +3202,14 @@ fn main() {
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                     };
+                    if let Some(method) = notification.get("method").and_then(Value::as_str) {
+                        let payload = serde_json::json!({
+                          "type": "mcp-notification",
+                          "method": method,
+                          "params": notification.get("params").cloned().unwrap_or(Value::Null)
+                        });
+                        let _ = emit_compat_message(&app_handle_for_notifications, payload);
+                    }
                     if let Err(error) = reconcile_automation_run_completion(
                         app_handle_for_notifications.clone(),
                         Arc::clone(&automation_store_for_notifications),

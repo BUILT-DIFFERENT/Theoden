@@ -545,7 +545,10 @@ export function AutomationsPage() {
               const historyOpen = expandedHistory.has(automation.id);
               const enabled = enabledFromStatus(automation.status);
               return (
-                <div key={automation.id} className="surface-card p-4">
+                <div
+                  key={automation.id}
+                  className="automation-row surface-card p-4"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-sm text-ink-100">{automation.name}</p>
@@ -563,7 +566,7 @@ export function AutomationsPage() {
                       {latestRun?.status ?? automation.status}
                     </span>
                   </div>
-                  <p className="mt-3 text-xs text-ink-400">
+                  <p className="automation-row__schedule mt-3 text-xs text-ink-400">
                     {recurringSummary(automation)}
                   </p>
                   <p className="mt-1 text-xs text-ink-500">
@@ -674,7 +677,7 @@ export function AutomationsPage() {
       {runMessage ? <p className="text-sm text-ink-300">{runMessage}</p> : null}
 
       {sheetOpen ? (
-        <div className="fixed inset-0 z-40 flex justify-end bg-black/50 animate-codex-dialog-overlay">
+        <div className="codex-dialog-overlay fixed inset-0 z-40 flex justify-end bg-black/50">
           <button
             type="button"
             aria-label="Close create automation sheet"
@@ -685,7 +688,7 @@ export function AutomationsPage() {
             ref={sheetRef}
             role="dialog"
             aria-modal="true"
-            className="surface-panel animate-codex-dialog-enter relative z-10 h-full w-full max-w-xl overflow-y-auto rounded-none border-l border-white/10 p-6"
+            className="codex-dialog surface-panel relative z-10 h-full w-full max-w-xl overflow-y-auto rounded-none border-l border-white/10 p-6"
           >
             <div className="flex items-start justify-between gap-3">
               <div>

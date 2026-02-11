@@ -6,8 +6,6 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const action = (process.argv[2] || "dev").trim().toLowerCase();
-const requestedMode = (process.argv[3] || "compat").trim().toLowerCase();
-const mode = requestedMode === "rewrite" ? "rewrite" : "compat";
 
 if (!["dev", "build"].includes(action)) {
   console.error(
@@ -15,17 +13,11 @@ if (!["dev", "build"].includes(action)) {
   );
   process.exit(1);
 }
-
-const env = {
-  ...process.env,
-  CODEX_DESKTOP_RENDERER_MODE: mode,
-};
-
-console.log(`[run-desktop] action=${action} mode=${mode}`);
+console.log(`[run-desktop] action=${action} mode=rewrite`);
 
 const result = spawnSync(`pnpm tauri ${action}`, {
   cwd: root,
-  env,
+  env: process.env,
   stdio: "inherit",
   shell: true,
 });

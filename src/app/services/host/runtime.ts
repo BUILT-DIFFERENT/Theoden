@@ -23,17 +23,6 @@ export interface HostBuildFlavor {
   channel: string;
 }
 
-export type HostRendererMode = "compat" | "rewrite";
-
-export interface HostRendererModePayload {
-  mode: HostRendererMode;
-}
-
-export interface HostBridgeMessage {
-  channel: string;
-  payload: unknown;
-}
-
 function canUseRuntimeBridge() {
   if (!isTauri()) {
     return false;
@@ -113,22 +102,6 @@ export async function subscribeHostUpdateState(
   };
 }
 
-export async function sendBridgeMessageFromView(params: HostBridgeMessage) {
-  if (!canUseRuntimeBridge()) {
-    return;
-  }
-  await invoke("bridge_message_from_view", { params });
-}
-
-export async function showBridgeContextMenu(payload?: unknown) {
-  if (!canUseRuntimeBridge()) {
-    return true;
-  }
-  return invoke<boolean>("bridge_show_context_menu", {
-    payload: payload ?? null,
-  });
-}
-
 export async function getBridgeBuildFlavor() {
   if (!canUseRuntimeBridge()) {
     return {
@@ -138,49 +111,4 @@ export async function getBridgeBuildFlavor() {
     } satisfies HostBuildFlavor;
   }
   return invoke<HostBuildFlavor>("bridge_get_build_flavor");
-}
-
-function parseRendererMode(raw: string | undefined): HostRendererMode {
-  return raw === "compat" ? "compat" : "rewrite";
-}
-
-function readRendererModeFromEnv() {
-  const env = import.meta.env as Record<string, unknown>;
-  const value = env["VITE_DESKTOP_RENDERER_MODE"];
-  return typeof value === "string" ? value : undefined;
-}
-
-export async function getHostRendererMode() {
-  const fallback = {
-    mode: parseRendererMode(readRendererModeFromEnv()),
-  } satisfies HostRendererModePayload;
-  if (!canUseRuntimeBridge()) {
-    return fallback;
-  }
-  try {
-    return invoke<HostRendererModePayload>("host_get_renderer_mode");
-  } catch (error) {
-    console.warn("Failed to load host renderer mode", error);
-    return fallback;
-  }
-}
-
-export async function subscribeBridgeMessageForView(
-  listener: (payload: HostBridgeMessage) => void,
-) {
-  if (!canUseRuntimeBridge()) {
-    return () => {};
-  }
-  let unlisten: (() => void) | null = null;
-  try {
-    unlisten = await listen<HostBridgeMessage>(
-      "codex-desktop-message-for-view",
-      (event) => listener(event.payload),
-    );
-  } catch (error) {
-    console.warn("Failed to subscribe to bridge view messages", error);
-  }
-  return () => {
-    unlisten?.();
-  };
 }

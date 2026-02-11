@@ -6,9 +6,7 @@ const path = require("node:path");
 
 const root = process.cwd();
 const srcDir = path.join(root, "src");
-const allowedFiles = new Set([
-  path.join(root, "src", "app", "services", "bridge", "electronCompat.ts"),
-]);
+const allowedFiles = new Set();
 const disallowedPatterns = [
   /\bwindow\.electronBridge\b/,
   /\bwindow\.codexWindowType\b/,

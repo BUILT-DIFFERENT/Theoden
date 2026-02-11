@@ -5,8 +5,22 @@ name: Codespell
 on:
   push:
     branches: [main]
+    paths:
+      - "docs/**"
+      - "src/**"
+      - "src-tauri/**"
+      - ".codespellrc"
+      - ".codespellignore"
+      - ".github/workflows/codespell.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "docs/**"
+      - "src/**"
+      - "src-tauri/**"
+      - ".codespellrc"
+      - ".codespellignore"
+      - ".github/workflows/codespell.yml"
 
 permissions:
   contents: read

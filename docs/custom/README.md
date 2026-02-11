@@ -19,6 +19,7 @@ Current docs:
 - `docs/custom/app-server-adoption-hardening.md`: app-server documented-surface adoption status, outbound method policy, and deferred API-overview backlog.
 - `docs/custom/signal-parity-map-tauri.md`: closed signal-level parity mapping for thread/turn/approval/auth + OAuth coverage.
 - `docs/custom/codex-app.md`: consolidated product/UX specification.
-- `docs/custom/tauri-renderer-port-phases.md`: phased renderer migration status for dual-runtime rollout.
+- `docs/custom/tauri-renderer-port-phases.md`: renderer migration closure and rewrite-only runtime policy.
+- `docs/custom/ui-parity-investigation-2026-02-11.md`: Electron-vs-Tauri UI/screen/flow parity findings and applied alias/deeplink updates.
 - `docs/custom/official-desktop-debugging.md`: official desktop app submodule debug harness workflow (Playwright/CDP, NDJSON telemetry, fixtures, audit, parity map).
 - `docs/custom/titlebar-windows-linux.md`: integrated titlebar/menubar behavior, permissions, and troubleshooting for Windows/Linux.

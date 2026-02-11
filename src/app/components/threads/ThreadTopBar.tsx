@@ -1,13 +1,9 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, MoreHorizontal, Play } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  forkThread,
-  listLoadedThreads,
-  rollbackThread,
-} from "@/app/services/cli/threads";
+import { forkThread, rollbackThread } from "@/app/services/cli/threads";
 import { useWorkspaces } from "@/app/services/cli/useWorkspaces";
 import { useThreadUi } from "@/app/state/threadUi";
 import { useWorkspaceUi } from "@/app/state/workspaceUi";
@@ -30,7 +26,7 @@ export function ThreadTopBar({
   title,
   variant,
 }: ThreadTopBarProps) {
-  const { reviewOpen, setReviewOpen, setActiveModal } = useThreadUi();
+  const { reviewOpen, setReviewOpen } = useThreadUi();
   const { selectedWorkspace } = useWorkspaceUi();
   const { workspaces } = useWorkspaces();
   const navigate = useNavigate();
@@ -60,30 +56,12 @@ export function ThreadTopBar({
         ? (thread?.title ?? title ?? "Thread")
         : (title ?? "Codex");
   const showThreadHeader = resolvedVariant === "thread";
-  const showActionToolbar = showThreadHeader && Boolean(thread);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [menuActionError, setMenuActionError] = useState<string | null>(null);
   const [menuActionBusy, setMenuActionBusy] = useState<
     "fork" | "rollback" | null
   >(null);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
-  const changeSummary = thread?.diffSummary;
-  const hasChanges = Boolean(
-    changeSummary &&
-      (changeSummary.additions > 0 || changeSummary.deletions > 0),
-  );
-  const loadedThreadsQuery = useQuery({
-    queryKey: ["threads", "loaded", "topbar"],
-    queryFn: () => listLoadedThreads({ limit: 200 }),
-    refetchOnWindowFocus: true,
-  });
-  const loadedThreadCount = loadedThreadsQuery.data?.data.length ?? 0;
-  const isCurrentThreadLoaded = Boolean(
-    threadId &&
-      loadedThreadsQuery.data?.data.some(
-        (loadedThreadId) => loadedThreadId === threadId,
-      ),
-  );
 
   useEffect(() => {
     if (!headerMenuOpen) return;
@@ -128,45 +106,11 @@ export function ThreadTopBar({
           {headerTitle}
         </h1>
         {showThreadHeader ? (
-          <span className="text-[0.72rem] text-ink-400">
-            {subtitle}
-            {isCurrentThreadLoaded ? " · loaded" : ""}
-          </span>
+          <span className="text-[0.72rem] text-ink-400">{subtitle}</span>
         ) : null}
       </div>
       {showThreadHeader ? (
         <div className="flex items-center gap-1.5">
-          {showActionToolbar ? (
-            <>
-              <button
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/10 text-ink-300 hover:bg-white/5 hover:text-ink-50"
-                title="Run"
-                aria-label="Run"
-              >
-                <Play className="h-3.5 w-3.5" />
-              </button>
-              <button
-                className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2.5 py-1 text-[0.72rem] text-ink-200 hover:bg-white/5"
-                onClick={() => setActiveModal("branch")}
-              >
-                Open
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-              <button
-                className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2.5 py-1 text-[0.72rem] text-ink-200 hover:bg-white/5"
-                onClick={() => setActiveModal("commit")}
-              >
-                Commit
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-              {hasChanges ? (
-                <span className="rounded-md border border-white/10 bg-black/30 px-2 py-0.5 text-[0.68rem] text-ink-300">
-                  +{changeSummary?.additions ?? 0} -
-                  {changeSummary?.deletions ?? 0}
-                </span>
-              ) : null}
-            </>
-          ) : null}
           <div className="relative" ref={headerMenuRef}>
             <button
               className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/10 text-ink-400 hover:bg-white/5"
@@ -301,7 +245,7 @@ export function ThreadTopBar({
                     void navigate({ to: "/plan-summary" });
                   }}
                 >
-                  Open plan summary ({loadedThreadCount})
+                  Open plan summary
                 </button>
                 <button
                   className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/5"

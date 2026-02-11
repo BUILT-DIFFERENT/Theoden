@@ -6,14 +6,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const compatSourceDir = path.join(root, "out", "electron-ui");
 const rewriteSourceDir = path.join(root, "dist");
 const runtimeOutputDir = path.join(root, "out", "desktop-runtime");
-
-const requestedMode = (process.env.CODEX_DESKTOP_RENDERER_MODE || "compat")
-  .trim()
-  .toLowerCase();
-const rendererMode = requestedMode === "rewrite" ? "rewrite" : "compat";
 
 function run(command) {
   const result = spawnSync(command, {
@@ -41,28 +35,22 @@ function ensureExists(targetPath, label) {
   }
 }
 
-if (rendererMode === "compat") {
-  run("node scripts/sync-electron-ui.cjs");
-} else {
-  run("pnpm frontend:build");
-}
+run("pnpm frontend:build");
 
-const selectedSourceDir =
-  rendererMode === "compat" ? compatSourceDir : rewriteSourceDir;
-ensureExists(selectedSourceDir, `renderer source (${rendererMode})`);
-ensureExists(path.join(selectedSourceDir, "index.html"), "renderer index.html");
+ensureExists(rewriteSourceDir, "renderer source (rewrite)");
+ensureExists(path.join(rewriteSourceDir, "index.html"), "renderer index.html");
 
 fs.rmSync(runtimeOutputDir, { recursive: true, force: true });
 fs.mkdirSync(runtimeOutputDir, { recursive: true });
-fs.cpSync(selectedSourceDir, runtimeOutputDir, {
+fs.cpSync(rewriteSourceDir, runtimeOutputDir, {
   recursive: true,
   force: true,
 });
 
 const manifest = {
   generatedAt: new Date().toISOString(),
-  mode: rendererMode,
-  source: path.relative(root, selectedSourceDir).replaceAll("\\", "/"),
+  mode: "rewrite",
+  source: path.relative(root, rewriteSourceDir).replaceAll("\\", "/"),
   output: path.relative(root, runtimeOutputDir).replaceAll("\\", "/"),
 };
 
@@ -73,5 +61,5 @@ fs.writeFileSync(
 );
 
 console.log(
-  `[prepare-desktop-runtime] prepared mode=${rendererMode} source=${manifest.source} output=${manifest.output}`,
+  `[prepare-desktop-runtime] prepared mode=rewrite source=${manifest.source} output=${manifest.output}`,
 );

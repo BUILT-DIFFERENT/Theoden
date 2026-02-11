@@ -33,7 +33,7 @@ export function FilePreviewPage() {
           File preview contract route
         </h1>
         <p className="mt-2 text-sm text-ink-300">
-          This route preserves Electron deeplink compatibility for targeted file
+          This route preserves desktop deeplink compatibility for targeted file
           navigation and editor open actions.
         </p>
       </section>

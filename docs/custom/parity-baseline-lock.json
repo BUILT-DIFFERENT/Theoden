@@ -1,7 +1,7 @@
 {
   "version": 1,
   "lockedAt": "2026-02-10",
-  "mode": "compat-default",
+  "mode": "rewrite-only",
   "platformScope": "windows-linux",
   "scopeFile": "docs/custom/parity-scope-v2.md",
   "gapRegistryFile": "docs/custom/parity-gap-registry.json",

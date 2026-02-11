@@ -31,8 +31,8 @@ for (const key of requiredKeys) {
   }
 }
 
-if (lock.mode !== "compat-default") {
-  fail(`lock mode must be "compat-default" (received "${lock.mode}")`);
+if (lock.mode !== "rewrite-only") {
+  fail(`lock mode must be "rewrite-only" (received "${lock.mode}")`);
 }
 
 if (lock.platformScope !== "windows-linux") {

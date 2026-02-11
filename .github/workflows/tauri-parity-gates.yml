@@ -242,30 +242,6 @@ jobs:
       - name: Rewrite bridge boundary contract
         run: pnpm parity:check:bridge-boundary
 
-  parity-renderer-mode-matrix:
-    name: Parity renderer mode matrix
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: "pnpm"
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.2
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate renderer mode matrix
-        run: pnpm parity:check:renderer-mode-matrix
-
   parity-results:
     name: Parity gate results (required)
     needs:
@@ -278,7 +254,6 @@ jobs:
       - parity-automations-cloud-settings
       - official-audit-gate
       - parity-contract-checks
-      - parity-renderer-mode-matrix
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -294,4 +269,3 @@ jobs:
           [[ "${{ needs.parity-automations-cloud-settings.result }}" == "success" ]] || exit 1
           [[ "${{ needs.official-audit-gate.result }}" == "success" ]] || exit 1
           [[ "${{ needs.parity-contract-checks.result }}" == "success" ]] || exit 1
-          [[ "${{ needs.parity-renderer-mode-matrix.result }}" == "success" ]] || exit 1

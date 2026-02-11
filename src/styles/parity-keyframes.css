@@ -13,14 +13,14 @@
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-3px);
+    transform: translateY(-6px);
   }
 }
 
 @keyframes codex-dialog-enter {
   0% {
     opacity: 0;
-    transform: translateY(10px) scale(0.985);
+    transform: translateY(calc(var(--spacing, 4px) * 2)) scale(0.98);
   }
   100% {
     opacity: 1;
@@ -59,10 +59,10 @@
 
 @keyframes loading-shimmer {
   0% {
-    background-position: -240px 0;
+    background-position: -100% 0;
   }
   100% {
-    background-position: 240px 0;
+    background-position: 250% 0;
   }
 }
 
@@ -91,30 +91,53 @@
 }
 
 @keyframes sync-dot-pass-down {
-  0% {
-    transform: translateY(-2px);
-  }
+  0%,
+  50%,
   100% {
-    transform: translateY(2px);
+    opacity: 0.16;
+    transform: scale(1);
+  }
+  12% {
+    opacity: 0.55;
+    transform: scale(1.1);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.28);
+  }
+  38% {
+    opacity: 0.55;
+    transform: scale(1.1);
   }
 }
 
 @keyframes sync-dot-pass-up {
-  0% {
-    transform: translateY(2px);
-  }
+  0%,
+  50%,
   100% {
-    transform: translateY(-2px);
+    opacity: 0.16;
+    transform: scale(1);
+  }
+  62% {
+    opacity: 0.55;
+    transform: scale(1.1);
+  }
+  75% {
+    opacity: 1;
+    transform: scale(1.28);
+  }
+  88% {
+    opacity: 0.55;
+    transform: scale(1.1);
   }
 }
 
 @keyframes toast-open {
   0% {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(-100%);
   }
   100% {
-    opacity: 1;
     transform: translateY(0);
   }
 }
@@ -122,11 +145,9 @@
 @keyframes toast-close {
   0% {
     opacity: 1;
-    transform: translateY(0);
   }
   100% {
     opacity: 0;
-    transform: translateY(8px);
   }
 }
 
@@ -149,6 +170,26 @@
   100% {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+.codex-dialog {
+  animation: codex-dialog-enter var(--default-transition-duration, 180ms)
+    var(--default-transition-timing-function, ease-out) both;
+  transform-origin: center top;
+  will-change: transform, opacity;
+}
+
+.codex-dialog-overlay {
+  animation: codex-dialog-overlay var(--default-transition-duration, 180ms)
+    var(--default-transition-timing-function, ease-out) both;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .codex-dialog,
+  .codex-dialog-overlay {
+    animation: none;
   }
 }
 

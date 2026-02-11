@@ -5,8 +5,6 @@ import ReactDOM from "react-dom/client";
 
 import { ThemeSync } from "@/app/components/layout/ThemeSync";
 import { router } from "@/app/router";
-import { initializeElectronCompatBridge } from "@/app/services/bridge/electronCompat";
-import { getHostRendererMode } from "@/app/services/host/runtime";
 import { AppUiProvider } from "@/app/state/appUi";
 import "@/styles/parity-keyframes.css";
 import "@/styles/parity-tokens.css";
@@ -29,12 +27,7 @@ if (!root) {
 }
 const rootElement = root;
 
-async function bootstrap() {
-  const rendererMode = await getHostRendererMode();
-  if (rendererMode.mode === "compat") {
-    initializeElectronCompatBridge();
-  }
-
+function bootstrap() {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
@@ -47,4 +40,4 @@ async function bootstrap() {
   );
 }
 
-void bootstrap();
+bootstrap();

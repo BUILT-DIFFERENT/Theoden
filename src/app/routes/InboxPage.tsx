@@ -81,13 +81,21 @@ export function InboxPage() {
   return (
     <section className="space-y-4">
       <div className="surface-panel p-5">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-300">Inbox</p>
-        <h1 className="mt-2 font-display text-2xl text-ink-50">
-          Automation updates
-        </h1>
-        <p className="mt-2 text-sm text-ink-300">
-          Unread items: <span className="text-ink-100">{unreadCount}</span>
-        </p>
+        <div className="inbox-toolbar flex items-start justify-between gap-3">
+          <div>
+            <p className="inbox-toolbar__label--compact text-xs uppercase tracking-[0.3em] text-ink-300">
+              Inbox
+            </p>
+            <h1 className="mt-2 font-display text-2xl text-ink-50">
+              Automation updates
+            </h1>
+          </div>
+          <div className="inbox-toolbar__actions">
+            <p className="inbox-toolbar__filter mt-1 text-sm text-ink-300">
+              Unread items: <span className="text-ink-100">{unreadCount}</span>
+            </p>
+          </div>
+        </div>
         {actionError ? (
           <p className="mt-2 text-xs text-rose-300">{actionError}</p>
         ) : null}

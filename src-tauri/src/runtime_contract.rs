@@ -122,14 +122,27 @@ pub fn parse_codex_deeplink(raw: &str) -> Result<HostDeeplinkPayload, String> {
                 .map(|value| (*value).to_string())
                 .or(query_section);
         }
+        "prompts" => payload.route = "/plan-summary".to_string(),
         "skills" => payload.route = "/skills".to_string(),
         "automations" => payload.route = "/automations".to_string(),
+        "login" => payload.route = "/login".to_string(),
+        "welcome" | "announcement" | "first-run" => payload.route = "/welcome".to_string(),
+        "select-workspace" => payload.route = "/select-workspace".to_string(),
+        "files" => payload.route = "/file-preview".to_string(),
+        "debug" => payload.route = "/plan-summary".to_string(),
         "local" => {
             let conversation_id = segments
                 .first()
                 .ok_or_else(|| "local deeplink missing conversation id".to_string())?;
             payload.route = "/t".to_string();
             payload.thread_id = Some((*conversation_id).to_string());
+        }
+        "thread-overlay" => {
+            payload.route = "/thread-overlay".to_string();
+            payload.thread_id = segments
+                .first()
+                .filter(|value| !value.is_empty())
+                .map(|value| (*value).to_string());
         }
         "remote" => {
             let task_id = segments
@@ -144,6 +157,37 @@ pub fn parse_codex_deeplink(raw: &str) -> Result<HostDeeplinkPayload, String> {
                 .ok_or_else(|| "worktree-init-v2 deeplink missing id".to_string())?;
             payload.route = "/worktree-init-v2".to_string();
             payload.pending_id = Some((*pending_id).to_string());
+        }
+        "wham" => {
+            match segments.first().copied() {
+                Some("accounts") if segments.get(1).copied() == Some("check") => {
+                    payload.route = "/login".to_string();
+                }
+                Some("environments") => {
+                    payload.route = "/settings".to_string();
+                    payload.section = Some("environments".to_string());
+                }
+                Some("tasks") if segments.get(1).copied() == Some("list") => {
+                    payload.route = "/inbox".to_string();
+                }
+                Some("tasks") => {
+                    payload.route = "/inbox".to_string();
+                }
+                Some("usage") => {
+                    payload.route = "/settings".to_string();
+                    payload.section = Some("usage-analytics".to_string());
+                }
+                Some("worktree_snapshots")
+                    if matches!(
+                        segments.get(1).copied(),
+                        Some("finish_upload") | Some("upload_url")
+                    ) =>
+                {
+                    payload.route = "/settings".to_string();
+                    payload.section = Some("worktrees".to_string());
+                }
+                _ => return Err("unsupported wham deeplink target".to_string()),
+            }
         }
         _ => return Err(format!("unsupported deeplink host: {host}")),
     }
@@ -207,6 +251,32 @@ mod tests {
         let payload = parse_codex_deeplink("codex://threads/local/thread-1").expect("parsed");
         assert_eq!(payload.route, "/t");
         assert_eq!(payload.thread_id.as_deref(), Some("thread-1"));
+    }
+
+    #[test]
+    fn parses_welcome_alias_deeplink() {
+        let payload = parse_codex_deeplink("codex://first-run").expect("parsed");
+        assert_eq!(payload.route, "/welcome");
+    }
+
+    #[test]
+    fn parses_thread_overlay_deeplink() {
+        let payload = parse_codex_deeplink("codex://thread-overlay/thread-77").expect("parsed");
+        assert_eq!(payload.route, "/thread-overlay");
+        assert_eq!(payload.thread_id.as_deref(), Some("thread-77"));
+    }
+
+    #[test]
+    fn parses_select_workspace_deeplink() {
+        let payload = parse_codex_deeplink("codex://select-workspace").expect("parsed");
+        assert_eq!(payload.route, "/select-workspace");
+    }
+
+    #[test]
+    fn parses_wham_usage_deeplink() {
+        let payload = parse_codex_deeplink("codex://wham/usage").expect("parsed");
+        assert_eq!(payload.route, "/settings");
+        assert_eq!(payload.section.as_deref(), Some("usage-analytics"));
     }
 
     #[test]

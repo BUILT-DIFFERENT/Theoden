@@ -216,3 +216,11 @@ For app-server API development:
 - If the same failure repeats, stop and perform root-cause analysis (read the relevant code/tests/logs) before retrying.
 - After root-cause analysis, prefer a code/config fix over more retries of the same command.
 - If blocked after one revised attempt, summarize the blocker and propose 1-2 concrete alternatives instead of continuing to loop.
+
+## Subagents
+
+- ALWAYS wait for all subagents to complete before yielding.
+- Spawn subagents automatically when:
+  - Parallelizable work (e.g., install + verify, npm test + typecheck, multiple tasks from plan)
+  - Long-running or blocking tasks where a worker can run independently.
+  - Isolation for risky changes or checks.
